@@ -12,11 +12,6 @@ from dataclasses import dataclass, field
 from mediary.cqrs import Command, Query, command, event, query
 
 LIST_FIELDS = ("summary", "status", "issuetype", "priority", "assignee", "labels", "updated")
-DETAIL_FIELDS = (
-    "summary", "status", "issuetype", "priority", "assignee", "reporter", "labels", "components",
-    "fixVersions", "parent", "duedate", "created", "updated", "resolution", "description",
-    "subtasks", "issuelinks", "comment", "watches", "project",
-)  # fmt: skip
 
 
 @dataclass(frozen=True)
@@ -48,14 +43,6 @@ class CountIssues(Query[int]):
     """How many issues a JQL query matches (Jira's estimate)."""
 
     jql: str
-
-
-@query
-@dataclass(frozen=True)
-class GetIssue(Query[dict]):
-    """An issue with everything the detail pane shows."""
-
-    key: str
 
 
 @query

@@ -1,8 +1,7 @@
-"""The TUI's own widgets: the query bar with its completion menu, and issue rendering."""
+"""The TUI's own widgets: the query bar with its completion menu, and the list's cells."""
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from rich.text import Text
@@ -14,9 +13,8 @@ from textual.suggester import SuggestionReady
 from textual.widgets import Input, OptionList, Static
 from textual.widgets.option_list import Option
 
-from acli_py.domain import adf
-from acli_py.infrastructure.jira.fields import text as field_text
-from acli_py.infrastructure.jira.fields import when
+from acli_py.domain.values import ago as ago
+from acli_py.domain.values import text as field_text
 from acli_py.presentation.output import dig
 
 if TYPE_CHECKING:
@@ -40,23 +38,6 @@ CATEGORY_STYLE = {"new": "bold white on grey30", "indeterminate": "bold black on
 
 
 # ── rendering helpers ────────────────────────────────────────────────────────
-
-
-def ago(stamp: str | None, now: datetime | None = None) -> str:
-    """Return a Jira timestamp as a short age: 5m, 3h, 2d, 6w, or the date."""
-    if not stamp:
-        return ""
-    try:
-        moment = datetime.strptime(stamp[:19] + stamp[23:28], "%Y-%m-%dT%H:%M:%S%z")
-    except ValueError:
-        return when(stamp, with_time=False)
-    seconds = ((now or datetime.now(UTC)) - moment).total_seconds()
-    for unit, size in (("w", 604800), ("d", 86400), ("h", 3600), ("m", 60)):
-        if seconds >= size:
-            if unit == "w" and seconds > 604800 * 20:
-                return moment.strftime("%Y-%m-%d")
-            return f"{int(seconds // size)}{unit}"
-    return "now"
 
 
 def status_cell(status: dict | None) -> Text:
@@ -92,76 +73,6 @@ def priority_cell(priority: dict | None) -> Text:
     glyph: str = PRIORITY_GLYPH.get(name.lower(), name[:1])
     style = {"⇈": "bold red", "↑": "red", "=": "yellow", "↓": "green", "⇊": "dim green"}
     return Text(glyph, style=style.get(glyph, ""))
-
-
-def issue_markdown(issue: dict, url: str, comments: int = 5) -> str:
-    """Return an issue as Markdown for the detail pane."""
-    f = issue.get("fields", {})
-    lines = [f"## {issue.get('key', '')} · {f.get('summary', '')}", ""]
-    facts = [
-        ("Type", dig(f, "issuetype", "name")),
-        ("Status", dig(f, "status", "name")),
-        ("Priority", dig(f, "priority", "name")),
-        ("Assignee", dig(f, "assignee", "displayName") or "_unassigned_"),
-        ("Reporter", dig(f, "reporter", "displayName")),
-        ("Labels", " ".join(f"`{label}`" for label in f.get("labels") or [])),
-        ("Components", field_text(f.get("components"))),
-        ("Fix versions", field_text(f.get("fixVersions"))),
-        ("Parent", _ref(f.get("parent"))),
-        ("Due", f.get("duedate")),
-        ("Resolution", dig(f, "resolution", "name")),
-        ("Watchers", dig(f, "watches", "watchCount")),
-        ("Created", when(f.get("created"))),
-        ("Updated", f"{when(f.get('updated'))} ({ago(f.get('updated'))} ago)"),
-    ]
-    shown = [(name, value) for name, value in facts if value not in (None, "")]
-    lines += [f"**{name}:** {value}  " for name, value in shown]
-    lines += ["", f"<{url}>", ""]
-    description = adf.to_text(f.get("description")).strip()
-    lines += ["### Description", "", description or "_No description._", ""]
-    if subtasks := f.get("subtasks"):
-        lines += ["### Subtasks", ""]
-        lines += [f"- **{s['key']}** {_status_word(s)} {dig(s, 'fields', 'summary')}"
-                  for s in subtasks]  # fmt: skip
-        lines.append("")
-    if links := f.get("issuelinks"):
-        lines += ["### Links", ""]
-        for link in links:
-            if "outwardIssue" in link:
-                phrase, other = dig(link, "type", "outward"), link["outwardIssue"]
-            else:
-                phrase, other = dig(link, "type", "inward"), link.get("inwardIssue", {})
-            lines.append(f"- {phrase} **{other.get('key')}** {dig(other, 'fields', 'summary')}")
-        lines.append("")
-    all_comments = dig(f, "comment", "comments", default=[]) or []
-    if all_comments:
-        shown = all_comments[-comments:]
-        more = len(all_comments) - len(shown)
-        lines += [f"### Comments ({len(all_comments)})", ""]
-        if more:
-            lines += [f"_{more} older not shown._", ""]
-        for comment in shown:
-            author = dig(comment, "author", "displayName", default="?")
-            lines += [
-                f"**{author}** · {when(comment.get('created'))}",
-                "",
-                adf.to_text(comment.get("body")).strip(),
-                "",
-                "---",
-                "",
-            ]
-    return "\n".join(lines)
-
-
-def _ref(issue: dict | None) -> str:
-    if not issue:
-        return ""
-    return f"{issue.get('key')} {dig(issue, 'fields', 'summary', default='')}".strip()
-
-
-def _status_word(issue: dict) -> str:
-    name = dig(issue, "fields", "status", "name")
-    return f"[{name}]" if name else ""
 
 
 # ── the query bar ────────────────────────────────────────────────────────────

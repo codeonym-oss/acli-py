@@ -27,7 +27,6 @@ from acli_py.application.messages import (
     CountIssues,
     CreateIssue,
     FindAssignees,
-    GetIssue,
     GetTransitions,
     IssueChanged,
     ListFilters,
@@ -40,6 +39,7 @@ from acli_py.application.messages import (
     ValidateJql,
     WatchIssue,
 )
+from acli_py.application.queries.get_issue.query import GetIssue
 from acli_py.domain import adf
 from acli_py.domain.jql import Completer, compile_query
 from acli_py.domain.jql.catalog import Catalog, spelling
@@ -60,7 +60,6 @@ from acli_py.presentation.tui.screens import (
 from acli_py.presentation.tui.widgets import (
     QueryBar,
     ago,
-    issue_markdown,
     priority_cell,
     status_cell,
     type_cell,
@@ -458,15 +457,13 @@ class IssueBrowser(App[None]):
     async def _show_detail(self, key: str, *, delay: float = 0.12) -> None:
         await asyncio.sleep(delay)  # let fast scrolling settle first
         try:
-            issue = await self.bus.send(GetIssue(key))
+            view = await self.bus.send(GetIssue(key))
         except ERRORS as error:
             self.query_one("#detail", Markdown).update(f"**{key}**: {error}")
             return
         if key != self.current_key():
             return
-        await self.query_one("#detail", Markdown).update(
-            issue_markdown(issue, self.site.browse(key))
-        )
+        await self.query_one("#detail", Markdown).update(view.to_markdown())
         self.query_one("#detail-box").border_title = key
 
     # ── changes ──────────────────────────────────────────────────────────────
@@ -485,13 +482,14 @@ class IssueBrowser(App[None]):
         if change.what == "CreateIssue":
             return
         try:
-            issue = await self.bus.send(GetIssue(change.key))
+            page = await self.bus.send(SearchIssues(f"key in ({change.key})", size=1))
         except ERRORS:
             return
+        fresh = next((i for i in page.issues if i["key"] == change.key), None)
         for index, row in enumerate(self.rows):
-            if row["key"] == change.key:
+            if fresh and row["key"] == change.key:
                 row["fields"].update(
-                    {k: v for k, v in issue["fields"].items() if k in row["fields"]}
+                    {k: v for k, v in fresh["fields"].items() if k in row["fields"]}
                 )
                 self.rows[index] = row
                 for column, value in zip(self.table.columns, self._cells(row), strict=True):
@@ -659,11 +657,11 @@ class IssueBrowser(App[None]):
         if not key:
             return
         try:
-            issue = await self.bus.send(GetIssue(key))
+            view = await self.bus.send(GetIssue(key))
         except ERRORS as error:
             self.notify(str(error), severity="error")
             return
-        old = adf.to_text(dig(issue, "fields", "description"))
+        old = view.issue.description
         new = await self.push_screen_wait(TextScreen(f"Description of {key}", old))
         if new is not None and new != old:
             body = adf.to_adf(new)
@@ -715,11 +713,11 @@ class IssueBrowser(App[None]):
         if not key:
             return
         try:
-            issue = await self.bus.send(GetIssue(key))
+            view = await self.bus.send(GetIssue(key))
         except ERRORS as error:
             self.notify(str(error), severity="error")
             return
-        watching = bool(dig(issue, "fields", "watches", "isWatching"))
+        watching = view.issue.watching
         await self._each(
             [key], lambda k: WatchIssue(k, not watching), "unwatched" if watching else "watched"
         )

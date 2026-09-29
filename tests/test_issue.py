@@ -30,7 +30,9 @@ def test_view_shows_details_description_links_and_comments(site):
 
 def test_view_json_and_extra_fields(site):
     data = json.loads(ok("issue", "view", "DEMO-1", "--json"))
-    assert data["fields"]["summary"] == "Login fails on Safari"
+    assert data["summary"] == "Login fails on Safari"
+    assert data["status"] == {"name": "To Do", "category": "new"}
+    assert data["links"][0]["issue"]["key"] == "DEMO-3"
     out = ok("issue", "view", "DEMO-1", "--fields", "customfield_10016")
     assert "Story point estimate" in out
 

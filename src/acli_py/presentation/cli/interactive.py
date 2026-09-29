@@ -20,10 +20,9 @@ def open_site(session: Session) -> Site:
 
     Plans and --debug lines would print over a full-screen UI, so the UI shows them instead.
     """
-    client = session.client
-    client.on_plan = None
-    client.session.hooks["response"] = []
-    return Site(client, session.url, session.account.account_id, session.account.display_name)
+    session.client.on_plan = None
+    session.client.session.hooks["response"] = []
+    return session.site()
 
 
 @guarded

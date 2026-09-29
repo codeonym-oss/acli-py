@@ -13,6 +13,7 @@ from textual.widgets import Input, Markdown, OptionList, TextArea
 
 from acli_py.application.site import Site
 from acli_py.bootstrap import build_bus
+from acli_py.domain.values import ago
 from acli_py.infrastructure.jira.catalog import JiraCatalog
 from acli_py.infrastructure.jira.client import JiraClient
 from acli_py.infrastructure.storage import History, Views
@@ -25,7 +26,7 @@ from acli_py.presentation.tui.screens import (
     PromptScreen,
     TextScreen,
 )
-from acli_py.presentation.tui.widgets import ago, issue_markdown, type_cell
+from acli_py.presentation.tui.widgets import type_cell
 from tests import fake_jira
 
 if TYPE_CHECKING:
@@ -482,31 +483,3 @@ def test_type_badges():
     assert type_cell({"name": "Sub-task", "subtask": True}).plain == "↳"
     assert type_cell({"name": "Idea"}).plain == "I"
     assert type_cell(None).plain == ""
-
-
-def test_issue_markdown_shows_everything_there_is():
-    issue = {
-        "key": "DEMO-9",
-        "fields": {
-            "summary": "S",
-            "parent": {"key": "DEMO-1", "fields": {"summary": "Epic"}},
-            "subtasks": [
-                {"key": "DEMO-10", "fields": {"summary": "Sub", "status": {"name": "Done"}}}
-            ],
-            "issuelinks": [
-                {
-                    "type": {"inward": "is blocked by"},
-                    "inwardIssue": {"key": "DEMO-2", "fields": {"summary": "B"}},
-                }
-            ],
-            "comment": {
-                "comments": [{"author": {"displayName": "Bob"}, "body": f"c{n}"} for n in range(7)]
-            },
-        },
-    }
-    text = issue_markdown(issue, "https://x/browse/DEMO-9")
-    assert "**Parent:** DEMO-1 Epic" in text
-    assert "- **DEMO-10** [Done] Sub" in text
-    assert "- is blocked by **DEMO-2** B" in text
-    assert "_2 older not shown._" in text
-    assert "_No description._" in text

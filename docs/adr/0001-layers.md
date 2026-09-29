@@ -68,6 +68,28 @@ Its message and its handler sit side by side, and nothing else lives there:
 Finding the code for "assign an issue" means opening `application/commands/assign_issue/`.
 Adding a use case adds a folder; it doesn't grow a thousand-line module.
 
+### Ports and adapters
+
+A handler that needs the outside world names a port, a `Protocol` in
+`acli_py.application.ports` (such as `IssueReader`). Infrastructure implements it (such as
+`acli_py.infrastructure.jira.issues.JiraIssues`), and the composition root's resolver hands the
+adapter to the handler. Adapters return domain objects, parsed from Jira's JSON once, so
+nothing above them digs through raw dicts.
+
+### The worked example: `get_issue`
+
+`application/queries/get_issue/` is the first use case built this way, and the one to copy:
+
+1. `domain/issue.py`: `Issue` and its value objects (`Status`, `User`, `IssueRef`, `Link`…),
+   with `Issue.from_jira`.
+2. `application/ports.py`: `IssueReader.get_issue(key, fields) -> Issue`.
+3. `infrastructure/jira/issues.py`: `JiraIssues`, the adapter over the REST client.
+4. `application/queries/get_issue/`: `GetIssue` (query), `get_issue` (handler) and
+   `IssueView` (view), which renders as a Rich panel, JSON or Markdown.
+5. Front ends send the query: `acli-py issue view` (and so the shell) prints
+   `view.to_rich()` or `view.to_json()`; the TUI's detail pane shows `view.to_markdown()`.
+6. `tests/test_get_issue.py` tests each layer; `tests/test_issue.py` runs the command.
+
 ### mediary is the only way to reach Jira
 
 Every front end, the command line included, sends messages through the same bus
@@ -87,6 +109,9 @@ being a command.
 | `infrastructure/jira/resolve.py`, `fields.py` | infrastructure | They look names up through the API and build its payloads |
 | `infrastructure/config.py`, `credentials.py`, `storage.py` | infrastructure | Files and the OS keyring |
 | `application/bus.py`, `behaviors/` | application | The mediator and what wraps every message |
+| `application/ports.py` | application | What use cases need from outside, as protocols |
+| `domain/issue.py`, `domain/values.py` | domain | An issue as typed objects; how Jira's values read |
+| `infrastructure/jira/issues.py` | infrastructure | `JiraIssues`, the `IssueReader` port over the client |
 | `application/messages.py`, `handlers.py`, `site.py` | application | The use cases written before this layout |
 | `presentation/cli/`, `shell.py`, `tui/`, `output.py` | presentation | The front ends |
 
@@ -99,7 +124,8 @@ being a command.
   migration is done (issue #18).
 - `application/messages.py` and `handlers.py` shrink as their use cases move into
   `commands/` and `queries/`, then disappear.
-- Handlers still reach the client through `Site`. The first tracer bullets (issues #9 and #10)
-  replace that with ports, so the application layer stops importing infrastructure.
+- The handlers in `application/handlers.py` still reach the client through `Site`. Each one
+  that moves to its own package asks for a port instead; when the last one moves, `Site`
+  leaves the application layer and the layers contract has no exceptions left.
 - Tests follow the layers: domain tests need nothing; handler tests run against the fake Jira
   site; front-end tests drive the CLI, the shell or the TUI end to end.
