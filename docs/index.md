@@ -1,0 +1,33 @@
+# acli-py
+
+`aj` is a friendly command line for **Jira Cloud**: a Python port of the Jira side of
+Atlassian's `acli`, redesigned around short, predictable commands and a **dry-run mode for
+every change**.
+
+```sh
+aj auth login
+aj issue create -p DEMO -t Bug -s "Login fails on Safari" -a @me -L web
+aj issue transition DEMO-12 --to "In Progress" -m "On it"
+aj issue edit --jql 'project = DEMO AND labels = legacy' --remove-label legacy --dry-run
+```
+
+Start with [Getting started](guide/getting-started.md). [Dry runs and bulk changes](guide/dry-run.md)
+explains how changes are previewed and applied to many issues. Every command is listed under
+[Commands](commands/index.md), generated from the CLI's own help.
+
+```{toctree}
+:hidden:
+:caption: Guide
+
+guide/getting-started
+guide/dry-run
+guide/fields
+guide/from-acli
+```
+
+```{toctree}
+:hidden:
+:caption: Reference
+
+commands/index
+```
