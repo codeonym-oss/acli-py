@@ -1,0 +1,118 @@
+[project]
+name = "acli-py"
+version = "0.0.0"
+description = "A friendly Jira Cloud command line: create, edit, move and delete issues, projects, boards, sprints, filters and fields, with a dry-run mode for every change."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "codeonym-oss" }]
+requires-python = ">=3.10"
+dependencies = [
+    "keyring>=24",
+    "platformdirs>=4",
+    "requests>=2.31",
+    "rich>=13",
+    "typer>=0.12",
+]
+keywords = ["jira", "atlassian", "acli", "cli", "issues", "sprints", "dry-run"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Information Technology",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Office/Business",
+    "Topic :: Software Development :: Bug Tracking",
+    "Typing :: Typed",
+]
+
+[project.urls]
+Homepage = "https://github.com/codeonym-oss/acli-py"
+Documentation = "https://docs.codeonym.work/projects/acli-py/"
+Repository = "https://github.com/codeonym-oss/acli-py"
+Issues = "https://github.com/codeonym-oss/acli-py/issues"
+Changelog = "https://github.com/codeonym-oss/acli-py/blob/main/CHANGELOG.md"
+
+[project.scripts]
+aj = "acli_py.cli:app"
+acli-py = "acli_py.cli:app"
+
+[build-system]
+requires = ["uv_build>=0.8.22,<0.13"]
+build-backend = "uv_build"
+
+[dependency-groups]
+test = [
+    "pytest>=8",
+    "pytest-cov>=7",
+]
+dev = [
+    {include-group = "test"},
+    {include-group = "docs"},
+    "commitizen>=4.8",
+    "pre-commit>=4.3",
+    "pyright>=1.1.400",
+    "ruff>=0.16",
+    "types-requests>=2.31",
+]
+# The docs site (see CONTRIBUTING.md). Sphinx 9 needs Python 3.12+, so before 3.12 this is empty.
+docs = [
+    "myst-parser>=5.1; python_version >= '3.12'",
+    "shibuya>=2026.7; python_version >= '3.12'",
+    "sphinx>=9.1; python_version >= '3.12'",
+    "sphinx-autobuild>=2025.8; python_version >= '3.12'",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = [
+    "E", "W", "F", "I", "B", "UP", "SIM", "RUF", "C4", "PT", "PIE", "RET",
+    "TC", "PERF", "N", "D",
+]
+ignore = [
+    "D100", "D104", "D105", "D107",  # module/package/magic/__init__ docstrings
+    "D203", "D213",                  # pick D211 + D212 (summary on the first line)
+    "RUF001", "RUF002", "RUF003",    # the terminal UI deliberately uses →, ×, ✔ and friends
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Fixture data (fake Jira payloads) reads better unwrapped.
+"tests/**" = ["D", "E501"]
+# Typer reads the command signatures' annotations at runtime, so their imports must stay real.
+"src/acli_py/cli/**" = ["TC"]
+
+[tool.commitizen]
+# Only used to validate messages (commit-msg hook + CI); versions and changelog are release-please's job.
+name = "cz_conventional_commits"
+allowed_prefixes = ["Merge", "Revert", "fixup!", "squash!"]
+
+[tool.pyright]
+include = ["src", "tests", "scripts"]
+pythonVersion = "3.10"
+typeCheckingMode = "standard"
+
+[tool.pytest.ini_options]
+addopts = ["--strict-markers", "--strict-config", "-ra", "--cov", "--cov-report=term-missing"]
+testpaths = ["tests"]
+xfail_strict = true
+filterwarnings = ["error"]
+
+[tool.coverage.run]
+source = ["acli_py"]
+branch = true
+
+[tool.coverage.report]
+fail_under = 88
+show_missing = true
+skip_covered = true
+exclude_also = ["if TYPE_CHECKING:", "@overload", "raise NotImplementedError", "if __name__ == .__main__.:"]
