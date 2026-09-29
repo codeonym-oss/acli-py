@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.2.0](https://github.com/codeonym-oss/acli-py/compare/v0.1.0...v0.2.0) (2026-09-29)
+
+
+### Features
+
+* aj tui, aj shell and smart queries, with every acli flag covered ([#3](https://github.com/codeonym-oss/acli-py/issues/3)) ([574dcc7](https://github.com/codeonym-oss/acli-py/commit/574dcc79dd25185d844996e17684eef44c71f66d)), closes [#2](https://github.com/codeonym-oss/acli-py/issues/2)
+
+
+### Documentation
+
+* point from getting started to the TUI and the shell ([#6](https://github.com/codeonym-oss/acli-py/issues/6)) ([328e214](https://github.com/codeonym-oss/acli-py/commit/328e214b79e15802ef75e677d48d28a1f0aaeabf)), closes [#5](https://github.com/codeonym-oss/acli-py/issues/5)
+
 ## 0.1.0 (2026-09-29)
 
 
