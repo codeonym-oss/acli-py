@@ -19,6 +19,8 @@ aj board list [OPTIONS]
 | `-t`, `--type` `TEXT` |  | scrum, kanban or simple. |
 | `-p`, `--project` `TEXT` |  | Boards about this project. |
 | `--filter` `TEXT` |  | Boards using this filter id. |
+| `--order` `TEXT` |  | Sort by name: name, or -name for Z to A. |
+| `--private` |  | Also list private boards (Jira hides their names). |
 | `-l`, `--limit` `INTEGER` | `50` | Show at most this many results. |
 | `-A`, `--all` |  | Fetch every page, ignoring --limit. |
 | `--json` |  | Print JSON. |

@@ -26,4 +26,6 @@ field
 user
 meta
 api
+tui
+shell
 ```

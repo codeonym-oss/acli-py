@@ -11,9 +11,18 @@ predictable commands and a **dry-run mode for every change**.
 aj issue create -p DEMO -t Bug -s "Login fails on Safari" -a @me -L web
 aj issue transition DEMO-12 --to "In Progress" -m "On it"
 aj issue edit --jql 'project = DEMO AND labels = legacy' --remove-label legacy --dry-run
-aj sprint start 42 --weeks 2
+aj issue search '@me is:open #web sort:-priority'
+aj tui
 ```
 
+![aj tui: views, the issue list and the detail pane](https://raw.githubusercontent.com/codeonym-oss/acli-py/main/docs/_static/tui.svg)
+
+- **A TUI and a shell.** `aj tui` is a full-screen issue browser: type a query with
+  completion from your site, read issues beside the list, then transition, assign, comment,
+  relabel or create, one issue or many at a time. `aj shell` runs every command at a prompt
+  that completes commands, options, issue keys, statuses, people and JQL.
+- **Smart queries.** `@me #web s:progress is:open updated:7d sort:-priority` compiles to the
+  JQL you meant, with names spelled the way your site spells them. Plain JQL still works.
 - **Every Jira object you work with daily:** issues (create, view, search, edit, assign,
   transition, clone, archive, delete), comments, links, attachments, watchers, worklogs,
   projects, boards, sprints, filters, custom fields, dashboards and users. There is also
@@ -36,7 +45,7 @@ aj sprint start 42 --weeks 2
 
 ## Install
 
-It needs Python 3.10 or newer, on Linux, macOS or Windows. Until the first PyPI release,
+It needs Python 3.11 or newer, on Linux, macOS or Windows. Until the first PyPI release,
 install it from the repository with [uv](https://docs.astral.sh/uv/) or
 [pipx](https://pipx.pypa.io/):
 
@@ -68,12 +77,14 @@ Every command has `--help` with examples. The whole tree:
 | `aj auth login \| logout \| status \| switch` | Manage accounts. `status --check` verifies the token. |
 | `aj config show \| set \| unset \| path` | Defaults: `project`, `issue-type`, `board`, `editor`. |
 | `aj issue view KEY` | Details, description (rendered Markdown), subtasks, links, attachments, latest comments. `--web`, `--json`. |
-| `aj issue search [JQL]` | Search with JQL and/or `-p -a -s -t -L --text --open --filter --order`. `--count`, `--all`, `--fields`, `--csv`, `--web`. Alias `list`. |
-| `aj issue create` | One issue from options or `--editor`, or many from `--from-json` / `--from-csv` (`--template` prints an example). |
+| `aj tui [QUERY]` | The full-screen issue browser. `--view NAME` starts from a saved view. |
+| `aj shell` | Every command at a prompt, with completion from your site. |
+| `aj issue search [QUERY]` | Search with a smart query or JQL, and/or `-p -a -s -t -L --text --open --filter --order`. `--count`, `--all`, `--fields`, `--csv`, `--web`, `--syntax`. Alias `list`. |
+| `aj issue create` | One issue from options, `--editor` or `--from-file`, or many from `--from-json` / `--from-csv` (`--template` prints an example). |
 | `aj issue edit KEYS…` | Summary, description, type, priority, labels (`--add-label`, `--remove-label`), components, versions, parent, due date, any `-F` field. |
 | `aj issue assign KEYS… --to USER` | Assign to `@me`, a person, `default`, or `--unassign`. |
 | `aj issue transition KEYS… --to STATUS` | Move by status or transition name, with `-m` comment, `--resolution` and fields. Alias `move`. `transitions KEY` lists options. |
-| `aj issue clone KEYS…` | Copy issues, in place or `--to-project`, linked to the original. |
+| `aj issue clone KEYS…` | Copy issues, in place, `--to-project`, or `--to-site` another account's site, linked to the original. |
 | `aj issue archive \| unarchive \| delete KEYS…` | Archive, restore, or permanently delete (`--with-subtasks`). |
 | `aj issue open KEY` | Open in the browser. |
 | `aj issue comment list \| add \| edit \| delete \| visibility` | Markdown comments. Role/group visibility, `--edit-last`, `--editor`, stdin. |
@@ -81,7 +92,7 @@ Every command has `--help` with examples. The whole tree:
 | `aj issue attachment list \| upload \| download \| delete` | Files on an issue. |
 | `aj issue watcher list \| add \| remove` | Watchers (yourself by default). |
 | `aj issue worklog list \| add \| delete` | Log time: `aj issue worklog add DEMO-1 "1h 30m" -m "Pairing"`. |
-| `aj project list \| view \| create \| update \| archive \| restore \| delete` | Projects. `create -T scrum\|kanban\|basic\|tasks\|process\|service`. `components`, `versions`. |
+| `aj project list \| view \| create \| update \| archive \| restore \| delete` | Projects. `create -T scrum\|kanban\|basic\|tasks\|process\|service`, or `--from-project KEY` to share one's configuration. `components`, `versions`. |
 | `aj board list \| view \| create \| delete \| projects \| sprints \| backlog` | Boards. |
 | `aj sprint list \| view \| issues \| create \| update \| start \| close \| delete \| add \| remove` | Sprints, and moving issues in and out of them. |
 | `aj filter list \| search \| view \| create \| update \| delete \| star \| owner \| columns` | Saved filters, sharing, favourites, navigator columns. |
@@ -140,9 +151,10 @@ Confirmation prompts are skipped during a dry run, because nothing will change.
 | `acli jira field delete --id customfield_1` | `aj field delete customfield_1` |
 | `acli jira dashboard search` | `aj dashboard list` |
 
-`aj workitem …` is a hidden alias of `aj issue …`. Not ported: OAuth browser login
-(`--web`), which needs an Atlassian OAuth app, and acli's Confluence, admin and Rovo Dev
-commands.
+Every `acli jira` command of acli 1.3.39 has an `aj` equivalent: the
+[full table](docs/guide/from-acli.md) goes flag by flag. `aj workitem …` is a hidden alias of
+`aj issue …`. Not ported: OAuth browser login (`--web`), which needs an Atlassian OAuth app,
+and acli's Confluence, admin and Rovo Dev commands.
 
 ## Configuration
 
@@ -153,13 +165,20 @@ commands.
 | `ACLI_PY_API_TOKEN` | Used instead of the stored token, never saved. |
 | `ACLI_PY_SITE`, `ACLI_PY_EMAIL` | With `ACLI_PY_API_TOKEN`: run without logging in (CI). |
 | `ACLI_PY_DRY_RUN=1` | Every command is a dry run. |
+| `views.json`, `query-history.json`, `shell-history` | Saved views and history for the TUI and shell, next to the config. The shell never records a line holding a token. |
 | `VISUAL` / `EDITOR` | Used by `--editor` (or `aj config set editor "code --wait"`). |
 
 ## Development
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). In short: `uv sync`, then `uv run pytest`. The
-tests run the real CLI over real HTTP against `tests/fake_jira.py`, a stateful in-memory
-Jira. A parametrised test checks that every write command sends nothing under `--dry-run`.
+tests run the real CLI, the TUI (through Textual's pilot) and the shell over real HTTP against
+`tests/fake_jira.py`, a stateful in-memory Jira. A parametrised test checks that every write
+command sends nothing under `--dry-run`.
+
+The TUI and shell send their reads and writes through a CQRS layer built on
+[mediary](https://pypi.org/project/mediary/). Queries are cached briefly, and each command
+announces the issue it changed so that the screens refresh. See
+[Interactive](docs/guide/interactive.md#how-it-works).
 
 ## License
 
