@@ -1,4 +1,4 @@
-"""`aj tui`: browse, search and change issues without leaving the terminal.
+"""`acli-py tui`: browse, search and change issues without leaving the terminal.
 
 Every read and write goes through the mediator (`acli_py.app.bus`), so the UI never blocks:
 queries are cached for a minute, and each command empties the cache and announces the issue
@@ -102,7 +102,7 @@ COLUMNS = (
 class IssueBrowser(App[None]):
     """The TUI."""
 
-    TITLE = "aj"
+    TITLE = "acli-py"
     CSS = """
     Screen { layout: vertical; }
     #top { height: 1; background: $primary-background; color: $text; padding: 0 1; }
@@ -236,7 +236,7 @@ class IssueBrowser(App[None]):
         self.screen.set_class(width < 90, "-tiny")
 
     def _top_text(self) -> Text:
-        text = Text(" aj ", style="bold reverse")
+        text = Text(" acli-py ", style="bold reverse")
         who = self.site.display_name or self.site.url
         text.append(f"  {who} · {self.site.url.split('://')[-1]}", style="bold")
         if self.site.dry_run:

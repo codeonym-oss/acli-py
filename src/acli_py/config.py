@@ -23,10 +23,10 @@ from acli_py.client import site_host
 APP_NAME = "acli-py"
 CONFIG_VERSION = 1
 
-# The defaults `aj config set` accepts, and what each one means.
+# The defaults `acli-py config set` accepts, and what each one means.
 SETTINGS = {
     "project": "Project key used when a command needs one and none is given.",
-    "issue-type": "Issue type `aj issue create` uses when --type is omitted.",
+    "issue-type": "Issue type `acli-py issue create` uses when --type is omitted.",
     "board": "Board id used by sprint commands when --board is omitted.",
     "editor": "Editor for --editor (else $VISUAL, then $EDITOR).",
 }

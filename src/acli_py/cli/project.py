@@ -1,4 +1,4 @@
-"""`aj project`: list, view, create, update, archive, restore and delete projects."""
+"""`acli-py project`: list, view, create, update, archive, restore and delete projects."""
 
 from __future__ import annotations
 
@@ -244,8 +244,8 @@ def create(
 ) -> None:
     """Create a company-managed project.
 
-    [dim]aj project create -k OPS -n "Operations" -T kanban
-    aj project create -k WEB2 -n "Web 2" --from-project WEB[/]
+    [dim]acli-py project create -k OPS -n "Operations" -T kanban
+    acli-py project create -k WEB2 -n "Web 2" --from-project WEB[/]
     """
     if print_template:
         output.print_json(PROJECT_TEMPLATE)
@@ -299,7 +299,7 @@ def update(
              "description": description, "url": url}  # fmt: skip
     data.update({k: v for k, v in given.items() if v is not None})
     if not data:
-        raise fail("Nothing to change. See [bold]aj project update --help[/].")
+        raise fail("Nothing to change. See [bold]acli-py project update --help[/].")
     session = connect(dry_run)
     result = session.client.put(
         f"{API}/project/{project.upper()}", _project_body(session, data, creating=False)

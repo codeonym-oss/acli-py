@@ -1,1 +1,1 @@
-"""The terminal UI (`aj tui`)."""
+"""The terminal UI (`acli-py tui`)."""

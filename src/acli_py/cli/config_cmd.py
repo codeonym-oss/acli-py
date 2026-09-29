@@ -1,4 +1,4 @@
-"""`aj config`: defaults such as the project and the issue type."""
+"""`acli-py config`: defaults such as the project and the issue type."""
 
 from __future__ import annotations
 
@@ -33,7 +33,7 @@ def show(as_json: JsonOpt = False) -> None:
             {"active": config.active, "defaults": config.defaults, "path": str(config.path)}
         )
         return
-    rows = [("account", escape(config.active or "—  run aj auth login"))]
+    rows = [("account", escape(config.active or "—  run acli-py auth login"))]
     rows += [
         (name, escape(config.defaults.get(name, "")) or f"[dim]unset · {SETTINGS[name]}[/]")
         for name in SETTINGS
@@ -45,7 +45,7 @@ def show(as_json: JsonOpt = False) -> None:
 @app.command("set")
 @guarded
 def set_(name: SettingArg, value: Annotated[str, typer.Argument(help="The value.")]) -> None:
-    """Set a default, e.g. `aj config set project DEMO`."""
+    """Set a default, e.g. `acli-py config set project DEMO`."""
     name = _setting(name)
     config = Config.load()
     config.defaults[name] = value.upper() if name == "project" else value

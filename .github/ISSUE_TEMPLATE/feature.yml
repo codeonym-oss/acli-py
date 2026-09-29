@@ -1,5 +1,5 @@
 name: Feature request
-description: Suggest an addition or change to aj.
+description: Suggest an addition or change to acli-py.
 labels: [enhancement]
 body:
   - type: textarea

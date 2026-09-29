@@ -42,14 +42,14 @@ def test_every_group_is_in_the_reference():
 
 
 def _snippets(path: Path) -> list[str]:
-    """Return every `aj …` code span in a page, alternatives included (`… / --x`)."""
+    """Return every `acli-py …` code span in a page, alternatives included (`… / --x`)."""
     import re
 
-    return re.findall(r"`(aj [^`]+)`", path.read_text(encoding="utf-8"))
+    return re.findall(r"`(acli-py [^`]+)`", path.read_text(encoding="utf-8"))
 
 
 def test_documented_commands_and_options_exist():
-    """Every `aj …` in the guides and README names real commands and options."""
+    """Every `acli-py …` in the guides and README names real commands and options."""
     import shlex
 
     import typer

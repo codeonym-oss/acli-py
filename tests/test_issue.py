@@ -7,13 +7,13 @@ import pytest
 
 from acli_py.adf import to_text
 from tests import fake_jira
-from tests.conftest import aj
+from tests.conftest import run_cli
 
 BOB = fake_jira.BOB
 
 
 def ok(*args: str, input: str | None = None) -> str:
-    result, out = aj(*args, input=input)
+    result, out = run_cli(*args, input=input)
     assert result.exit_code == 0, out
     return out
 
@@ -63,7 +63,7 @@ def test_search_limit_and_saved_filter(site):
 
 
 def test_search_needs_something_to_search_for(site):
-    result, out = aj("issue", "search")
+    result, out = run_cli("issue", "search")
     assert result.exit_code == 1
     assert "Say what to search" in out
     ok("config", "set", "project", "OPS")
@@ -136,23 +136,25 @@ def test_create_uses_configured_defaults(site):
 
 
 def test_create_needs_a_summary_and_a_project(site):
-    result, out = aj("issue", "create", "-p", "DEMO")
+    result, out = run_cli("issue", "create", "-p", "DEMO")
     assert result.exit_code == 1
     assert "summary is required" in out
-    result, out = aj("issue", "create", "-s", "x")
+    result, out = run_cli("issue", "create", "-s", "x")
     assert result.exit_code == 1
     assert "No project given" in out
 
 
 def test_create_reports_unknown_fields_helpfully(site):
-    result, out = aj("issue", "create", "-p", "DEMO", "-s", "x", "-F", "Story=3")
+    result, out = run_cli("issue", "create", "-p", "DEMO", "-s", "x", "-F", "Story=3")
     assert result.exit_code == 1
     assert "Did you mean: Story point estimate" in out
-    result, out = aj("issue", "create", "-p", "DEMO", "-s", "x", "-F", "Story point estimate=lots")
+    result, out = run_cli(
+        "issue", "create", "-p", "DEMO", "-s", "x", "-F", "Story point estimate=lots"
+    )
     assert "takes a number" in out
-    result, out = aj("issue", "create", "-p", "DEMO", "-s", "x", "-a", "nobody-matches")
+    result, out = run_cli("issue", "create", "-p", "DEMO", "-s", "x", "-a", "nobody-matches")
     assert "no user matches" in out
-    result, out = aj("issue", "create", "-p", "DEMO", "-s", "x", "-a", "Jensen")
+    result, out = run_cli("issue", "create", "-p", "DEMO", "-s", "x", "-a", "Jensen")
     assert "matches several people" in out
 
 
@@ -208,10 +210,10 @@ def test_create_many_from_json_and_csv(site, tmp_path):
 def test_create_many_stops_at_the_first_error_unless_told_not_to(site, tmp_path):
     path = tmp_path / "issues.json"
     path.write_text(json.dumps([{"summary": "a", "type": "Nope"}, {"summary": "b"}]))
-    result, out = aj("issue", "create", "--from-json", str(path), "-p", "DEMO", "-y")
+    result, out = run_cli("issue", "create", "--from-json", str(path), "-p", "DEMO", "-y")
     assert result.exit_code == 1
     assert "1 not tried" in out
-    result, out = aj(
+    result, out = run_cli(
         "issue", "create", "--from-json", str(path), "-p", "DEMO", "-y", "--ignore-errors", "--json"
     )
     assert result.exit_code == 1
@@ -221,7 +223,7 @@ def test_create_many_stops_at_the_first_error_unless_told_not_to(site, tmp_path)
 def test_create_many_asks_first_without_a_terminal(site, tmp_path):
     path = tmp_path / "issues.json"
     path.write_text(json.dumps([{"summary": "a"}]))
-    result, out = aj("issue", "create", "--from-json", str(path), "-p", "DEMO")
+    result, out = run_cli("issue", "create", "--from-json", str(path), "-p", "DEMO")
     assert result.exit_code == 1
     assert "Refusing without --yes" in out
     assert site.writes() == []
@@ -256,7 +258,7 @@ def test_edit_fields_and_labels(site):
 
 
 def test_edit_many_by_jql_needs_confirmation(site):
-    result, out = aj("issue", "edit", "--jql", "project = DEMO", "--add-label", "q4")
+    result, out = run_cli("issue", "edit", "--jql", "project = DEMO", "--add-label", "q4")
     assert result.exit_code == 1
     assert "Edit 3 issues?" in out
     out = ok("issue", "edit", "--jql", "project = DEMO", "--add-label", "q4", "-y")
@@ -265,12 +267,12 @@ def test_edit_many_by_jql_needs_confirmation(site):
 
 
 def test_edit_needs_something_to_change(site):
-    result, out = aj("issue", "edit", "DEMO-1")
+    result, out = run_cli("issue", "edit", "DEMO-1")
     assert result.exit_code == 1
     assert "Nothing to change" in out
-    result, out = aj("issue", "edit", "-s", "x")
+    result, out = run_cli("issue", "edit", "-s", "x")
     assert "say which issues" in out
-    result, out = aj("issue", "edit", "not-a-key", "-s", "x")
+    result, out = run_cli("issue", "edit", "not-a-key", "-s", "x")
     assert "is not an issue key" in out
 
 
@@ -288,7 +290,7 @@ def test_assign_and_unassign(site):
     assert site.issues["DEMO-2"]["fields"]["assignee"] == BOB
     ok("issue", "assign", "DEMO-2", "--unassign")
     assert site.issues["DEMO-2"]["fields"]["assignee"] is None
-    result, _ = aj("issue", "assign", "DEMO-2")
+    result, _ = run_cli("issue", "assign", "DEMO-2")
     assert result.exit_code == 1
 
 
@@ -303,15 +305,15 @@ def test_transition_by_status_or_transition_name(site):
 
 
 def test_transition_explains_what_is_possible(site):
-    result, out = aj("issue", "transition", "DEMO-1", "--to", "Nowhere")
+    result, out = run_cli("issue", "transition", "DEMO-1", "--to", "Nowhere")
     assert result.exit_code == 1
     assert "Available: Start work → In Progress, Finish → Done" in out
-    result, out = aj("issue", "transition", "DEMO-1")
+    result, out = run_cli("issue", "transition", "DEMO-1")
     assert "Say where to" in out
 
 
 def test_delete_asks_then_deletes(site):
-    result, out = aj("issue", "delete", "DEMO-2")
+    result, out = run_cli("issue", "delete", "DEMO-2")
     assert result.exit_code == 1
     assert "Permanently delete 1 issue (DEMO-2)?" in out
     assert "DEMO-2" in site.issues
@@ -322,7 +324,7 @@ def test_delete_asks_then_deletes(site):
 def test_delete_with_subtasks(site):
     sub = site.add_issue("DEMO", "child", "Subtask")
     sub["fields"]["parent"] = {"key": "DEMO-2"}
-    result, out = aj("issue", "delete", "DEMO-2", "-y")
+    result, out = run_cli("issue", "delete", "DEMO-2", "-y")
     assert result.exit_code == 1
     assert "has subtasks" in out
     ok("issue", "delete", "DEMO-2", "-y", "--with-subtasks")
@@ -330,7 +332,7 @@ def test_delete_with_subtasks(site):
 
 
 def test_archive_and_unarchive(site):
-    result, out = aj("issue", "archive", "DEMO-2", "NOPE-9", "-y")
+    result, out = run_cli("issue", "archive", "DEMO-2", "NOPE-9", "-y")
     assert result.exit_code == 1
     assert "DEMO-2 archived" in out
     assert "NOPE-9 could not be archived" in out
@@ -405,7 +407,7 @@ def test_clone_copies_and_links(site):
     ids=lambda c: " ".join(c[:3]),
 )
 def test_every_write_command_honours_dry_run(site, command):
-    result, out = aj(*command, "--dry-run")
+    result, out = run_cli(*command, "--dry-run")
     assert result.exit_code == 0, out
     assert "DRY RUN" in out
     assert "nothing was sent to Jira" in out

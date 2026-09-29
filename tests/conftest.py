@@ -22,8 +22,8 @@ if _original is not None:
     )
 
 
-def aj(*args: str, input: str | None = None):
-    """Run `aj` in-process; return (result, combined stdout+stderr)."""
+def run_cli(*args: str, input: str | None = None):
+    """Run `acli-py` in-process; return (result, combined stdout+stderr)."""
     result = runner.invoke(app, list(args), input=input)
     return result, result.output
 
@@ -59,7 +59,7 @@ def jira(fake):
 def site(fake, jira):
     """Log in to the fake site; return its state (the request log starts empty)."""
     _, url = fake
-    result, out = aj(
+    result, out = run_cli(
         "auth", "login", "--site", url, "--email", fake_jira.EMAIL, "--token", fake_jira.TOKEN
     )
     assert result.exit_code == 0, out

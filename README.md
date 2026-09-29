@@ -3,32 +3,32 @@
 [![CI](https://github.com/codeonym-oss/acli-py/actions/workflows/ci.yml/badge.svg)](https://github.com/codeonym-oss/acli-py/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](https://github.com/codeonym-oss/acli-py/blob/main/LICENSE)
 
-`aj` is a friendly command line for **Jira Cloud**. It is a Python port of the Jira side of
+`acli-py` is a friendly command line for **Jira Cloud**. It is a Python port of the Jira side of
 Atlassian's [`acli`](https://developer.atlassian.com/cloud/acli/), redesigned around short,
 predictable commands and a **dry-run mode for every change**.
 
 ```sh
-aj issue create -p DEMO -t Bug -s "Login fails on Safari" -a @me -L web
-aj issue transition DEMO-12 --to "In Progress" -m "On it"
-aj issue edit --jql 'project = DEMO AND labels = legacy' --remove-label legacy --dry-run
-aj issue search '@me is:open #web sort:-priority'
-aj tui
+acli-py issue create -p DEMO -t Bug -s "Login fails on Safari" -a @me -L web
+acli-py issue transition DEMO-12 --to "In Progress" -m "On it"
+acli-py issue edit --jql 'project = DEMO AND labels = legacy' --remove-label legacy --dry-run
+acli-py issue search '@me is:open #web sort:-priority'
+acli-py tui
 ```
 
-![aj tui: views, the issue list and the detail pane](https://raw.githubusercontent.com/codeonym-oss/acli-py/main/docs/_static/tui.svg)
+![acli-py tui: views, the issue list and the detail pane](https://raw.githubusercontent.com/codeonym-oss/acli-py/main/docs/_static/tui.svg)
 
-- **A TUI and a shell.** `aj tui` is a full-screen issue browser: type a query with
+- **A TUI and a shell.** `acli-py tui` is a full-screen issue browser: type a query with
   completion from your site, read issues beside the list, then transition, assign, comment,
-  relabel or create, one issue or many at a time. `aj shell` runs every command at a prompt
+  relabel or create, one issue or many at a time. `acli-py shell` runs every command at a prompt
   that completes commands, options, issue keys, statuses, people and JQL.
 - **Smart queries.** `@me #web s:progress is:open updated:7d sort:-priority` compiles to the
   JQL you meant, with names spelled the way your site spells them. Plain JQL still works.
 - **Every Jira object you work with daily:** issues (create, view, search, edit, assign,
   transition, clone, archive, delete), comments, links, attachments, watchers, worklogs,
   projects, boards, sprints, filters, custom fields, dashboards and users. There is also
-  `aj api` for any other endpoint.
+  `acli-py api` for any other endpoint.
 - **Dry run everywhere.** Add `--dry-run` (`-n`) to any command, or put it in front
-  (`aj -n …`), or set `ACLI_PY_DRY_RUN=1`. Reads still happen, so targets are resolved for
+  (`acli-py -n …`), or set `ACLI_PY_DRY_RUN=1`. Reads still happen, so targets are resolved for
   real, but each write is printed instead of sent. The HTTP client enforces this, so no
   command can skip it.
 - **Bulk by default.** Commands that change issues take keys (`DEMO-1 DEMO-2`), `--jql`,
@@ -51,21 +51,21 @@ install it from the repository with [uv](https://docs.astral.sh/uv/) or
 
 ```sh
 uv tool install git+https://github.com/codeonym-oss/acli-py   # or: pipx install git+…
-aj --version
+acli-py --version
 ```
 
-That installs two identical commands: `aj`, and `acli-py` for when `aj` is taken.
+That installs the `acli-py` command.
 
 ## Getting started
 
 ```sh
-aj auth login                  # site, email and an API token (typed hidden)
-aj config set project DEMO     # optional: the project used when -p is left out
-aj issue search -a @me --open  # my unfinished issues
+acli-py auth login                  # site, email and an API token (typed hidden)
+acli-py config set project DEMO     # optional: the project used when -p is left out
+acli-py issue search -a @me --open  # my unfinished issues
 ```
 
 Create an API token at <https://id.atlassian.com/manage-profile/security/api-tokens>. For
-scripts, `echo "$TOKEN" | aj auth login -s team.atlassian.net -e me@example.com --token-stdin`.
+scripts, `echo "$TOKEN" | acli-py auth login -s team.atlassian.net -e me@example.com --token-stdin`.
 In CI, skip the login and set `ACLI_PY_SITE`, `ACLI_PY_EMAIL` and `ACLI_PY_API_TOKEN`.
 
 ## Commands
@@ -74,33 +74,33 @@ Every command has `--help` with examples. The whole tree:
 
 | Command | What it does |
 |---|---|
-| `aj auth login \| logout \| status \| switch` | Manage accounts. `status --check` verifies the token. |
-| `aj config show \| set \| unset \| path` | Defaults: `project`, `issue-type`, `board`, `editor`. |
-| `aj issue view KEY` | Details, description (rendered Markdown), subtasks, links, attachments, latest comments. `--web`, `--json`. |
-| `aj tui [QUERY]` | The full-screen issue browser. `--view NAME` starts from a saved view. |
-| `aj shell` | Every command at a prompt, with completion from your site. |
-| `aj issue search [QUERY]` | Search with a smart query or JQL, and/or `-p -a -s -t -L --text --open --filter --order`. `--count`, `--all`, `--fields`, `--csv`, `--web`, `--syntax`. Alias `list`. |
-| `aj issue create` | One issue from options, `--editor` or `--from-file`, or many from `--from-json` / `--from-csv` (`--template` prints an example). |
-| `aj issue edit KEYS…` | Summary, description, type, priority, labels (`--add-label`, `--remove-label`), components, versions, parent, due date, any `-F` field. |
-| `aj issue assign KEYS… --to USER` | Assign to `@me`, a person, `default`, or `--unassign`. |
-| `aj issue transition KEYS… --to STATUS` | Move by status or transition name, with `-m` comment, `--resolution` and fields. Alias `move`. `transitions KEY` lists options. |
-| `aj issue clone KEYS…` | Copy issues, in place, `--to-project`, or `--to-site` another account's site, linked to the original. |
-| `aj issue archive \| unarchive \| delete KEYS…` | Archive, restore, or permanently delete (`--with-subtasks`). |
-| `aj issue open KEY` | Open in the browser. |
-| `aj issue comment list \| add \| edit \| delete \| visibility` | Markdown comments. Role/group visibility, `--edit-last`, `--editor`, stdin. |
-| `aj issue link add A blocks B \| list \| delete \| types` | Links read as a sentence, with inward phrases too (`"is blocked by"`). Bulk from JSON/CSV. |
-| `aj issue attachment list \| upload \| download \| delete` | Files on an issue. |
-| `aj issue watcher list \| add \| remove` | Watchers (yourself by default). |
-| `aj issue worklog list \| add \| delete` | Log time: `aj issue worklog add DEMO-1 "1h 30m" -m "Pairing"`. |
-| `aj project list \| view \| create \| update \| archive \| restore \| delete` | Projects. `create -T scrum\|kanban\|basic\|tasks\|process\|service`, or `--from-project KEY` to share one's configuration. `components`, `versions`. |
-| `aj board list \| view \| create \| delete \| projects \| sprints \| backlog` | Boards. |
-| `aj sprint list \| view \| issues \| create \| update \| start \| close \| delete \| add \| remove` | Sprints, and moving issues in and out of them. |
-| `aj filter list \| search \| view \| create \| update \| delete \| star \| owner \| columns` | Saved filters, sharing, favourites, navigator columns. |
-| `aj field list \| create \| update \| delete \| restore` | Fields and their ids. `create --type text\|number\|select\|date\|user…`. |
-| `aj dashboard list \| view` | Dashboards. |
-| `aj user search \| view` | Look people up (`aj user view` is you). |
-| `aj meta statuses \| priorities \| resolutions \| issue-types` | Site-wide lists. |
-| `aj api METHOD PATH` | Any REST endpoint with your credentials: `aj api GET myself`, `-d @body.json`, `-q key=value`. |
+| `acli-py auth login \| logout \| status \| switch` | Manage accounts. `status --check` verifies the token. |
+| `acli-py config show \| set \| unset \| path` | Defaults: `project`, `issue-type`, `board`, `editor`. |
+| `acli-py issue view KEY` | Details, description (rendered Markdown), subtasks, links, attachments, latest comments. `--web`, `--json`. |
+| `acli-py tui [QUERY]` | The full-screen issue browser. `--view NAME` starts from a saved view. |
+| `acli-py shell` | Every command at a prompt, with completion from your site. |
+| `acli-py issue search [QUERY]` | Search with a smart query or JQL, and/or `-p -a -s -t -L --text --open --filter --order`. `--count`, `--all`, `--fields`, `--csv`, `--web`, `--syntax`. Alias `list`. |
+| `acli-py issue create` | One issue from options, `--editor` or `--from-file`, or many from `--from-json` / `--from-csv` (`--template` prints an example). |
+| `acli-py issue edit KEYS…` | Summary, description, type, priority, labels (`--add-label`, `--remove-label`), components, versions, parent, due date, any `-F` field. |
+| `acli-py issue assign KEYS… --to USER` | Assign to `@me`, a person, `default`, or `--unassign`. |
+| `acli-py issue transition KEYS… --to STATUS` | Move by status or transition name, with `-m` comment, `--resolution` and fields. Alias `move`. `transitions KEY` lists options. |
+| `acli-py issue clone KEYS…` | Copy issues, in place, `--to-project`, or `--to-site` another account's site, linked to the original. |
+| `acli-py issue archive \| unarchive \| delete KEYS…` | Archive, restore, or permanently delete (`--with-subtasks`). |
+| `acli-py issue open KEY` | Open in the browser. |
+| `acli-py issue comment list \| add \| edit \| delete \| visibility` | Markdown comments. Role/group visibility, `--edit-last`, `--editor`, stdin. |
+| `acli-py issue link add A blocks B \| list \| delete \| types` | Links read as a sentence, with inward phrases too (`"is blocked by"`). Bulk from JSON/CSV. |
+| `acli-py issue attachment list \| upload \| download \| delete` | Files on an issue. |
+| `acli-py issue watcher list \| add \| remove` | Watchers (yourself by default). |
+| `acli-py issue worklog list \| add \| delete` | Log time: `acli-py issue worklog add DEMO-1 "1h 30m" -m "Pairing"`. |
+| `acli-py project list \| view \| create \| update \| archive \| restore \| delete` | Projects. `create -T scrum\|kanban\|basic\|tasks\|process\|service`, or `--from-project KEY` to share one's configuration. `components`, `versions`. |
+| `acli-py board list \| view \| create \| delete \| projects \| sprints \| backlog` | Boards. |
+| `acli-py sprint list \| view \| issues \| create \| update \| start \| close \| delete \| add \| remove` | Sprints, and moving issues in and out of them. |
+| `acli-py filter list \| search \| view \| create \| update \| delete \| star \| owner \| columns` | Saved filters, sharing, favourites, navigator columns. |
+| `acli-py field list \| create \| update \| delete \| restore` | Fields and their ids. `create --type text\|number\|select\|date\|user…`. |
+| `acli-py dashboard list \| view` | Dashboards. |
+| `acli-py user search \| view` | Look people up (`acli-py user view` is you). |
+| `acli-py meta statuses \| priorities \| resolutions \| issue-types` | Site-wide lists. |
+| `acli-py api METHOD PATH` | Any REST endpoint with your credentials: `acli-py api GET myself`, `-d @body.json`, `-q key=value`. |
 
 Global options go before the command: `--dry-run`, `--account EMAIL@SITE` (use another saved
 account once), and `--debug` (trace every HTTP request).
@@ -108,7 +108,7 @@ account once), and `--debug` (trace every HTTP request).
 ## Dry run
 
 ```console
-$ aj issue link add DEMO-2 "is blocked by" DEMO-3 --dry-run
+$ acli-py issue link add DEMO-2 "is blocked by" DEMO-3 --dry-run
 ╭─ DRY RUN POST /rest/api/3/issueLink ─╮
 │ {                                    │
 │   "type": {                          │
@@ -131,42 +131,42 @@ Confirmation prompts are skipped during a dry run, because nothing will change.
 
 ## Coming from `acli`
 
-| acli | aj |
+| acli | acli-py |
 |---|---|
-| `acli jira auth login --site S --email E --token < t` | `aj auth login -s S -e E --token-stdin < t` |
-| `acli jira workitem view KEY-1` | `aj issue view KEY-1` |
-| `acli jira workitem search --jql "…" --paginate` | `aj issue search "…" --all` |
-| `acli jira workitem create --summary S --project P --type T` | `aj issue create -s S -p P -t T` |
-| `acli jira workitem create-bulk --from-csv f.csv` | `aj issue create --from-csv f.csv` |
-| `acli jira workitem edit --key K --summary S` | `aj issue edit K -s S` |
-| `acli jira workitem transition --key K --status Done` | `aj issue transition K --to Done` |
-| `acli jira workitem assign --key K --assignee @me` | `aj issue assign K --to @me` |
-| `acli jira workitem comment create --key K --body B` | `aj issue comment add K -b B` |
-| `acli jira workitem link create --out A --in B --type Blocks` | `aj issue link add A blocks B` |
-| `acli jira workitem list-watchers --key K` | `aj issue watcher list K` |
-| `acli jira project create --key K --name N` | `aj project create -k K --name N` |
-| `acli jira board list-sprints --id 1` | `aj board sprints 1` or `aj sprint list 1` |
-| `acli jira sprint list-workitems --sprint 7 --board 1` | `aj sprint issues 7` |
-| `acli jira filter add-favourite --filter-id 1` | `aj filter star 1` |
-| `acli jira field delete --id customfield_1` | `aj field delete customfield_1` |
-| `acli jira dashboard search` | `aj dashboard list` |
+| `acli jira auth login --site S --email E --token < t` | `acli-py auth login -s S -e E --token-stdin < t` |
+| `acli jira workitem view KEY-1` | `acli-py issue view KEY-1` |
+| `acli jira workitem search --jql "…" --paginate` | `acli-py issue search "…" --all` |
+| `acli jira workitem create --summary S --project P --type T` | `acli-py issue create -s S -p P -t T` |
+| `acli jira workitem create-bulk --from-csv f.csv` | `acli-py issue create --from-csv f.csv` |
+| `acli jira workitem edit --key K --summary S` | `acli-py issue edit K -s S` |
+| `acli jira workitem transition --key K --status Done` | `acli-py issue transition K --to Done` |
+| `acli jira workitem assign --key K --assignee @me` | `acli-py issue assign K --to @me` |
+| `acli jira workitem comment create --key K --body B` | `acli-py issue comment add K -b B` |
+| `acli jira workitem link create --out A --in B --type Blocks` | `acli-py issue link add A blocks B` |
+| `acli jira workitem list-watchers --key K` | `acli-py issue watcher list K` |
+| `acli jira project create --key K --name N` | `acli-py project create -k K --name N` |
+| `acli jira board list-sprints --id 1` | `acli-py board sprints 1` or `acli-py sprint list 1` |
+| `acli jira sprint list-workitems --sprint 7 --board 1` | `acli-py sprint issues 7` |
+| `acli jira filter add-favourite --filter-id 1` | `acli-py filter star 1` |
+| `acli jira field delete --id customfield_1` | `acli-py field delete customfield_1` |
+| `acli jira dashboard search` | `acli-py dashboard list` |
 
-Every `acli jira` command of acli 1.3.39 has an `aj` equivalent: the
-[full table](docs/guide/from-acli.md) goes flag by flag. `aj workitem …` is a hidden alias of
-`aj issue …`. Not ported: OAuth browser login (`--web`), which needs an Atlassian OAuth app,
+Every `acli jira` command of acli 1.3.39 has an `acli-py` equivalent: the
+[full table](docs/guide/from-acli.md) goes flag by flag. `acli-py workitem …` is a hidden alias of
+`acli-py issue …`. Not ported: OAuth browser login (`--web`), which needs an Atlassian OAuth app,
 and acli's Confluence, admin and Rovo Dev commands.
 
 ## Configuration
 
 | | |
 |---|---|
-| Config file | `aj config path`. `ACLI_PY_CONFIG_DIR` moves it. Never holds tokens. |
+| Config file | `acli-py config path`. `ACLI_PY_CONFIG_DIR` moves it. Never holds tokens. |
 | Tokens | System keyring, or `credentials.json` (0600) next to the config. Force one with `ACLI_PY_CREDENTIAL_BACKEND=keyring\|file`. |
 | `ACLI_PY_API_TOKEN` | Used instead of the stored token, never saved. |
 | `ACLI_PY_SITE`, `ACLI_PY_EMAIL` | With `ACLI_PY_API_TOKEN`: run without logging in (CI). |
 | `ACLI_PY_DRY_RUN=1` | Every command is a dry run. |
 | `views.json`, `query-history.json`, `shell-history` | Saved views and history for the TUI and shell, next to the config. The shell never records a line holding a token. |
-| `VISUAL` / `EDITOR` | Used by `--editor` (or `aj config set editor "code --wait"`). |
+| `VISUAL` / `EDITOR` | Used by `--editor` (or `acli-py config set editor "code --wait"`). |
 
 ## Development
 

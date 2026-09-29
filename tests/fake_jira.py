@@ -1,7 +1,7 @@
 """A small, stateful stand-in for Jira Cloud's REST API (platform v3 + Agile 1.0).
 
 It keeps issues, comments, links, filters, boards and sprints in memory, so tests can run a
-real `aj` command over real HTTP and then look at what changed. Every request is recorded in
+real `acli-py` command over real HTTP and then look at what changed. Every request is recorded in
 `FakeJira.log`, which is how the tests prove that a dry run sends no writes.
 
 JQL is only roughly understood: `project`, `key in`, `labels`, `status`, `assignee =

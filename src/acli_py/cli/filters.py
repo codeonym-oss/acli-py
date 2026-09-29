@@ -1,4 +1,4 @@
-"""`aj filter` and `aj field`: saved filters and custom fields."""
+"""`acli-py filter` and `acli-py field`: saved filters and custom fields."""
 
 from __future__ import annotations
 
@@ -195,7 +195,7 @@ def filter_update(
     if (edits := _share(edit_share, "--edit-share")) is not None:
         body["editPermissions"] = edits
     if len(body) == 1 and not name:
-        raise fail("Nothing to change. See [bold]aj filter update --help[/].")
+        raise fail("Nothing to change. See [bold]acli-py filter update --help[/].")
     result = session.client.put(f"{API}/filter/{filter_id}", body)
     if as_json:
         output.print_json(result)
@@ -427,7 +427,7 @@ def field_update(
     body = {"name": name, "description": description, "searcherKey": searcher}
     body = {k: v for k, v in body.items() if v is not None}
     if not body:
-        raise fail("Nothing to change. See [bold]aj field update --help[/].")
+        raise fail("Nothing to change. See [bold]acli-py field update --help[/].")
     session = connect(dry_run)
     session.client.put(f"{API}/field/{field_id}", body)
     if not session.dry_run:

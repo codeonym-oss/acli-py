@@ -1,4 +1,4 @@
-"""The `aj` command line (also installed as `acli-py`)."""
+"""The `acli-py` command line."""
 
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ from acli_py.cli import (
 from acli_py.cli.common import close_clients, state
 
 app = typer.Typer(
-    name="aj",
+    name="acli-py",
     help="A friendly command line for Jira Cloud. Every change can be previewed with "
     "[bold]--dry-run[/].",
     no_args_is_help=True,
@@ -85,7 +85,7 @@ def main(
         ),
     ] = None,
 ) -> None:
-    """Start with [bold]aj auth login[/], then use [bold]aj issue[/], [bold]aj sprint[/]…."""
+    """Start with [bold]acli-py auth login[/], then use [bold]acli-py issue[/], [bold]sprint[/]…."""
     state.dry_run, state.debug, state.account = dry_run, debug, account
     state.clients.clear()
     ctx.call_on_close(close_clients)

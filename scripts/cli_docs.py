@@ -86,11 +86,11 @@ def command_section(path: str, command: Command, level: int) -> list[str]:
     """Return the Markdown for one runnable command."""
     arguments = [p for p in command.params if not _is_option(p)]
     usage = " ".join(
-        ["aj", path, *(f"[{a.human_readable_name.upper()}]" if not a.required
+        ["acli-py", path, *(f"[{a.human_readable_name.upper()}]" if not a.required
                        else a.human_readable_name.upper() for a in arguments), "[OPTIONS]"]
     )  # fmt: skip
     description, examples = _help(command)
-    lines = [f"{'#' * level} `aj {path}`", "", description, "", "```text", usage, "```", ""]
+    lines = [f"{'#' * level} `acli-py {path}`", "", description, "", "```text", usage, "```", ""]
     if examples:
         lines += ["```sh", examples, "```", ""]
     lines += ["| Option | Default | Description |", "|---|---|---|"]
@@ -112,7 +112,7 @@ def command_section(path: str, command: Command, level: int) -> list[str]:
 
 def group_page(name: str, group: Command) -> str:
     """Return the page for a top-level group (or a single top-level command)."""
-    lines = [HEADER, "", f"# aj {name}", ""]
+    lines = [HEADER, "", f"# acli-py {name}", ""]
     if not hasattr(group, "commands"):
         return "\n".join(lines + command_section(name, group, 2)).rstrip() + "\n"
     lines += [_plain(group.help), "", ""]
@@ -123,7 +123,7 @@ def group_page(name: str, group: Command) -> str:
                 continue
             if hasattr(sub, "commands"):
                 lines.extend(
-                    [f"## `aj {' '.join([*path, sub_name])}`", "", _plain(sub.help), "", ""]
+                    [f"## `acli-py {' '.join([*path, sub_name])}`", "", _plain(sub.help), "", ""]
                 )
                 walk(sub, [*path, sub_name])
             else:
@@ -141,7 +141,7 @@ def pages() -> dict[Path, str]:
     result: dict[Path, str] = {}
     toc: list[str] = []
     commands = root.commands.items()
-    # Groups first, in the order `aj --help` shows them; single commands (api) last.
+    # Groups first, in the order `acli-py --help` shows them; single commands (api) last.
     for name, command in sorted(commands, key=lambda item: not hasattr(item[1], "commands")):
         if command.hidden:
             continue
@@ -152,7 +152,7 @@ def pages() -> dict[Path, str]:
         "",
         "# Commands",
         "",
-        "Every command, generated from `aj --help`. Global options go before the command:",
+        "Every command, generated from `acli-py --help`. Global options go before the command:",
         "",
         "| Option | Description |",
         "|---|---|",

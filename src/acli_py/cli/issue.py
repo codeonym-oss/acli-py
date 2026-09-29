@@ -1,4 +1,4 @@
-"""`aj issue`: view, search, create, edit, move, assign, clone, archive and delete issues."""
+"""`acli-py issue`: view, search, create, edit, move, assign, clone, archive and delete issues."""
 
 from __future__ import annotations
 
@@ -297,7 +297,7 @@ def build_jql(
         if not default:
             raise fail(
                 "Say what to search: a JQL query, or --project/--assignee/--status/--text…, "
-                "or set a default with [bold]aj config set project KEY[/]."
+                "or set a default with [bold]acli-py config set project KEY[/]."
             )
         clauses.append(f"project = {jql_quote(default)}")
     query = " AND ".join(clauses)
@@ -408,10 +408,10 @@ def search(
 ) -> None:
     """Find issues with a smart query, JQL, and/or simple options.
 
-    [dim]aj issue search '@me is:open #web sort:-priority'
-    aj issue search 'p:DEMO s:progress updated:7d "login"'
-    aj issue search -p DEMO -a @me --open
-    aj issue search 'project = DEMO AND sprint in openSprints()' --csv[/]
+    [dim]acli-py issue search '@me is:open #web sort:-priority'
+    acli-py issue search 'p:DEMO s:progress updated:7d "login"'
+    acli-py issue search -p DEMO -a @me --open
+    acli-py issue search 'project = DEMO AND sprint in openSprints()' --csv[/]
     """
     if syntax:
         show_syntax()
@@ -513,8 +513,8 @@ def create(
 
     Options given on the command line fill in what each file row leaves out.
 
-    [dim]aj issue create -p DEMO -t Bug -s "Login fails on Safari" -a @me -L web
-    aj issue create --from-csv backlog.csv -p DEMO --dry-run[/]
+    [dim]acli-py issue create -p DEMO -t Bug -s "Login fails on Safari" -a @me -L web
+    acli-py issue create --from-csv backlog.csv -p DEMO --dry-run[/]
     """
     if template:
         output.print_json([issue_fields.TEMPLATE])
@@ -708,8 +708,8 @@ def edit(
 ) -> None:
     """Change fields on one or many issues.
 
-    [dim]aj issue edit DEMO-4 -s "New title" --add-label urgent
-    aj issue edit --jql 'project = DEMO AND labels = old' --remove-label old -y[/]
+    [dim]acli-py issue edit DEMO-4 -s "New title" --add-label urgent
+    acli-py issue edit --jql 'project = DEMO AND labels = old' --remove-label old -y[/]
     """
     if template:
         output.print_json(EDIT_TEMPLATE)
@@ -752,7 +752,7 @@ def edit(
         resolve.account_id(session.client, assignee, session.me) if assignee is not None else ...
     )
     if not payload.get("fields") and "update" not in payload and assign_to is ...:
-        raise fail("Nothing to change. See [bold]aj issue edit --help[/].")
+        raise fail("Nothing to change. See [bold]acli-py issue edit --help[/].")
     if len(picked) > 1:
         confirm(f"Edit {plural(len(picked), 'issue')}?", yes, session)
 
@@ -795,8 +795,8 @@ def assign(
 ) -> None:
     """Assign issues to someone, to the project default, or to nobody.
 
-    [dim]aj issue assign DEMO-1 DEMO-2 --to @me
-    aj issue assign --jql 'assignee = "old@example.com"' --to new@example.com -y[/]
+    [dim]acli-py issue assign DEMO-1 DEMO-2 --to @me
+    acli-py issue assign --jql 'assignee = "old@example.com"' --to new@example.com -y[/]
     """
     if bool(to) == unassign:
         raise fail("Give exactly one of [bold]--to USER[/] and [bold]--unassign[/].")
@@ -844,12 +844,12 @@ def transition(
 ) -> None:
     """Move issues to another status (alias: move).
 
-    [dim]aj issue transition DEMO-1 --to Done -m "Shipped in 2.4"[/]
+    [dim]acli-py issue transition DEMO-1 --to Done -m "Shipped in 2.4"[/]
     """
     if not to:
         raise fail(
             "Say where to: [bold]--to STATUS[/]. List options with "
-            "[bold]aj issue transitions KEY[/]."
+            "[bold]acli-py issue transitions KEY[/]."
         )
     session = connect(dry_run)
     picked = resolve.targets(session.client, keys, jql, saved_filter, from_file)
@@ -1045,9 +1045,9 @@ def clone(
     With [bold]--to-site[/], copies go to another site you are logged in to, each with a web
     link back to its original.
 
-    [dim]aj issue clone DEMO-1 DEMO-2 --prefix "[copy] "
-    aj issue clone --jql 'sprint = 7' --to-project OPS
-    aj issue clone DEMO-1 --to-site me@other.atlassian.net --to-project NEW[/]
+    [dim]acli-py issue clone DEMO-1 DEMO-2 --prefix "[copy] "
+    acli-py issue clone --jql 'sprint = 7' --to-project OPS
+    acli-py issue clone DEMO-1 --to-site me@other.atlassian.net --to-project NEW[/]
     """
     session = connect(dry_run)
     if to_site and not to_project:

@@ -1,4 +1,4 @@
-"""`aj board` and `aj sprint`: Jira Software's boards and sprints (the Agile API)."""
+"""`acli-py board` and `acli-py sprint`: Jira Software's boards and sprints (the Agile API)."""
 
 from __future__ import annotations
 
@@ -38,10 +38,11 @@ from acli_py.output import Column, dig
 board_app = typer.Typer(help="Work with boards.", no_args_is_help=True)
 sprint_app = typer.Typer(help="Plan, start and close sprints.", no_args_is_help=True)
 
-BoardIdArg = Annotated[int, typer.Argument(help="Board id (see `aj board list`).")]
-SprintIdArg = Annotated[int, typer.Argument(help="Sprint id (see `aj sprint list`).")]
+BoardIdArg = Annotated[int, typer.Argument(help="Board id (see `acli-py board list`).")]
+SprintIdArg = Annotated[int, typer.Argument(help="Sprint id (see `acli-py sprint list`).")]
 BoardOpt = Annotated[
-    int | None, typer.Option("--board", "-b", help="Board id (default: `aj config set board`).")
+    int | None,
+    typer.Option("--board", "-b", help="Board id (default: `acli-py config set board`)."),
 ]
 StateOpt = Annotated[
     list[str] | None,
@@ -65,7 +66,7 @@ def board_id(session: Session, board: int | None) -> int:
     default = session.config.defaults.get("board")
     if not default:
         raise fail(
-            "No board given. Pass [bold]--board ID[/] or run [bold]aj config set board ID[/]."
+            "No board given. Pass [bold]--board ID[/] or run [bold]acli-py config set board ID[/]."
         )
     return int(default)
 
@@ -154,7 +155,7 @@ def board_view(board: BoardIdArg, web: WebOpt = False, as_json: JsonOpt = False)
         ("Name", escape(data.get("name", ""))),
         ("Type", data.get("type")),
         ("Project", escape(dig(data, "location", "displayName", default=""))),
-        ("Filter", f"{dig(config, 'filter', 'id')} [dim](aj filter view …)[/]"),
+        ("Filter", f"{dig(config, 'filter', 'id')} [dim](acli-py filter view …)[/]"),
         ("Columns", escape(" → ".join(c for c in columns if c))),
         ("Estimation", escape(dig(config, "estimation", "field", "displayName", default=""))),
     ]
@@ -340,7 +341,7 @@ def sprint_create(
 def _update_sprint(session: Session, sprint: int, changes: dict[str, Any], done: str) -> None:
     changes = {k: v for k, v in changes.items() if v is not None}
     if not changes:
-        raise fail("Nothing to change. See [bold]aj sprint update --help[/].")
+        raise fail("Nothing to change. See [bold]acli-py sprint update --help[/].")
     session.client.post(f"{AGILE}/sprint/{sprint}", changes)
     if not session.dry_run:
         output.success(f"Sprint {sprint} {done}")

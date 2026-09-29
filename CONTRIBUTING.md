@@ -10,7 +10,7 @@ You need [uv](https://docs.astral.sh/uv/). Python versions are installed by uv a
 git clone git@github.com:codeonym-oss/acli-py.git && cd acli-py
 uv sync                                  # .venv with the locked dev tools
 uv run pre-commit install --install-hooks -t pre-commit -t commit-msg -t pre-push
-uv run aj --help                         # the CLI, from your checkout
+uv run acli-py --help                         # the CLI, from your checkout
 ```
 
 The hooks run the same checks as CI:
@@ -26,7 +26,7 @@ The tests never reach a real Jira, and every test gets its own config directory 
 credential store.
 
 `tests/fake_jira.py` is a stateful, in-memory Jira (platform v3 and Agile 1.0 routes) served
-over real HTTP. Tests run the real `aj` commands against it, then check both the output and what
+over real HTTP. Tests run the real `acli-py` commands against it, then check both the output and what
 changed on the fake site. It records every request, which is how
 `test_every_write_command_honours_dry_run` proves that `--dry-run` sends no writes. When you add
 a write command, add it to that test's list.
@@ -131,7 +131,8 @@ CI builds the site with `-W`, so broken links and references fail the build.
 
 The command reference (`docs/commands/`) is generated from the CLI's own help texts. After
 changing a command, an option or a help text, run `uv run python scripts/cli_docs.py`.
-`tests/test_docs.py` fails when the reference is out of date.
+`tests/test_docs.py` fails when the reference is out of date. After changing how the TUI looks,
+run `uv run python scripts/tui_screenshots.py` to redraw the screenshots in `docs/_static/`.
 
 [Read the Docs](https://app.readthedocs.org/) builds and hosts the site from
 `.readthedocs.yaml`: `latest` is `main`, each release tag gets its own version, and `stable`
