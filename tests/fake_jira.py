@@ -253,7 +253,7 @@ class FakeJira:
 
     def comment(self, author: dict, text: str) -> dict:
         """Return a new comment."""
-        from acli_py.adf import to_adf
+        from acli_py.domain.adf import to_adf
 
         return {
             "id": self.new_id(),

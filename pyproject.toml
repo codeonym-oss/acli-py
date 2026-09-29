@@ -43,7 +43,7 @@ Issues = "https://github.com/codeonym-oss/acli-py/issues"
 Changelog = "https://github.com/codeonym-oss/acli-py/blob/main/CHANGELOG.md"
 
 [project.scripts]
-acli-py = "acli_py.cli:app"
+acli-py = "acli_py.presentation.cli:app"
 
 [build-system]
 requires = ["uv_build>=0.8.22,<0.13"]
@@ -58,6 +58,7 @@ dev = [
     {include-group = "test"},
     {include-group = "docs"},
     "commitizen>=4.8",
+    "import-linter>=2.15",
     "pre-commit>=4.3",
     "pyright>=1.1.400",
     "ruff>=0.16",
@@ -90,11 +91,11 @@ ignore = [
 # Fixture data (fake Jira payloads) reads better unwrapped.
 "tests/**" = ["D", "E501"]
 # Typer reads the command signatures' annotations at runtime, so their imports must stay real.
-"src/acli_py/cli/**" = ["TC"]
+"src/acli_py/presentation/cli/**" = ["TC"]
 # mediary reads handler signatures at runtime to find their messages and dependencies.
-"src/acli_py/app/**" = ["TC"]
+"src/acli_py/application/**" = ["TC"]
 # Textual's BINDINGS and CSS are class attributes by design.
-"src/acli_py/tui/**" = ["RUF012"]
+"src/acli_py/presentation/tui/**" = ["RUF012"]
 
 [tool.commitizen]
 # Only used to validate messages (commit-msg hook + CI); versions and changelog are release-please's job.
@@ -121,3 +122,65 @@ fail_under = 88
 show_missing = true
 skip_covered = true
 exclude_also = ["if TYPE_CHECKING:", "@overload", "raise NotImplementedError", "if __name__ == .__main__.:"]
+
+# The layer rules from docs/adr/0001-layers.md, checked by `lint-imports` (pre-commit and CI).
+# ignore_imports lists the imports written before the layers existed. Each ticket that moves a
+# use case deletes its lines; a line that no longer matches an import fails the check.
+[tool.importlinter]
+root_package = "acli_py"
+
+[[tool.importlinter.contracts]]
+id = "layers"
+name = "Each layer imports only the layers below it"
+type = "layers"
+layers = [
+    "acli_py.presentation",
+    "acli_py.bootstrap",
+    "acli_py.infrastructure",
+    "acli_py.application",
+    "acli_py.domain",
+]
+ignore_imports = [
+    "acli_py.application.site -> acli_py.infrastructure.jira.client",
+    "acli_py.application.handlers -> acli_py.infrastructure.jira.client",
+]
+
+[[tool.importlinter.contracts]]
+id = "no-shortcuts"
+name = "Presentation reaches infrastructure only through the composition root"
+type = "forbidden"
+source_modules = ["acli_py.presentation"]
+forbidden_modules = ["acli_py.infrastructure"]
+allow_indirect_imports = true
+ignore_imports = [
+    "acli_py.presentation.cli.agile -> acli_py.infrastructure.jira.client",
+    "acli_py.presentation.cli.agile -> acli_py.infrastructure.jira.fields",
+    "acli_py.presentation.cli.agile -> acli_py.infrastructure.jira.resolve",
+    "acli_py.presentation.cli.auth -> acli_py.infrastructure.config",
+    "acli_py.presentation.cli.auth -> acli_py.infrastructure.credentials",
+    "acli_py.presentation.cli.auth -> acli_py.infrastructure.jira.client",
+    "acli_py.presentation.cli.common -> acli_py.infrastructure.config",
+    "acli_py.presentation.cli.common -> acli_py.infrastructure.credentials",
+    "acli_py.presentation.cli.common -> acli_py.infrastructure.jira.client",
+    "acli_py.presentation.cli.common -> acli_py.infrastructure.jira.resolve",
+    "acli_py.presentation.cli.config_cmd -> acli_py.infrastructure.config",
+    "acli_py.presentation.cli.filters -> acli_py.infrastructure.jira.client",
+    "acli_py.presentation.cli.filters -> acli_py.infrastructure.jira.resolve",
+    "acli_py.presentation.cli.interactive -> acli_py.infrastructure.config",
+    "acli_py.presentation.cli.interactive -> acli_py.infrastructure.storage",
+    "acli_py.presentation.cli.issue -> acli_py.infrastructure.jira.client",
+    "acli_py.presentation.cli.issue -> acli_py.infrastructure.jira.fields",
+    "acli_py.presentation.cli.issue -> acli_py.infrastructure.jira.resolve",
+    "acli_py.presentation.cli.issue_parts -> acli_py.infrastructure.jira.client",
+    "acli_py.presentation.cli.issue_parts -> acli_py.infrastructure.jira.fields",
+    "acli_py.presentation.cli.issue_parts -> acli_py.infrastructure.jira.resolve",
+    "acli_py.presentation.cli.misc -> acli_py.infrastructure.jira.client",
+    "acli_py.presentation.cli.misc -> acli_py.infrastructure.jira.resolve",
+    "acli_py.presentation.cli.project -> acli_py.infrastructure.jira.client",
+    "acli_py.presentation.cli.project -> acli_py.infrastructure.jira.resolve",
+    "acli_py.presentation.output -> acli_py.infrastructure.jira.client",
+    "acli_py.presentation.tui.app -> acli_py.infrastructure.jira.client",
+    "acli_py.presentation.tui.app -> acli_py.infrastructure.jira.resolve",
+    "acli_py.presentation.tui.app -> acli_py.infrastructure.storage",
+    "acli_py.presentation.tui.widgets -> acli_py.infrastructure.jira.fields",
+]

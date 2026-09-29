@@ -29,6 +29,12 @@ repos:
         language: system
         types_or: [python, pyi]
         pass_filenames: false
+      - id: import-layers
+        name: import layers (lint-imports)
+        entry: uv run --frozen lint-imports
+        language: system
+        types_or: [python, toml]
+        pass_filenames: false
       - id: commit-message
         name: conventional commit message
         entry: uv run --frozen cz check --commit-msg-file

@@ -116,6 +116,94 @@ Fixes #5
 
 Keep a PR to one issue. Fill in the PR template's checklist.
 
+## Code layout
+
+The code is split into four layers; [ADR 0001](docs/adr/0001-layers.md) explains why.
+
+```text
+src/acli_py/
+  domain/          Jira's concepts and rules: pure Python, no I/O
+  application/     use cases on the mediary bus: commands/, queries/, events/, behaviors/
+  infrastructure/  the Jira client, config, credentials, files
+  presentation/    cli/, shell.py, tui/, output.py
+  bootstrap.py     builds the bus and the adapters for the front ends
+```
+
+Each layer imports only the layers below it (presentation → bootstrap → infrastructure →
+application → domain), and front ends reach infrastructure only through `bootstrap`.
+`uv run lint-imports` checks this in pre-commit and CI. Code written before the layers is
+listed under `ignore_imports` in `pyproject.toml`; when you move a use case, delete its lines
+there. Never add new ones.
+
+### Adding a command
+
+A command changes Jira. Give it its own folder, named after what it does:
+
+```text
+application/commands/watch_issue/
+  __init__.py
+  command.py    # the message
+  handler.py    # what it does
+```
+
+```python
+# command.py
+from dataclasses import dataclass
+
+from mediary.cqrs import Command, command
+
+
+@command
+@dataclass(frozen=True)
+class WatchIssue(Command[None]):
+    """Start or stop watching an issue."""
+
+    key: str
+    watch: bool = True
+```
+
+```python
+# handler.py
+from mediary.cqrs import command_handler
+
+from acli_py.application.commands.watch_issue.command import WatchIssue
+
+
+@command_handler
+def watch_issue(command: WatchIssue, site: Site) -> None:
+    """Add or remove the user as a watcher."""
+```
+
+The bus finds the handler by itself: `bootstrap.build_bus` scans `commands/`, `queries/` and
+`events/`. Handlers are plain synchronous functions. mediary runs them on a worker thread,
+and passes their other parameters (the dependencies) from the composition root's resolver.
+Front ends then `await bus.send(WatchIssue("DEMO-1"))`. Test the handler against the fake Jira
+site in `tests/fake_jira.py`.
+
+### Adding a query
+
+A query only reads. Its folder has a third file, `view.py`, holding the read model that front
+ends display: the handler returns a view built from domain objects, and the view knows how to
+show itself (as a table, JSON, Markdown…). Queries are frozen dataclasses because they are the
+query cache's keys.
+
+### Adding a subscriber
+
+Events say what happened (`application/events/<event>/event.py`). Anyone who reacts to one
+adds a function to that event's `subscribers.py`:
+
+```python
+from mediary.cqrs import event_handler
+
+
+@event_handler
+def write_audit_record(event: IssueChanged, log: AuditLog) -> None:
+    """Remember the change, so it can be undone."""
+```
+
+Subscribers never call back into commands; if a reaction needs to change Jira, it belongs in
+the command's handler.
+
 ## Documentation
 
 The docs site is built with [Sphinx](https://www.sphinx-doc.org/), the

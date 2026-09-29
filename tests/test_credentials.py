@@ -4,8 +4,8 @@ import keyring
 import pytest
 from keyring.backend import KeyringBackend
 
-from acli_py import credentials
-from acli_py.config import config_dir
+from acli_py.infrastructure import credentials
+from acli_py.infrastructure.config import config_dir
 
 NAME = "a@b.c@site.atlassian.net"
 

@@ -11,13 +11,13 @@ import pytest
 from textual.screen import ModalScreen
 from textual.widgets import Input, Markdown, OptionList, TextArea
 
-from acli_py.app.bus import Bus
-from acli_py.app.site import Site
-from acli_py.app.store import History, Views
-from acli_py.client import JiraClient
-from acli_py.jql import JiraCatalog
-from acli_py.tui.app import IssueBrowser, with_order
-from acli_py.tui.screens import (
+from acli_py.application.site import Site
+from acli_py.bootstrap import build_bus
+from acli_py.infrastructure.jira.catalog import JiraCatalog
+from acli_py.infrastructure.jira.client import JiraClient
+from acli_py.infrastructure.storage import History, Views
+from acli_py.presentation.tui.app import IssueBrowser, with_order
+from acli_py.presentation.tui.screens import (
     ActivityScreen,
     CreateScreen,
     HelpScreen,
@@ -25,7 +25,7 @@ from acli_py.tui.screens import (
     PromptScreen,
     TextScreen,
 )
-from acli_py.tui.widgets import ago, issue_markdown, type_cell
+from acli_py.presentation.tui.widgets import ago, issue_markdown, type_cell
 from tests import fake_jira
 
 if TYPE_CHECKING:
@@ -37,7 +37,7 @@ SIZE = (160, 44)
 def browser(url: str, tmp: Path, *, query: str = "p:DEMO sort:key", dry_run: bool = False):
     client = JiraClient(url, fake_jira.EMAIL, fake_jira.TOKEN, dry_run=dry_run, retries=0)
     return IssueBrowser(
-        Bus(Site(client, url, "", "Alice Martin")),
+        build_bus(Site(client, url, "", "Alice Martin")),
         JiraCatalog(client),
         query=query,
         default_project="DEMO",

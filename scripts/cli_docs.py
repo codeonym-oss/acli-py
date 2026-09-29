@@ -2,8 +2,8 @@
 
 Each top-level command group gets one page (`docs/commands/issue.md`, …) listing every command
 under it with its usage, description and options. Pages are fully generated: edit the help texts
-in `src/acli_py/cli/`, then run this script. `--check` changes nothing and exits 1 when a page
-is out of date, as the tests do.
+in `src/acli_py/presentation/cli/`, then run this script. `--check` changes nothing and exits 1
+when a page is out of date, as the tests do.
 
     uv run python scripts/cli_docs.py [--check]
 """
@@ -18,7 +18,7 @@ from typing import Any
 import typer
 from rich.text import Text
 
-from acli_py.cli import app
+from acli_py.presentation.cli import app
 
 ROOT = Path(__file__).resolve().parents[1]
 PAGES = ROOT / "docs" / "commands"
