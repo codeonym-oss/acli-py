@@ -9,9 +9,12 @@ aj auth login
 aj issue create -p DEMO -t Bug -s "Login fails on Safari" -a @me -L web
 aj issue transition DEMO-12 --to "In Progress" -m "On it"
 aj issue edit --jql 'project = DEMO AND labels = legacy' --remove-label legacy --dry-run
+aj issue search '@me is:open #web sort:-priority'
+aj tui
 ```
 
-Start with [Getting started](guide/getting-started.md). [Dry runs and bulk changes](guide/dry-run.md)
+Start with [Getting started](guide/getting-started.md), then try the
+[TUI and the shell](guide/interactive.md). [Dry runs and bulk changes](guide/dry-run.md)
 explains how changes are previewed and applied to many issues. Every command is listed under
 [Commands](commands/index.md), generated from the CLI's own help.
 
@@ -20,6 +23,7 @@ explains how changes are previewed and applied to many issues. Every command is 
 :caption: Guide
 
 guide/getting-started
+guide/interactive
 guide/dry-run
 guide/fields
 guide/from-acli

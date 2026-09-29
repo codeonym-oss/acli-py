@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any
 
 import typer
@@ -77,7 +77,7 @@ def iso_date(text: str | None, end_of_day: bool = False) -> str | None:
     text = text.strip()
     if "T" in text:
         return text
-    moment = datetime.fromisoformat(text).replace(tzinfo=timezone.utc)
+    moment = datetime.fromisoformat(text).replace(tzinfo=UTC)
     if end_of_day:
         moment = moment.replace(hour=23, minute=59)
     return moment.strftime("%Y-%m-%dT%H:%M:%S.000Z")
@@ -99,6 +99,13 @@ def board_list(
     filter_id: Annotated[
         str | None, typer.Option("--filter", help="Boards using this filter id.")
     ] = None,
+    order: Annotated[
+        str | None, typer.Option("--order", help="Sort by name: name, or -name for Z to A.")
+    ] = None,
+    private: Annotated[
+        bool,
+        typer.Option("--private", help="Also list private boards (Jira hides their names)."),
+    ] = False,
     limit: LimitOpt = 50,
     all_pages: AllOpt = False,
     as_json: JsonOpt = False,
@@ -113,6 +120,8 @@ def board_list(
         type=board_type,
         projectKeyOrId=project.upper() if project else None,
         filterId=filter_id,
+        orderBy=order,
+        includePrivate="true" if private else None,
     )
     output.emit(
         boards,
@@ -377,7 +386,7 @@ def sprint_start(
     begin = (
         iso_date(start)
         or current.get("startDate")
-        or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+        or datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.000Z")
     )
     finish = iso_date(end, True) or current.get("endDate")
     if not finish:

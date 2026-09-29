@@ -242,13 +242,26 @@ def filter_star(
 @filter_app.command("owner")
 @guarded
 def filter_owner(
-    filter_ids: Annotated[list[str], typer.Argument(help="Filter ids.")],
     to: Annotated[str, typer.Option("--to", help="New owner: email, name or account id.")],
+    filter_ids: Annotated[
+        list[str] | None, typer.Argument(help="Filter ids.", show_default=False)
+    ] = None,
+    from_file: Annotated[
+        Path | None,
+        typer.Option(
+            "--from-file", "-f", help="Read filter ids from a file (commas, spaces or lines)."
+        ),
+    ] = None,
     yes: YesOpt = False,
     ignore_errors: IgnoreErrorsOpt = False,
     dry_run: DryRunOpt = False,
 ) -> None:
     """Hand filters over to someone else."""
+    filter_ids = resolve.split_keys(filter_ids) + (
+        resolve.read_keys_file(from_file) if from_file else []
+    )
+    if not filter_ids:
+        raise fail("Say which filters: give their ids or --from-file.")
     session = connect(dry_run)
     account = resolve.user(session.client, to, session.me)["accountId"]
     if len(filter_ids) > 1:

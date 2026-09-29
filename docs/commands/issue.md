@@ -24,20 +24,22 @@ aj issue view KEY [OPTIONS]
 
 ## `aj issue search`
 
-Find issues with JQL and/or simple options.
+Find issues with a smart query, JQL, and/or simple options.
 
 ```text
 aj issue search [JQL] [OPTIONS]
 ```
 
 ```sh
+aj issue search '@me is:open #web sort:-priority'
+aj issue search 'p:DEMO s:progress updated:7d "login"'
 aj issue search -p DEMO -a @me --open
 aj issue search 'project = DEMO AND sprint in openSprints()' --csv
 ```
 
 | Option | Default | Description |
 |---|---|---|
-| `JQL` |  | A JQL query (optional). |
+| `JQL` |  | A smart query ('@me #web is:open', see --syntax) or JQL (optional). |
 | `-p`, `--project` `TEXT` |  | Project key (default: `aj config set project`). |
 | `-a`, `--assignee` `TEXT` |  | @me, 'none', email or name. |
 | `-s`, `--status` `TEXT` |  | Status name (repeatable). |
@@ -54,6 +56,8 @@ aj issue search 'project = DEMO AND sprint in openSprints()' --csv
 | `-w`, `--web` |  | Open it in the browser instead. |
 | `--json` |  | Print JSON. |
 | `--csv` |  | Print CSV. |
+| `--syntax` |  | Show the smart query syntax and exit. |
+| `--raw` |  | Send the query as JQL, never as a smart query. |
 
 
 ## `aj issue create`
@@ -90,6 +94,7 @@ aj issue create --from-csv backlog.csv -p DEMO --dry-run
 | `-e`, `--editor` |  | Write the summary and description in $EDITOR. |
 | `--from-json` `PATH` |  | Create from a JSON file: one issue or a list. |
 | `--from-csv` `PATH` |  | Create one issue per row of a CSV file with a header. |
+| `-f`, `--from-file` `PATH` |  | Read the summary (first line) and description (the rest) from a text file. |
 | `--template` |  | Print an example --from-json file and exit. |
 | `--open` |  | Open the new issue in the browser. |
 | `--ignore-errors` |  | Keep going when one item fails; exit 1 at the end. |
@@ -135,6 +140,7 @@ aj issue edit --jql 'project = DEMO AND labels = old' --remove-label old -y
 | `-e`, `--editor` |  | Edit the summary and description in $EDITOR. |
 | `--from-json` `PATH` |  | Apply a Jira edit payload ({fields, update}) file. |
 | `--notify`, `--no-notify` | `True` | Email watchers about the change. |
+| `--template` |  | Print an example --from-json file and exit. |
 | `-y`, `--yes` |  | Don't ask for confirmation. |
 | `--ignore-errors` |  | Keep going when one item fails; exit 1 at the end. |
 | `-n`, `--dry-run` |  | Show what would change without changing anything. Reads still run. |
@@ -246,6 +252,7 @@ aj issue archive [KEYS] [OPTIONS]
 | `--filter` `TEXT` |  | Act on the issues of this saved filter id. |
 | `-f`, `--from-file` `PATH` |  | Read issue keys from a file (commas, spaces or lines; '-' for stdin). |
 | `-y`, `--yes` |  | Don't ask for confirmation. |
+| `--ignore-errors` |  | Keep going when one item fails; exit 1 at the end. |
 | `-n`, `--dry-run` |  | Show what would change without changing anything. Reads still run. |
 | `--json` |  | Print JSON. |
 
@@ -263,6 +270,7 @@ aj issue unarchive [KEYS] [OPTIONS]
 | `KEYS` |  | Issue keys (DEMO-1 DEMO-2, or DEMO-1,DEMO-2). |
 | `-f`, `--from-file` `PATH` |  | Read issue keys from a file (commas, spaces or lines; '-' for stdin). |
 | `-y`, `--yes` |  | Don't ask for confirmation. |
+| `--ignore-errors` |  | Keep going when one item fails; exit 1 at the end. |
 | `-n`, `--dry-run` |  | Show what would change without changing anything. Reads still run. |
 | `--json` |  | Print JSON. |
 
@@ -271,8 +279,17 @@ aj issue unarchive [KEYS] [OPTIONS]
 
 Copy issues (summary, description, type, priority, labels…), in place or to a project.
 
+With --to-site, copies go to another site you are logged in to, each with a web
+link back to its original.
+
 ```text
 aj issue clone [KEYS] [OPTIONS]
+```
+
+```sh
+aj issue clone DEMO-1 DEMO-2 --prefix " "
+aj issue clone --jql 'sprint = 7' --to-project OPS
+aj issue clone DEMO-1 --to-site me@other.atlassian.net --to-project NEW
 ```
 
 | Option | Default | Description |
@@ -281,6 +298,7 @@ aj issue clone [KEYS] [OPTIONS]
 | `-p`, `--to-project` `TEXT` |  | Clone into this project (default: same one). |
 | `--prefix` `TEXT` |  | Put this before each copied summary. |
 | `--link`, `--no-link` | `True` | Link each copy to its original. |
+| `--to-site` `TEXT` |  | Clone into another saved account's site (email@site or the site); needs --to-project. |
 | `-q`, `--jql` `TEXT` |  | Act on the issues this JQL finds. |
 | `--filter` `TEXT` |  | Act on the issues of this saved filter id. |
 | `-f`, `--from-file` `PATH` |  | Read issue keys from a file (commas, spaces or lines; '-' for stdin). |
@@ -342,7 +360,7 @@ echo "Deployed" | aj issue comment add --jql 'fixVersion = 2.4' -b - -y
 |---|---|---|
 | `KEYS` |  | Issue keys (DEMO-1 DEMO-2, or DEMO-1,DEMO-2). |
 | `-b`, `--body` `TEXT` |  | Markdown (or ADF JSON); '-' reads stdin. |
-| `-B`, `--body-file` `PATH` |  | Read the body from a file. |
+| `-B`, `--body-adf`, `--body-file` `PATH` |  | Read the body from a file: Markdown, or ADF JSON ('-' for stdin). |
 | `-e`, `--editor` |  | Write the body in $EDITOR. |
 | `--role` `TEXT` |  | Only this project role can see it. |
 | `--group` `TEXT` |  | Only this group can see it. |
@@ -369,7 +387,7 @@ aj issue comment edit KEY COMMENT_ID [OPTIONS]
 | `KEY` | required | Issue key, e.g. DEMO-12. |
 | `COMMENT_ID` | required | Comment id (see `comment list`). |
 | `-b`, `--body` `TEXT` |  | Markdown (or ADF JSON); '-' reads stdin. |
-| `-B`, `--body-file` `PATH` |  | Read the body from a file. |
+| `-B`, `--body-adf`, `--body-file` `PATH` |  | Read the body from a file: Markdown, or ADF JSON ('-' for stdin). |
 | `-e`, `--editor` |  | Write the body in $EDITOR. |
 | `--role` `TEXT` |  | Only this project role can see it. |
 | `--group` `TEXT` |  | Only this group can see it. |
@@ -433,6 +451,7 @@ aj issue link add DEMO-5 "is duplicated by" DEMO-9
 | `--from-json` `PATH` |  | Many links: [{"from": "A-1", "type": "blocks", "to": "A-2"}]. |
 | `--from-csv` `PATH` |  | Many links: CSV with from,type,to columns. |
 | `-m`, `--comment` `TEXT` |  | Also comment on the first issue. |
+| `--template` |  | Print an example --from-json file and exit. |
 | `-y`, `--yes` |  | Don't ask for confirmation. |
 | `--ignore-errors` |  | Keep going when one item fails; exit 1 at the end. |
 | `-n`, `--dry-run` |  | Show what would change without changing anything. Reads still run. |

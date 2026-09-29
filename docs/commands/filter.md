@@ -129,13 +129,14 @@ aj filter star FILTER_ID [OPTIONS]
 Hand filters over to someone else.
 
 ```text
-aj filter owner FILTER_IDS [OPTIONS]
+aj filter owner [FILTER_IDS] [OPTIONS]
 ```
 
 | Option | Default | Description |
 |---|---|---|
-| `FILTER_IDS` | required | Filter ids. |
 | `--to` `TEXT` | required | New owner: email, name or account id. |
+| `FILTER_IDS` |  | Filter ids. |
+| `-f`, `--from-file` `PATH` |  | Read filter ids from a file (commas, spaces or lines). |
 | `-y`, `--yes` |  | Don't ask for confirmation. |
 | `--ignore-errors` |  | Keep going when one item fails; exit 1 at the end. |
 | `-n`, `--dry-run` |  | Show what would change without changing anything. Reads still run. |

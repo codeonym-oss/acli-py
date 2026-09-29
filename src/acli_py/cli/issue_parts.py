@@ -58,7 +58,13 @@ BodyOpt = Annotated[
     str | None, typer.Option("--body", "-b", help="Markdown (or ADF JSON); '-' reads stdin.")
 ]
 BodyFileOpt = Annotated[
-    Path | None, typer.Option("--body-file", "-B", help="Read the body from a file.")
+    Path | None,
+    typer.Option(
+        "--body-file",
+        "-B",
+        "--body-adf",
+        help="Read the body from a file: Markdown, or ADF JSON ('-' for stdin).",
+    ),
 ]
 EditorOpt = Annotated[bool, typer.Option("--editor", "-e", help="Write the body in $EDITOR.")]
 RoleOpt = Annotated[str | None, typer.Option("--role", help="Only this project role can see it.")]
@@ -284,6 +290,9 @@ def link_add(
     comment: Annotated[
         str | None, typer.Option("--comment", "-m", help="Also comment on the first issue.")
     ] = None,
+    template: Annotated[
+        bool, typer.Option("--template", help="Print an example --from-json file and exit.")
+    ] = False,
     yes: YesOpt = False,
     ignore_errors: IgnoreErrorsOpt = False,
     dry_run: DryRunOpt = False,
@@ -293,6 +302,14 @@ def link_add(
     [dim]aj issue link add DEMO-1 blocks DEMO-2
     aj issue link add DEMO-5 "is duplicated by" DEMO-9[/]
     """
+    if template:
+        output.print_json(
+            [
+                {"from": "DEMO-1", "type": "blocks", "to": "DEMO-2"},
+                {"from": "DEMO-3", "type": "is duplicated by", "to": "DEMO-4"},
+            ]
+        )
+        return
     session = connect(dry_run)
     triples: list[tuple[str, str, str]] = []
     if from_json:

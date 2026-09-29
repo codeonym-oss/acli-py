@@ -50,6 +50,7 @@ aj project create [OPTIONS]
 
 ```sh
 aj project create -k OPS -n "Operations" -T kanban
+aj project create -k WEB2 -n "Web 2" --from-project WEB
 ```
 
 | Option | Default | Description |
@@ -61,6 +62,7 @@ aj project create -k OPS -n "Operations" -T kanban
 | `-d`, `--description` `TEXT` |  | Description. |
 | `--url` `TEXT` |  | A web address for the project. |
 | `--from-json` `PATH` |  | Read the details from a JSON file. |
+| `--from-project` `TEXT` |  | Share this company-managed project's configuration: its type, category, and permission, notification, security, issue type, screen and workflow schemes. |
 | `--print-template` |  | Print an example --from-json file. |
 | `-n`, `--dry-run` |  | Show what would change without changing anything. Reads still run. |
 | `--json` |  | Print JSON. |

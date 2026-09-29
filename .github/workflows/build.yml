@@ -43,6 +43,8 @@ jobs:
               echo "::error::$dist: aj --version printed '$got', expected '$EXPECTED'"; exit 1
             fi
             /tmp/smoke/bin/acli-py --help > /dev/null
+            # The TUI and the shell load their libraries lazily: import them for real.
+            /tmp/smoke/bin/python -c "import acli_py.tui.app, acli_py.shell"
             echo "ok $dist: $got"
           done
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

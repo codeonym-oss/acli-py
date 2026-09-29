@@ -11,7 +11,7 @@ import io
 import json
 import sys
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
 from rich import box
@@ -34,7 +34,7 @@ STATUS_COLORS = {"new": "blue", "indeterminate": "yellow", "done": "green"}
 METHOD_COLORS = {"POST": "green", "PUT": "yellow", "DELETE": "red", "PATCH": "yellow"}
 
 
-class Format(str, Enum):
+class Format(StrEnum):
     """How a command prints its results."""
 
     table = "table"

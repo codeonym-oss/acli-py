@@ -14,6 +14,7 @@ from rich.markdown import Markdown
 from rich.markup import escape
 from rich.panel import Panel
 from rich.rule import Rule
+from rich.table import Table
 
 from acli_py import adf, output, resolve
 from acli_py import fields as issue_fields
@@ -45,6 +46,9 @@ from acli_py.cli.common import (
 )
 from acli_py.client import API, DRY_RUN_ID
 from acli_py.fields import IssueInput, flat, when
+from acli_py.jql import JiraCatalog, compile_query, looks_like_jql
+from acli_py.jql.catalog import spelling
+from acli_py.jql.smart import cheatsheet
 from acli_py.output import Column, Format, dig, status_text
 
 app = typer.Typer(help="Work with issues (Jira's work items).", no_args_is_help=True)
@@ -306,6 +310,21 @@ def build_jql(
     return f"{query} {ordering or 'ORDER BY updated DESC'}"
 
 
+def show_syntax() -> None:
+    """Print the smart query syntax."""
+    table = Table(title="Smart queries", title_justify="left", box=None, padding=(0, 2))
+    table.add_column("Term", style="cyan", no_wrap=True)
+    table.add_column("Also", style="dim")
+    table.add_column("Meaning")
+    for term, aliases, meaning in cheatsheet():
+        table.add_row(escape(term), escape(aliases), escape(meaning))
+    output.console.print(table)
+    output.console.print(
+        "\nTerms combine with AND; the same filter twice means either (s:todo s:review). "
+        "Anything with =, ~, 'in (' or ORDER BY is sent as JQL."
+    )
+
+
 def _order_tail(jql: str) -> str:
     match = re.search(r"(?i)\border\s+by\b.*$", jql)
     return match.group(0) if match else ""
@@ -339,7 +358,13 @@ def issue_columns(session: Session, extra: list[str]) -> list[Column]:
 @app.command("list", hidden=True)
 @guarded
 def search(
-    jql: Annotated[str | None, typer.Argument(help="A JQL query (optional).")] = None,
+    jql: Annotated[
+        str | None,
+        typer.Argument(
+            help="A smart query ('@me #web is:open', see --syntax) or JQL (optional).",
+            show_default=False,
+        ),
+    ] = None,
     project: ProjectOpt = None,
     assignee: Annotated[
         str | None, typer.Option("--assignee", "-a", help="@me, 'none', email or name.")
@@ -374,13 +399,31 @@ def search(
     web: WebOpt = False,
     as_json: JsonOpt = False,
     as_csv: CsvOpt = False,
+    syntax: Annotated[
+        bool, typer.Option("--syntax", help="Show the smart query syntax and exit.")
+    ] = False,
+    raw: Annotated[
+        bool, typer.Option("--raw", help="Send the query as JQL, never as a smart query.")
+    ] = False,
 ) -> None:
-    """Find issues with JQL and/or simple options.
+    """Find issues with a smart query, JQL, and/or simple options.
 
-    [dim]aj issue search -p DEMO -a @me --open
+    [dim]aj issue search '@me is:open #web sort:-priority'
+    aj issue search 'p:DEMO s:progress updated:7d "login"'
+    aj issue search -p DEMO -a @me --open
     aj issue search 'project = DEMO AND sprint in openSprints()' --csv[/]
     """
+    if syntax:
+        show_syntax()
+        return
     session = connect()
+    if jql and not raw and not looks_like_jql(jql):
+        compiled = compile_query(
+            jql, resolve=spelling(JiraCatalog(session.client)), default_order=""
+        )
+        for warning in compiled.warnings:
+            output.warn(escape(warning))
+        jql = compiled.jql
     base = session.client.filter(saved_filter)["jql"] if saved_filter else None
     query_text = " AND ".join(f"({q})" for q in (base, jql) if q) if base and jql else base or jql
     query = build_jql(
@@ -449,6 +492,14 @@ def create(
         Path | None,
         typer.Option("--from-csv", help="Create one issue per row of a CSV file with a header."),
     ] = None,
+    from_file: Annotated[
+        Path | None,
+        typer.Option(
+            "--from-file",
+            "-f",
+            help="Read the summary (first line) and description (the rest) from a text file.",
+        ),
+    ] = None,
     template: Annotated[
         bool, typer.Option("--template", help="Print an example --from-json file and exit.")
     ] = False,
@@ -490,6 +541,11 @@ def create(
         rows = issue_fields.read_rows(from_json or from_csv)  # type: ignore[arg-type]
         _create_many(session, rows, common, yes, ignore_errors, as_json)
         return
+    if from_file:
+        text = resolve.read_text_arg(None, from_file) or ""
+        first, _, rest = text.strip("\n").partition("\n")
+        common.summary = common.summary or first.strip()
+        common.description = common.description or rest.strip() or None
     if editor:
         common.summary, common.description = _edit_issue_text(
             session, common.summary or "", common.description or ""
@@ -577,6 +633,16 @@ def _create_many(
     )
 
 
+# What `issue edit --from-json` takes: Jira's own edit payload.
+EDIT_TEMPLATE = {
+    "fields": {"summary": "A new summary", "duedate": "2026-12-31"},
+    "update": {
+        "labels": [{"add": "triaged"}, {"remove": "needs-triage"}],
+        "components": [{"set": [{"name": "API"}]}],
+    },
+}
+
+
 def _edit_issue_text(session: Session, summary: str, description: str) -> tuple[str, str]:
     template = f"{summary}\n\n{description}\n" if summary or description else "\n\n"
     text = edit_text(
@@ -632,6 +698,9 @@ def edit(
     notify: Annotated[
         bool, typer.Option("--notify/--no-notify", help="Email watchers about the change.")
     ] = True,
+    template: Annotated[
+        bool, typer.Option("--template", help="Print an example --from-json file and exit.")
+    ] = False,
     yes: YesOpt = False,
     ignore_errors: IgnoreErrorsOpt = False,
     dry_run: DryRunOpt = False,
@@ -642,6 +711,9 @@ def edit(
     [dim]aj issue edit DEMO-4 -s "New title" --add-label urgent
     aj issue edit --jql 'project = DEMO AND labels = old' --remove-label old -y[/]
     """
+    if template:
+        output.print_json(EDIT_TEMPLATE)
+        return
     session = connect(dry_run)
     picked = resolve.targets(session.client, keys, jql, saved_filter, from_file)
     wanted = IssueInput(
@@ -877,8 +949,12 @@ def _archive(unarchive: bool, **kwargs: Any) -> None:
     path = f"{API}/issue/{'unarchive' if unarchive else 'archive'}"
     done = f"{verb.lower()}d"
     results: list[dict] = []
-    # The archive endpoints take up to 1000 issues per call.
+    # The archive endpoints take up to 1000 issues per call. Without --ignore-errors, a batch
+    # with failures stops the batches after it.
     for start in range(0, len(picked), 1000):
+        if results and results[-1].get("errors") and not kwargs["ignore_errors"]:
+            output.info(f"{plural(len(picked) - start, 'issue')} not tried.")
+            break
         batch = picked[start : start + 1000]
         result = session.client.put(path, {"issueIdsOrKeys": batch}) or {}
         results.append(result)
@@ -906,6 +982,7 @@ def archive(
     saved_filter: FilterOpt = None,
     from_file: FromFileOpt = None,
     yes: YesOpt = False,
+    ignore_errors: IgnoreErrorsOpt = False,
     dry_run: DryRunOpt = False,
     as_json: JsonOpt = False,
 ) -> None:
@@ -919,6 +996,7 @@ def unarchive(
     keys: KeysArg = None,
     from_file: FromFileOpt = None,
     yes: YesOpt = False,
+    ignore_errors: IgnoreErrorsOpt = False,
     dry_run: DryRunOpt = False,
     as_json: JsonOpt = False,
 ) -> None:
@@ -946,6 +1024,14 @@ def clone(
     link: Annotated[
         bool, typer.Option("--link/--no-link", help="Link each copy to its original.")
     ] = True,
+    to_site: Annotated[
+        str | None,
+        typer.Option(
+            "--to-site",
+            help="Clone into another saved account's site (email@site or the site); "
+            "needs --to-project.",
+        ),
+    ] = None,
     jql: JqlOpt = None,
     saved_filter: FilterOpt = None,
     from_file: FromFileOpt = None,
@@ -954,13 +1040,25 @@ def clone(
     dry_run: DryRunOpt = False,
     as_json: JsonOpt = False,
 ) -> None:
-    """Copy issues (summary, description, type, priority, labels…), in place or to a project."""
+    """Copy issues (summary, description, type, priority, labels…), in place or to a project.
+
+    With [bold]--to-site[/], copies go to another site you are logged in to, each with a web
+    link back to its original.
+
+    [dim]aj issue clone DEMO-1 DEMO-2 --prefix "[copy] "
+    aj issue clone --jql 'sprint = 7' --to-project OPS
+    aj issue clone DEMO-1 --to-site me@other.atlassian.net --to-project NEW[/]
+    """
     session = connect(dry_run)
+    if to_site and not to_project:
+        raise fail("--to-site needs --to-project: the other site has its own projects.")
+    target = connect(dry_run, account_name=to_site) if to_site else session
+    cross_site = target.url != session.url
     picked = resolve.targets(session.client, keys, jql, saved_filter, from_file)
     if len(picked) > 1:
         confirm(f"Clone {plural(len(picked), 'issue')}?", yes, session)
     cloners = None
-    if link:
+    if link and not cross_site:
         cloners = next(
             (t for t in session.client.link_types() if t.get("name", "").lower() == "cloners"),
             None,
@@ -969,7 +1067,9 @@ def clone(
     def one(key: str) -> dict:
         original = session.client.issue(key, CLONE_FIELDS)
         f = original["fields"]
-        same_project = not to_project or to_project.upper() == f["project"]["key"]
+        same_project = not cross_site and (
+            not to_project or to_project.upper() == f["project"]["key"]
+        )
         new: dict[str, Any] = {
             "project": {"key": (to_project or f["project"]["key"]).upper()},
             "summary": prefix + f.get("summary", ""),
@@ -987,8 +1087,13 @@ def clone(
                 new["fixVersions"] = [{"id": v["id"]} for v in f["fixVersions"]]
             if f.get("parent"):
                 new["parent"] = {"key": f["parent"]["key"]}
-        created = session.client.post(f"{API}/issue", {"fields": new})
-        if cloners:
+        created = target.client.post(f"{API}/issue", {"fields": new})
+        if cross_site and link:
+            target.client.post(
+                f"{API}/issue/{created['key']}/remotelink",
+                {"object": {"url": session.browse(key), "title": f"Cloned from {key}"}},
+            )
+        elif cloners:
             # The outward ("from") issue is the copy: "DEMO-9 clones DEMO-1".
             session.client.post(
                 f"{API}/issueLink",
