@@ -35,3 +35,10 @@ guide/from-acli
 
 commands/index
 ```
+
+```{toctree}
+:hidden:
+:caption: Design
+
+adr/0001-layers
+```

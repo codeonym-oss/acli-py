@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-from acli_py.adf import inline, parse_adf, to_adf, to_text
+from acli_py.domain.adf import inline, parse_adf, to_adf, to_text
 
 
 def test_plain_text_becomes_paragraphs_with_line_breaks():

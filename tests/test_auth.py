@@ -4,7 +4,7 @@ import json
 import os
 import stat
 
-from acli_py.config import Config, config_dir
+from acli_py.infrastructure.config import Config, config_dir
 from tests import fake_jira
 from tests.conftest import run_cli
 

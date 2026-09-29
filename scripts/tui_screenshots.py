@@ -12,12 +12,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from acli_py.app.bus import Bus
-from acli_py.app.site import Site
-from acli_py.app.store import History, Views
-from acli_py.client import JiraClient
-from acli_py.jql import JiraCatalog
-from acli_py.tui.app import IssueBrowser
+from acli_py.application.site import Site
+from acli_py.bootstrap import build_bus, build_catalog
+from acli_py.infrastructure.jira.client import JiraClient
+from acli_py.infrastructure.storage import History, Views
+from acli_py.presentation.tui.app import IssueBrowser
 from tests import fake_jira
 
 OUT = Path(__file__).resolve().parent.parent / "docs" / "_static"
@@ -52,8 +51,8 @@ def main() -> None:
         client = JiraClient(url, fake_jira.EMAIL, fake_jira.TOKEN)
         site = Site(client, "https://demo.atlassian.net", "", "Alice Martin")
         app = IssueBrowser(
-            Bus(site),
-            JiraCatalog(client),
+            build_bus(site),
+            build_catalog(client),
             query="p:DEMO sort:key",
             views=Views(state / "views.json"),
             history=History(state / "history.json"),

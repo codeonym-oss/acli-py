@@ -9,10 +9,11 @@ import typer
 from prompt_toolkit.completion import CompleteEvent
 from prompt_toolkit.document import Document
 
-from acli_py.cli import app
-from acli_py.client import JiraClient
-from acli_py.jql import JiraCatalog, StaticCatalog, Value
-from acli_py.shell import SafeHistory, Shell, ShellCompleter, commands
+from acli_py.domain.jql import StaticCatalog, Value
+from acli_py.infrastructure.jira.catalog import JiraCatalog
+from acli_py.infrastructure.jira.client import JiraClient
+from acli_py.presentation.cli import app
+from acli_py.presentation.shell import SafeHistory, Shell, ShellCompleter, commands
 from tests import fake_jira
 from tests.conftest import run_cli
 
@@ -136,7 +137,7 @@ def test_shell_loop_reads_until_eof(site, tmp_path, monkeypatch):
                 raise KeyboardInterrupt
             return line
 
-    monkeypatch.setattr("acli_py.shell.PromptSession", FakeSession)
+    monkeypatch.setattr("acli_py.presentation.shell.PromptSession", FakeSession)
     shell, said, _ = make_shell(history=tmp_path / "sub" / "h")
     shell.run()
     assert said[0].startswith("acli-py shell")
@@ -172,7 +173,9 @@ def test_command_list():
 
 def test_tui_command_starts_the_app(site, monkeypatch):
     started: list = []
-    monkeypatch.setattr("acli_py.tui.app.IssueBrowser.run", lambda self: started.append(self))
+    monkeypatch.setattr(
+        "acli_py.presentation.tui.app.IssueBrowser.run", lambda self: started.append(self)
+    )
     result, out = run_cli("-n", "tui", "--view", "overdue")
     assert result.exit_code == 0, out
     browser = started[0]
@@ -186,20 +189,22 @@ def test_tui_command_starts_the_app(site, monkeypatch):
 
 def test_shell_command_starts_the_loop(site, monkeypatch):
     ran: list[Shell] = []
-    monkeypatch.setattr("acli_py.shell.Shell.run", lambda self: ran.append(self))
+    monkeypatch.setattr("acli_py.presentation.shell.Shell.run", lambda self: ran.append(self))
     result, out = run_cli("-n", "shell")
     assert result.exit_code == 0, out
     assert ran[0].dry_run
     assert ran[0].account.startswith(fake_jira.EMAIL)
     started: list = []
-    monkeypatch.setattr("acli_py.tui.app.IssueBrowser.run", lambda self: started.append(self))
+    monkeypatch.setattr(
+        "acli_py.presentation.tui.app.IssueBrowser.run", lambda self: started.append(self)
+    )
     ran[0].execute("tui #web")
     assert started[0].first_query == "#web"
 
 
 def test_shell_without_a_login_still_starts(jira, monkeypatch):
     ran: list[Shell] = []
-    monkeypatch.setattr("acli_py.shell.Shell.run", lambda self: ran.append(self))
+    monkeypatch.setattr("acli_py.presentation.shell.Shell.run", lambda self: ran.append(self))
     result, out = run_cli("shell")
     assert result.exit_code == 0, out
     assert "not logged in" in ran[0].account
@@ -318,7 +323,7 @@ def test_templates_print_json(jira):
 
 
 def test_archive_stops_after_a_failing_batch_unless_told(site, monkeypatch):
-    monkeypatch.setattr("acli_py.cli.issue.plural", lambda n, w: f"{n} {w}s")
+    monkeypatch.setattr("acli_py.presentation.cli.issue.plural", lambda n, w: f"{n} {w}s")
     for n in range(3):
         site.add_issue("DEMO", f"x{n}", "Task")
     result, out = run_cli("issue", "archive", "DEMO-1", "NOPE-9", "-y")

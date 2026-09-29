@@ -54,7 +54,7 @@ def test_documented_commands_and_options_exist():
 
     import typer
 
-    from acli_py.cli import app
+    from acli_py.presentation.cli import app
 
     root: Any = typer.main.get_command(app)  # Typer bundles its own click: typed loosely
 

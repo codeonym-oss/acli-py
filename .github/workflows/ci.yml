@@ -23,6 +23,7 @@ jobs:
       - run: uv sync --frozen
       - run: uv run --frozen ruff check --output-format=github
       - run: uv run --frozen ruff format --check
+      - run: uv run --frozen lint-imports
 
   typecheck:
     runs-on: ubuntu-latest

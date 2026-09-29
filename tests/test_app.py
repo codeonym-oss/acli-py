@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 import asyncio
+from typing import TYPE_CHECKING
 
 import pytest
 
-from acli_py.app.bus import Bus, describe
-from acli_py.app.messages import (
+if TYPE_CHECKING:
+    from acli_py.application.bus import Bus
+
+from acli_py.application.behaviors import describe
+from acli_py.application.messages import (
     AssignIssue,
     CommentOnIssue,
     CountIssues,
@@ -24,15 +28,16 @@ from acli_py.app.messages import (
     ValidateJql,
     WatchIssue,
 )
-from acli_py.app.site import Site
-from acli_py.app.store import BUILTIN_VIEWS, History, Views
-from acli_py.client import JiraClient, NotFoundError
+from acli_py.application.site import Site
+from acli_py.bootstrap import build_bus
+from acli_py.infrastructure.jira.client import JiraClient, NotFoundError
+from acli_py.infrastructure.storage import BUILTIN_VIEWS, History, Views
 from tests import fake_jira
 
 
 def make_bus(url: str, *, dry_run: bool = False) -> Bus:
     client = JiraClient(url, fake_jira.EMAIL, fake_jira.TOKEN, dry_run=dry_run, retries=0)
-    return Bus(Site(client, url))
+    return build_bus(Site(client, url))
 
 
 def run(coro):

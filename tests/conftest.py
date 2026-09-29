@@ -4,7 +4,7 @@ import pytest
 import typer.testing
 from typer.testing import CliRunner
 
-from acli_py.cli import app
+from acli_py.presentation.cli import app
 from tests import fake_jira
 
 runner = CliRunner()

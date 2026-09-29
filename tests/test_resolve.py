@@ -6,9 +6,9 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from acli_py import fields, resolve
-from acli_py.fields import IssueInput, text, when
-from acli_py.resolve import FieldCatalog, ResolveError
+from acli_py.infrastructure.jira import fields, resolve
+from acli_py.infrastructure.jira.fields import IssueInput, text, when
+from acli_py.infrastructure.jira.resolve import FieldCatalog, ResolveError
 from tests import fake_jira
 
 if TYPE_CHECKING:

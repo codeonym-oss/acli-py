@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-from acli_py.adf import to_text
+from acli_py.domain.adf import to_text
 from tests import fake_jira
 from tests.conftest import run_cli
 

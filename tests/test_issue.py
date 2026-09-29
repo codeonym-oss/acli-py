@@ -5,7 +5,7 @@ import json
 
 import pytest
 
-from acli_py.adf import to_text
+from acli_py.domain.adf import to_text
 from tests import fake_jira
 from tests.conftest import run_cli
 
@@ -71,8 +71,8 @@ def test_search_needs_something_to_search_for(site):
 
 
 def test_build_jql_combines_everything(site):
-    from acli_py.cli.common import connect
-    from acli_py.cli.issue import build_jql
+    from acli_py.presentation.cli.common import connect
+    from acli_py.presentation.cli.issue import build_jql
 
     session = connect()
     jql = build_jql(

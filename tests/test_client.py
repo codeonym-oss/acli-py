@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from acli_py.client import (
+from acli_py.infrastructure.jira.client import (
     API,
     DRY_RUN_ID,
     AuthError,

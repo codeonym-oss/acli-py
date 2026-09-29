@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import pytest
 
-from acli_py.client import JiraClient
-from acli_py.jql import Completer, JiraCatalog, StaticCatalog, Value, compile_query, looks_like_jql
-from acli_py.jql.lexer import Kind, quote, tokenize
-from acli_py.jql.smart import cheatsheet, date_clause
+from acli_py.domain.jql import Completer, StaticCatalog, Value, compile_query, looks_like_jql
+from acli_py.domain.jql.lexer import Kind, quote, tokenize
+from acli_py.domain.jql.smart import cheatsheet, date_clause
+from acli_py.infrastructure.jira.catalog import JiraCatalog
+from acli_py.infrastructure.jira.client import JiraClient
 from tests import fake_jira
 
 CATALOG = StaticCatalog(
@@ -172,7 +173,7 @@ def test_warnings_for_what_cant_be_used():
     assert compiled.warnings == [
         "unknown filter colour: (searched as text)",
         "is:shiny: unknown (try "
-        + ", ".join(__import__("acli_py.jql.smart", fromlist=["FLAGS"]).FLAGS)
+        + ", ".join(__import__("acli_py.domain.jql.smart", fromlist=["FLAGS"]).FLAGS)
         + ")",
         'status: needs a value, e.g. s:"In Progress"',
         "sort: give at least one field",
