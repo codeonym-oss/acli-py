@@ -5,11 +5,11 @@ from __future__ import annotations
 import json
 
 from tests import fake_jira
-from tests.conftest import aj
+from tests.conftest import run_cli
 
 
 def ok(*args: str, input: str | None = None) -> str:
-    result, out = aj(*args, input=input)
+    result, out = run_cli(*args, input=input)
     assert result.exit_code == 0, out
     return out
 
@@ -56,7 +56,7 @@ def test_project_create_update_archive_restore_delete(site):
     assert site.projects["NEW"]["archived"]
     ok("project", "restore", "NEW")
     assert not site.projects["NEW"]["archived"]
-    result, _ = aj("project", "delete", "NEW")
+    result, _ = run_cli("project", "delete", "NEW")
     assert result.exit_code == 1
     ok("project", "delete", "NEW", "-y")
     assert ("DELETE", "/rest/api/3/project/NEW", None) in site.log
@@ -68,9 +68,9 @@ def test_project_create_from_json(site, tmp_path):
     spec.write_text(json.dumps({"key": "biz", "name": "Business", "template": "tasks"}))
     ok("project", "create", "--from-json", str(spec))
     assert site.projects["BIZ"]["projectTypeKey"] == "business"
-    _, out = aj("project", "create", "--name", "No key")
+    _, out = run_cli("project", "create", "--name", "No key")
     assert "needs --key and --name" in out
-    _, out = aj("project", "update", "DEMO")
+    _, out = run_cli("project", "update", "DEMO")
     assert "Nothing to change" in out
 
 
@@ -88,7 +88,7 @@ def test_boards(site):
     board_id = next(k for k, b in site.boards.items() if b["name"] == "Ops flow")
     ok("board", "delete", board_id, "-y")
     assert board_id not in site.boards
-    _, out = aj("board", "create", "--name", "x", "--filter", "1", "--type", "list")
+    _, out = run_cli("board", "create", "--name", "x", "--filter", "1", "--type", "list")
     assert "scrum or kanban" in out
 
 
@@ -112,7 +112,7 @@ def test_sprints_lifecycle(site):
     ok("sprint", "remove", "DEMO-2")
     assert site.issues["DEMO-2"]["sprint"] is None
 
-    result, out = aj("sprint", "start", "7")
+    result, out = run_cli("sprint", "start", "7")
     assert result.exit_code == 1
     assert "only a future sprint can start" in out
     ok("sprint", "start", "8", "--start", "2026-10-05", "--weeks", "1")
@@ -127,7 +127,7 @@ def test_sprints_lifecycle(site):
 
 
 def test_sprint_board_default(site):
-    result, out = aj("sprint", "list")
+    result, out = run_cli("sprint", "list")
     assert result.exit_code == 1
     assert "No board given" in out
     ok("config", "set", "board", "1")
@@ -168,7 +168,7 @@ def test_filters(site):
 
     ok("filter", "delete", new["id"], "-y")
     assert new["id"] not in site.filters
-    _, out = aj("filter", "create", "--name", "x", "--jql", "y", "--share", "{}")
+    _, out = run_cli("filter", "create", "--name", "x", "--jql", "y", "--share", "{}")
     assert "JSON array" in out
 
 
@@ -184,7 +184,7 @@ def test_fields(site):
     body = next(b for m, p, b in site.log if m == "POST" and p == "/rest/api/3/field")
     assert body["type"].endswith(":select")
     assert body["searcherKey"].endswith(":multiselectsearcher")
-    _, out = aj("field", "create", "--name", "x", "--type", "blob")
+    _, out = run_cli("field", "create", "--name", "x", "--type", "blob")
     assert "Unknown field type" in out
     ok("field", "update", "customfield_10016", "--name", "Points")
     ok("field", "delete", "customfield_10030", "-y")
@@ -219,9 +219,9 @@ def test_raw_api(site, tmp_path):
     payload.write_text(json.dumps({"fields": {"project": {"key": "OPS"}, "summary": "via api"}}))
     created = json.loads(ok("api", "POST", "issue", "-d", f"@{payload}"))
     assert site.issues[created["key"]]["fields"]["summary"] == "via api"
-    result, out = aj("api", "TRACE", "x")
+    result, out = run_cli("api", "TRACE", "x")
     assert "Unsupported method" in out
-    result, out = aj("api", "GET", "issue/NOPE-1")
+    result, out = run_cli("api", "GET", "issue/NOPE-1")
     assert result.exit_code == 1
     assert "not found" in out
 
@@ -232,7 +232,9 @@ def test_debug_traces_http(site):
 
 
 def test_project_create_from_another_shares_its_schemes(site):
-    result, out = aj("project", "create", "-k", "web2", "--name", "Web 2", "--from-project", "demo")
+    result, out = run_cli(
+        "project", "create", "-k", "web2", "--name", "Web 2", "--from-project", "demo"
+    )
     assert result.exit_code == 0, out
     assert "Sharing DEMO's configuration: permission, notification, issueType" in out
     body = next(b for m, p, b in site.writes() if p == "/rest/api/3/project")
@@ -246,6 +248,6 @@ def test_project_create_from_another_shares_its_schemes(site):
 
 def test_project_create_from_a_team_managed_project_is_refused(site):
     site.projects["DEMO"]["style"] = "next-gen"
-    result, out = aj("project", "create", "-k", "X", "--name", "X", "--from-project", "DEMO")
+    result, out = run_cli("project", "create", "-k", "X", "--name", "X", "--from-project", "DEMO")
     assert result.exit_code == 1
     assert "team-managed" in out

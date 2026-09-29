@@ -156,7 +156,7 @@ class FieldCatalog:
             ids = ", ".join(f["id"] for f in named)
             raise ResolveError(f"several fields are called {name!r} ({ids}); use the id")
         close = [f["name"] for f in self.fields if lowered in f.get("name", "").lower()][:6]
-        hint = f" Did you mean: {', '.join(close)}?" if close else " See `aj field list`."
+        hint = f" Did you mean: {', '.join(close)}?" if close else " See `acli-py field list`."
         raise ResolveError(f"no field called {name!r}.{hint}")
 
 

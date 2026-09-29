@@ -1,4 +1,4 @@
-"""The shell, the `aj tui`/`aj shell` commands, smart search, and the acli parity options."""
+"""The shell, the `acli-py tui`/`acli-py shell` commands, smart search, and the acli parity options."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from acli_py.client import JiraClient
 from acli_py.jql import JiraCatalog, StaticCatalog, Value
 from acli_py.shell import SafeHistory, Shell, ShellCompleter, commands
 from tests import fake_jira
-from tests.conftest import aj
+from tests.conftest import run_cli
 
 ROOT = typer.main.get_command(app)
 
@@ -36,7 +36,7 @@ def test_commands_and_meta_commands(completer):
     top = completions(completer, "")
     assert {"issue", "sprint", "help", "dry-run", "tui", "exit"} <= set(top)
     assert "shell" not in top  # no shell inside the shell
-    assert completions(completer, "aj is") == ["issue"]
+    assert completions(completer, "acli-py is") == ["issue"]
     assert completions(completer, "issue tr") == ["transition", "transitions"]
     assert completions(completer, "issue comment a") == ["add"]
     assert completions(completer, "--") == ["--dry-run", "--account", "--debug", "--version"]
@@ -100,7 +100,7 @@ def test_shell_runs_commands_and_meta_commands(site, tmp_path, capsys):
     shell, said, opened = make_shell(history=tmp_path / "h")
     assert shell.execute("") is None
     assert shell.execute("# a comment") is None
-    assert shell.execute("aj issue view DEMO-1") == 0
+    assert shell.execute("acli-py issue view DEMO-1") == 0
     assert "Login fails on Safari" in capsys.readouterr().out
     assert shell.execute("issue view NOPE-1") == 1
     assert shell.execute("issue view") == 2  # missing argument: click's usage error
@@ -108,7 +108,7 @@ def test_shell_runs_commands_and_meta_commands(site, tmp_path, capsys):
     assert "Can't read that line" in said[-1]
     assert shell.execute("dry-run on") is None
     assert shell.dry_run
-    assert shell.prompt() == "aj (dry run)> "
+    assert shell.prompt() == "acli-py (dry run)> "
     assert "DRY RUN" in shell.toolbar().value
     assert shell.execute("issue assign DEMO-2 --to @me") == 0
     assert site.writes() == []  # the dry run held
@@ -119,7 +119,7 @@ def test_shell_runs_commands_and_meta_commands(site, tmp_path, capsys):
     assert shell.execute("shell") is None
     assert shell.execute("clear") is None
     assert shell.execute("help issue") == 0
-    assert shell.execute("aj") is None
+    assert shell.execute("acli-py") is None
     assert shell.execute("exit") == "exit"
 
 
@@ -139,7 +139,7 @@ def test_shell_loop_reads_until_eof(site, tmp_path, monkeypatch):
     monkeypatch.setattr("acli_py.shell.PromptSession", FakeSession)
     shell, said, _ = make_shell(history=tmp_path / "sub" / "h")
     shell.run()
-    assert said[0].startswith("aj shell")
+    assert said[0].startswith("acli-py shell")
 
     def eof(self, text):
         raise EOFError
@@ -167,19 +167,19 @@ def test_command_list():
     assert "workitem view" not in listed  # hidden alias
 
 
-# ── `aj tui` and `aj shell` ──────────────────────────────────────────────────
+# ── `acli-py tui` and `acli-py shell` ──────────────────────────────────────────────────
 
 
 def test_tui_command_starts_the_app(site, monkeypatch):
     started: list = []
     monkeypatch.setattr("acli_py.tui.app.IssueBrowser.run", lambda self: started.append(self))
-    result, out = aj("-n", "tui", "--view", "overdue")
+    result, out = run_cli("-n", "tui", "--view", "overdue")
     assert result.exit_code == 0, out
     browser = started[0]
     assert browser.first_query.startswith("is:overdue")
     assert browser.site.dry_run
     assert browser.site.client.on_plan is not None  # the app shows plans itself
-    result, out = aj("tui", "--view", "nope")
+    result, out = run_cli("tui", "--view", "nope")
     assert result.exit_code == 1
     assert "No view called 'nope'" in out
 
@@ -187,7 +187,7 @@ def test_tui_command_starts_the_app(site, monkeypatch):
 def test_shell_command_starts_the_loop(site, monkeypatch):
     ran: list[Shell] = []
     monkeypatch.setattr("acli_py.shell.Shell.run", lambda self: ran.append(self))
-    result, out = aj("-n", "shell")
+    result, out = run_cli("-n", "shell")
     assert result.exit_code == 0, out
     assert ran[0].dry_run
     assert ran[0].account.startswith(fake_jira.EMAIL)
@@ -200,7 +200,7 @@ def test_shell_command_starts_the_loop(site, monkeypatch):
 def test_shell_without_a_login_still_starts(jira, monkeypatch):
     ran: list[Shell] = []
     monkeypatch.setattr("acli_py.shell.Shell.run", lambda self: ran.append(self))
-    result, out = aj("shell")
+    result, out = run_cli("shell")
     assert result.exit_code == 0, out
     assert "not logged in" in ran[0].account
 
@@ -209,7 +209,7 @@ def test_shell_without_a_login_still_starts(jira, monkeypatch):
 
 
 def test_search_takes_smart_queries(site):
-    result, out = aj("issue", "search", "@me s:todo is:open", "--count", "--json")
+    result, out = run_cli("issue", "search", "@me s:todo is:open", "--count", "--json")
     assert result.exit_code == 0, out
     data = json.loads(out)
     # "todo" is how people type "To Do": spelled right before Jira sees it.
@@ -218,30 +218,30 @@ def test_search_takes_smart_queries(site):
         "ORDER BY updated DESC"
     )
     assert data["count"] == 2
-    result, out = aj("issue", "search", "p:demo sort:key", "--json")
+    result, out = run_cli("issue", "search", "p:demo sort:key", "--json")
     assert [i["key"] for i in json.loads(out)] == ["DEMO-1", "DEMO-2", "DEMO-3"]
-    result, out = aj("issue", "search", "@bob")
+    result, out = run_cli("issue", "search", "@bob")
     assert "DEMO-2" in out
     assert "OPS-1" not in out
 
 
 def test_search_warns_and_can_skip_smart_parsing(site):
-    result, out = aj("issue", "search", "colour:red", "-p", "DEMO")
+    result, out = run_cli("issue", "search", "colour:red", "-p", "DEMO")
     assert "unknown filter colour:" in out
-    result, out = aj("issue", "search", "project = DEMO", "--raw", "--count")
+    result, out = run_cli("issue", "search", "project = DEMO", "--raw", "--count")
     assert result.exit_code == 0, out
     assert out.strip() == "3"
 
 
 def test_search_syntax_needs_no_login(jira):
-    result, out = aj("issue", "search", "--syntax")
+    result, out = run_cli("issue", "search", "--syntax")
     assert result.exit_code == 0, out
     assert "sort:" in out
     assert "#LABEL" in out
 
 
 def test_ambiguous_people_are_refused(site):
-    result, out = aj("issue", "search", "@jensen")
+    result, out = run_cli("issue", "search", "@jensen")
     assert result.exit_code == 1
     assert "could be Bob Jensen, Carol Jensen" in out
 
@@ -252,10 +252,12 @@ def test_ambiguous_people_are_refused(site):
 def test_clone_to_another_site(site, fake):
     _, url = fake
     other = url.replace("127.0.0.1", "localhost")
-    aj("auth", "login", "--site", other, "--email", fake_jira.EMAIL, "--token", fake_jira.TOKEN)
-    aj("auth", "switch", "--site", url)
+    run_cli(
+        "auth", "login", "--site", other, "--email", fake_jira.EMAIL, "--token", fake_jira.TOKEN
+    )
+    run_cli("auth", "switch", "--site", url)
     site.log.clear()
-    result, out = aj("issue", "clone", "DEMO-1", "--to-site", other, "--to-project", "OPS")
+    result, out = run_cli("issue", "clone", "DEMO-1", "--to-site", other, "--to-project", "OPS")
     assert result.exit_code == 0, out
     copy = next(
         i for i in site.issues.values() if i["key"].startswith("OPS-") and i["key"] != "OPS-1"
@@ -263,7 +265,7 @@ def test_clone_to_another_site(site, fake):
     assert copy["fields"]["summary"] == "Login fails on Safari"
     assert copy["remote_links"][0]["title"] == "Cloned from DEMO-1"
     assert not any(path.endswith("/issueLink") for _, path, _ in site.writes())
-    result, out = aj("issue", "clone", "DEMO-1", "--to-site", other)
+    result, out = run_cli("issue", "clone", "DEMO-1", "--to-site", other)
     assert result.exit_code == 1
     assert "--to-site needs --to-project" in out
 
@@ -271,7 +273,7 @@ def test_clone_to_another_site(site, fake):
 def test_create_from_a_text_file(site, tmp_path):
     note = tmp_path / "issue.txt"
     note.write_text("Printer on fire\n\nIt is **really** on fire.\n")
-    result, out = aj("issue", "create", "-p", "DEMO", "-t", "Bug", "--from-file", str(note))
+    result, out = run_cli("issue", "create", "-p", "DEMO", "-t", "Bug", "--from-file", str(note))
     assert result.exit_code == 0, out
     body = next(b for m, p, b in site.writes() if p == "/rest/api/3/issue")
     assert body["fields"]["summary"] == "Printer on fire"
@@ -282,7 +284,7 @@ def test_comment_body_adf_alias(site, tmp_path):
     doc = tmp_path / "c.json"
     doc.write_text(json.dumps({"type": "doc", "version": 1, "content": [
         {"type": "paragraph", "content": [{"type": "text", "text": "raw adf"}]}]}))  # fmt: skip
-    result, out = aj("issue", "comment", "add", "DEMO-1", "--body-adf", str(doc))
+    result, out = run_cli("issue", "comment", "add", "DEMO-1", "--body-adf", str(doc))
     assert result.exit_code == 0, out
     assert (
         site.issues["DEMO-1"]["comments"][-1]["body"]["content"][0]["content"][0]["text"]
@@ -293,16 +295,16 @@ def test_comment_body_adf_alias(site, tmp_path):
 def test_filter_owner_from_a_file(site, tmp_path):
     ids = tmp_path / "ids.txt"
     ids.write_text("10100\n")
-    result, out = aj("filter", "owner", "--to", "bob", "--from-file", str(ids))
+    result, out = run_cli("filter", "owner", "--to", "bob", "--from-file", str(ids))
     assert result.exit_code == 0, out
     assert site.filters["10100"]["owner"]["displayName"] == "Bob Jensen"
-    result, out = aj("filter", "owner", "--to", "bob")
+    result, out = run_cli("filter", "owner", "--to", "bob")
     assert result.exit_code == 1
     assert "Say which filters" in out
 
 
 def test_board_list_order_and_private(site):
-    result, out = aj("board", "list", "--order", "-name", "--private", "--json")
+    result, out = run_cli("board", "list", "--order", "-name", "--private", "--json")
     assert result.exit_code == 0, out
     params = [p for m, p, _ in site.log if p.endswith("/board")]
     assert params
@@ -310,7 +312,7 @@ def test_board_list_order_and_private(site):
 
 def test_templates_print_json(jira):
     for args in (("issue", "edit", "--template"), ("issue", "link", "add", "--template")):
-        result, out = aj(*args)
+        result, out = run_cli(*args)
         assert result.exit_code == 0, out
         json.loads(out)
 
@@ -319,8 +321,8 @@ def test_archive_stops_after_a_failing_batch_unless_told(site, monkeypatch):
     monkeypatch.setattr("acli_py.cli.issue.plural", lambda n, w: f"{n} {w}s")
     for n in range(3):
         site.add_issue("DEMO", f"x{n}", "Task")
-    result, out = aj("issue", "archive", "DEMO-1", "NOPE-9", "-y")
+    result, out = run_cli("issue", "archive", "DEMO-1", "NOPE-9", "-y")
     assert result.exit_code == 1
     assert "NOPE-9 could not be archived" in out
-    result, out = aj("issue", "archive", "DEMO-2", "-y", "--ignore-errors")
+    result, out = run_cli("issue", "archive", "DEMO-2", "-y", "--ignore-errors")
     assert result.exit_code == 0, out

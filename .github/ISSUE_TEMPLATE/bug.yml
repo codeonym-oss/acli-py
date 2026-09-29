@@ -1,5 +1,5 @@
 name: Bug report
-description: Something in aj doesn't work as documented.
+description: Something in acli-py doesn't work as documented.
 labels: [bug]
 body:
   - type: markdown
@@ -18,7 +18,7 @@ body:
     id: repro
     attributes:
       label: Command
-      description: The `aj` command you ran, with its options.
+      description: The `acli-py` command you ran, with its options.
       render: shell
     validations:
       required: true
@@ -26,13 +26,13 @@ body:
     id: output
     attributes:
       label: Output or traceback
-      description: Rerunning with `aj --debug …` adds the HTTP trace, which often helps.
+      description: Rerunning with `acli-py --debug …` adds the HTTP trace, which often helps.
       render: text
   - type: input
     id: version
     attributes:
-      label: aj version
-      placeholder: aj --version
+      label: acli-py version
+      placeholder: acli-py --version
     validations:
       required: true
   - type: input

@@ -1,3 +1,3 @@
 from acli_py.cli import app
 
-app(prog_name="aj")
+app(prog_name="acli-py")

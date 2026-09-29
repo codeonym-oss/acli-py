@@ -1,24 +1,24 @@
 # Interactive: the TUI, the shell and smart queries
 
-`aj` has two interactive ways in, and both understand the same query language.
+`acli-py` has two interactive ways in, and both understand the same query language.
 
-- `aj tui` is a full-screen issue browser: search as you type, read an issue beside the list,
+- `acli-py tui` is a full-screen issue browser: search as you type, read an issue beside the list,
   and change it without leaving.
-- `aj shell` is a prompt for every `aj` command. It completes commands, options and your
+- `acli-py shell` is a prompt for every `acli-py` command. It completes commands, options and your
   site's own values.
 
 ## The TUI
 
 ```sh
-aj tui                                  # your open work
-aj tui '@me is:open sort:-priority'     # start from a query
-aj tui --view "Current sprint"          # or from a view
-aj -n tui                               # a dry run: try everything, nothing is sent
+acli-py tui                                  # your open work
+acli-py tui '@me is:open sort:-priority'     # start from a query
+acli-py tui --view "Current sprint"          # or from a view
+acli-py -n tui                               # a dry run: try everything, nothing is sent
 ```
 
-![The aj TUI: views, the issue list and the detail pane](../_static/tui.svg)
+![The acli-py TUI: views, the issue list and the detail pane](../_static/tui.svg)
 
-The top line is the query bar. Under it, `aj` shows the JQL it will run, or what is wrong with
+The top line is the query bar. Under it, `acli-py` shows the JQL it will run, or what is wrong with
 the query, which Jira itself checks before anything runs. On the left are the built-in views,
 your saved views, your favourite filters and your recent queries. In the middle is the issue
 list, which loads more as you scroll. On the right is the highlighted issue: its details,
@@ -54,19 +54,19 @@ line. `Enter` runs the query.
 | `Ctrl+P` | The command palette: every action and view by name |
 | `?` | Help, including the smart query syntax |
 
-Views are saved in `views.json` next to your config (`aj config path`). The TUI and the shell
+Views are saved in `views.json` next to your config (`acli-py config path`). The TUI and the shell
 share the query history.
 
 ## Smart queries
 
 Smart queries are short and forgiving, and they compile to JQL. They work in the TUI, the
-shell, and `aj issue search`:
+shell, and `acli-py issue search`:
 
 ```sh
-aj issue search '@me is:open #web sort:-priority'
-aj issue search 'p:DEMO s:progress updated:7d "login fails"'
-aj issue search '-#legacy t:bug,story is:sprint'
-aj issue search --syntax              # every term
+acli-py issue search '@me is:open #web sort:-priority'
+acli-py issue search 'p:DEMO s:progress updated:7d "login fails"'
+acli-py issue search '-#legacy t:bug,story is:sprint'
+acli-py issue search --syntax              # every term
 ```
 
 | Term | Meaning |
@@ -88,7 +88,7 @@ aj issue search --syntax              # every term
 Terms combine with AND. The same filter given twice means either, so `s:todo s:review` is
 `status in (…)`. Values are matched to your site's own spelling before Jira sees them:
 `s:progress` becomes `"In Progress"`, `s:todo` becomes `"To Do"`, and `@bob` becomes Bob's
-account id. When a name could mean several people, `aj` asks you to be more precise
+account id. When a name could mean several people, `acli-py` asks you to be more precise
 instead of guessing.
 
 A negation keeps issues where the field is empty. In plain JQL, `labels != legacy` silently
@@ -96,19 +96,19 @@ drops every issue that has no labels at all. `-#legacy` compiles to
 `(labels != legacy OR labels is EMPTY)`, which is what you meant.
 
 Anything containing `=`, `~`, `in (` or `ORDER BY` is sent as JQL unchanged. Pass `--raw` to
-`aj issue search` to never treat the query as a smart query.
+`acli-py issue search` to never treat the query as a smart query.
 
 ## The shell
 
 ```console
-$ aj shell
-aj shell: type a command without 'aj'. Tab completes; 'help' lists commands.
-aj> issue transition DEMO-1 --to <Tab>
+$ acli-py shell
+acli-py shell: type a command without 'acli-py'. Tab completes; 'help' lists commands.
+acli-py> issue transition DEMO-1 --to <Tab>
                                  In Progress
                                  Done
-aj> issue search 'status = Done AND assignee = cur<Tab>
-aj> dry-run on
-aj (dry run)> issue edit --jql 'labels = old' --remove-label old -y
+acli-py> issue search 'status = Done AND assignee = cur<Tab>
+acli-py> dry-run on
+acli-py (dry run)> issue edit --jql 'labels = old' --remove-label old -y
 ```
 
 Completion walks the real command tree, so it knows every command, option and choice. Values
@@ -118,7 +118,7 @@ completes JQL and smart queries. The grey suggestion after the cursor comes from
 
 | Command | Does |
 |---|---|
-| any `aj` command | Runs it, with or without the leading `aj` |
+| any `acli-py` command | Runs it, with or without the leading `acli-py` |
 | `help [COMMAND]` | Help for everything, or for one command |
 | `dry-run on` / `off` | Make every following command a dry run (or stop) |
 | `tui [QUERY]` | Open the TUI; you come back to the shell when you quit |

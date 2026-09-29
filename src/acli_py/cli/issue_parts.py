@@ -145,8 +145,8 @@ def comment_add(
 ) -> None:
     """Comment on one or many issues.
 
-    [dim]aj issue comment add DEMO-3 -b "Fixed in **2.4**"
-    echo "Deployed" | aj issue comment add --jql 'fixVersion = 2.4' -b - -y[/]
+    [dim]acli-py issue comment add DEMO-3 -b "Fixed in **2.4**"
+    echo "Deployed" | acli-py issue comment add --jql 'fixVersion = 2.4' -b - -y[/]
     """
     session = connect(dry_run)
     picked = resolve.targets(session.client, keys, jql, saved_filter, from_file)
@@ -299,8 +299,8 @@ def link_add(
 ) -> None:
     """Link two issues, read as a sentence.
 
-    [dim]aj issue link add DEMO-1 blocks DEMO-2
-    aj issue link add DEMO-5 "is duplicated by" DEMO-9[/]
+    [dim]acli-py issue link add DEMO-1 blocks DEMO-2
+    acli-py issue link add DEMO-5 "is duplicated by" DEMO-9[/]
     """
     if template:
         output.print_json(
@@ -322,10 +322,10 @@ def link_add(
         triples += [(r[0], r[1], r[2]) for r in rows[1:] if len(r) >= 3]
     if source or kind or target:
         if not (source and kind and target):
-            raise fail("Give three words: [bold]aj issue link add FROM TYPE TO[/].")
+            raise fail("Give three words: [bold]acli-py issue link add FROM TYPE TO[/].")
         triples.append((source, kind, target))
     if not triples:
-        raise fail("Nothing to link. See [bold]aj issue link add --help[/].")
+        raise fail("Nothing to link. See [bold]acli-py issue link add --help[/].")
     if len(triples) > 1:
         confirm(f"Create {len(triples)} links?", yes, session)
     labels = {f"{a.upper()} {k} {b.upper()}": (a, k, b) for a, k, b in triples}
@@ -398,7 +398,7 @@ def link_delete(
         rows = list(csv.reader(from_csv.read_text(encoding="utf-8-sig").splitlines()))
         ids += [r[0] for r in rows if r and r[0].strip().isdigit()]
     if not ids:
-        raise fail("Which links? Give ids; [bold]aj issue link list KEY[/] shows them.")
+        raise fail("Which links? Give ids; [bold]acli-py issue link list KEY[/] shows them.")
     session = connect(dry_run)
     confirm(f"Delete {len(ids)} link(s)?", yes, session)
     run_bulk(

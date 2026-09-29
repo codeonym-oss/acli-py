@@ -379,7 +379,7 @@ class HelpScreen(ModalScreen[None]):
             f"| `{term}` | {aliases} | {meaning} |" for term, aliases, meaning in cheatsheet()
         )
         text = (
-            "# aj · keys\n"
+            "# acli-py · keys\n"
             + KEYS
             + "\n# Smart queries\n\nTerms combine with AND; a filter given twice means either. "
             "Anything with `=`, `~`, `in (` or `ORDER BY` is run as JQL, with completion too.\n\n"

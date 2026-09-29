@@ -1,7 +1,7 @@
 """Everything the CLI prints: tables, JSON, CSV, messages and dry-run plans.
 
 Results go to stdout; messages, progress, traces and dry-run plans go to stderr, so
-`aj … --json | jq` and `aj … --csv > file.csv` stay clean.
+`acli-py … --json | jq` and `acli-py … --csv > file.csv` stay clean.
 """
 
 from __future__ import annotations

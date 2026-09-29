@@ -38,9 +38,9 @@ jobs:
           for dist in dist/*.whl dist/*.tar.gz; do
             uv venv -q "/tmp/smoke" --clear
             uv pip install -q --python /tmp/smoke "$dist"
-            got=$(/tmp/smoke/bin/aj --version)
+            got=$(/tmp/smoke/bin/acli-py --version)
             if [[ "$got" != "$EXPECTED" ]]; then
-              echo "::error::$dist: aj --version printed '$got', expected '$EXPECTED'"; exit 1
+              echo "::error::$dist: acli-py --version printed '$got', expected '$EXPECTED'"; exit 1
             fi
             /tmp/smoke/bin/acli-py --help > /dev/null
             # The TUI and the shell load their libraries lazily: import them for real.

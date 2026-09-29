@@ -171,7 +171,7 @@ class JiraClient:
         if resp.status_code == 401:
             raise AuthError(
                 "Jira rejected the credentials (401). "
-                "Run `aj auth login` again with a fresh API token.",
+                "Run `acli-py auth login` again with a fresh API token.",
                 401,
             )
         if resp.status_code == 404:

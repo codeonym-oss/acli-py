@@ -1,4 +1,4 @@
-"""`aj dashboard`, `aj user`, `aj meta` and `aj api`."""
+"""`acli-py dashboard`, `acli-py user`, `acli-py meta` and `acli-py api`."""
 
 from __future__ import annotations
 
@@ -243,8 +243,8 @@ def api(
 
     Writes honour --dry-run like every other command.
 
-    [dim]aj api GET myself
-    aj api POST /rest/api/3/issue -d @issue.json --dry-run[/]
+    [dim]acli-py api GET myself
+    acli-py api POST /rest/api/3/issue -d @issue.json --dry-run[/]
     """
     method = method.upper()
     if method not in ("GET", "POST", "PUT", "DELETE", "PATCH"):

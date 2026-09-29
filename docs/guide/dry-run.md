@@ -3,15 +3,15 @@
 ## Dry run
 
 Every command that changes something takes `--dry-run` (`-n`). You can also put it before the
-command (`aj -n issue delete …`), or set `ACLI_PY_DRY_RUN=1` to make a whole shell session
+command (`acli-py -n issue delete …`), or set `ACLI_PY_DRY_RUN=1` to make a whole shell session
 read-only.
 
-In a dry run, `aj` still **reads** from Jira: it finds the issues your JQL selects, resolves
+In a dry run, `acli-py` still **reads** from Jira: it finds the issues your JQL selects, resolves
 people and fields, and looks up transitions. So what it shows is what would really happen. It
 does not send any **write**. Instead it prints each request it would have made:
 
 ```console
-$ aj issue transition DEMO-1 --to "in progress" -m "On it" --dry-run
+$ acli-py issue transition DEMO-1 --to "in progress" -m "On it" --dry-run
 ╭─ DRY RUN POST /rest/api/3/issue/DEMO-1/transitions ─╮
 │ {                                                   │
 │   "transition": {                                   │
@@ -52,10 +52,10 @@ Commands that change issues (`edit`, `assign`, `transition`, `delete`, `archive`
 
 ## Confirmation and errors
 
-Before changing more than one issue, and before any deletion, `aj` asks for confirmation.
-`--yes` (`-y`) answers for you. Without a terminal (in a script or a pipe), `aj` refuses
+Before changing more than one issue, and before any deletion, `acli-py` asks for confirmation.
+`--yes` (`-y`) answers for you. Without a terminal (in a script or a pipe), `acli-py` refuses
 rather than guess, so scripts must pass `--yes`.
 
-Each issue gets its own ✔ or ✘ line. By default `aj` stops at the first failure and reports
+Each issue gets its own ✔ or ✘ line. By default `acli-py` stops at the first failure and reports
 how many issues it did not try. `--ignore-errors` keeps going. Either way the exit code is 1
 if anything failed, and `--json` prints a per-item result list.

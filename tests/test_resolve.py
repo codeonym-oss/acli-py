@@ -79,7 +79,7 @@ def test_field_catalog():
     twins = FieldCatalog([{"id": "a", "name": "Same"}, {"id": "b", "name": "same"}])
     with pytest.raises(ResolveError, match="several fields"):
         twins.find("same")
-    with pytest.raises(ResolveError, match="aj field list"):
+    with pytest.raises(ResolveError, match="acli-py field list"):
         catalog.find("zzz")
 
 

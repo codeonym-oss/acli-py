@@ -43,7 +43,6 @@ Issues = "https://github.com/codeonym-oss/acli-py/issues"
 Changelog = "https://github.com/codeonym-oss/acli-py/blob/main/CHANGELOG.md"
 
 [project.scripts]
-aj = "acli_py.cli:app"
 acli-py = "acli_py.cli:app"
 
 [build-system]

@@ -2,7 +2,7 @@
 
 # Commands
 
-Every command, generated from `aj --help`. Global options go before the command:
+Every command, generated from `acli-py --help`. Global options go before the command:
 
 | Option | Description |
 |---|---|

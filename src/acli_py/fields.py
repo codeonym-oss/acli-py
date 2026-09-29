@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 
     from acli_py.client import JiraClient
 
-# Keys `aj issue create --from-json/--from-csv` understands; anything else is a field name.
+# Keys `acli-py issue create --from-json/--from-csv` understands; anything else is a field name.
 KNOWN_KEYS = {
     "project": "project",
     "projectkey": "project",

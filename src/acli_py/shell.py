@@ -1,4 +1,4 @@
-"""`aj shell`: every `aj` command at a prompt, with completion that knows your site.
+"""`acli-py shell`: every `acli-py` command at a prompt, with completion that knows your site.
 
 Completion walks the real command tree, so it never drifts from the CLI: commands, options and
 their help, choices, and live values — issue keys, projects, statuses, people, labels — from the
@@ -90,7 +90,7 @@ def _takes_value(param: Any) -> bool:
 
 
 class ShellCompleter(Completer):
-    """Completes `aj` command lines."""
+    """Completes `acli-py` command lines."""
 
     def __init__(self, root: Command, catalog: Catalog) -> None:
         self.root = root
@@ -108,7 +108,7 @@ class ShellCompleter(Completer):
         else:
             current, done = "", words
         args = [unquote(w.text) for w in done]
-        if args and args[0] in ("aj", "acli-py"):
+        if args and args[0] == "acli-py":
             args = args[1:]
         yield from self._complete(args, current)
 
@@ -293,7 +293,7 @@ class Shell:
 
     def prompt(self) -> str:
         """Return the prompt text."""
-        return "aj (dry run)> " if self.dry_run else "aj> "
+        return "acli-py (dry run)> " if self.dry_run else "acli-py> "
 
     def run(self) -> None:
         """Read and run commands until exit or Ctrl+D."""
@@ -305,7 +305,9 @@ class Shell:
             complete_while_typing=True,
             bottom_toolbar=self.toolbar,
         )
-        self.say("aj shell: type a command without 'aj'. Tab completes; 'help' lists commands.")
+        self.say(
+            "acli-py shell: type a command without 'acli-py'. Tab completes; 'help' lists commands."
+        )
         while True:
             try:
                 line = session.prompt(self.prompt())
@@ -326,7 +328,7 @@ class Shell:
         except ValueError as error:
             self.say(f"Can't read that line: {error}")
             return 2
-        if args[0] in ("aj", "acli-py"):
+        if args[0] == "acli-py":
             args = args[1:]
         if not args:
             return None
@@ -353,10 +355,10 @@ class Shell:
         return self.invoke(args)
 
     def invoke(self, args: list[str]) -> int:
-        """Run an `aj` command in-process and return its exit code."""
+        """Run an `acli-py` command in-process and return its exit code."""
         full = (["--dry-run"] if self.dry_run else []) + args
         try:
-            result = self.root.main(full, prog_name="aj", standalone_mode=False)
+            result = self.root.main(full, prog_name="acli-py", standalone_mode=False)
         except SystemExit as leaving:
             return int(leaving.code or 0) if isinstance(leaving.code, int) else 1
         except Exception as error:  # click's own errors: show them like the CLI would

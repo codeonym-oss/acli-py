@@ -1,4 +1,4 @@
-"""`aj tui` and `aj shell`: the interactive ways in."""
+"""`acli-py tui` and `acli-py shell`: the interactive ways in."""
 
 from __future__ import annotations
 
@@ -42,10 +42,10 @@ def tui(
     Type a query with completion as you go ([bold]Tab[/]), read issues beside the list, and
     move, assign, comment, relabel or create without leaving it. [bold]?[/] shows every key.
 
-    [dim]aj tui
-    aj tui '@me is:open sort:-priority'
-    aj tui --view "Current sprint"
-    aj -n tui                       # try it all; nothing is sent[/]
+    [dim]acli-py tui
+    acli-py tui '@me is:open sort:-priority'
+    acli-py tui --view "Current sprint"
+    acli-py -n tui                       # try it all; nothing is sent[/]
     """
     from acli_py.tui.app import IssueBrowser  # Textual loads only for the TUI
 
@@ -71,14 +71,14 @@ def tui(
 def shell(
     dry_run: DryRunOpt = False,
 ) -> None:
-    """Run aj commands at a prompt, with completion that knows your site.
+    """Run acli-py commands at a prompt, with completion that knows your site.
 
     Tab completes commands, options and values: issue keys, projects, statuses, people,
     labels, and JQL or smart queries as you type them. Commands run instantly, history is
     kept (without tokens), and [bold]dry-run on[/] makes every change a preview.
 
-    [dim]aj shell
-    aj -n shell                     # start in dry-run mode[/]
+    [dim]acli-py shell
+    acli-py -n shell                     # start in dry-run mode[/]
     """
     import typer.main
 

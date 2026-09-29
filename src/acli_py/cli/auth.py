@@ -1,4 +1,4 @@
-"""`aj auth`: log in with API tokens, keep several accounts, switch between them."""
+"""`acli-py auth`: log in with API tokens, keep several accounts, switch between them."""
 
 from __future__ import annotations
 
@@ -119,7 +119,7 @@ def status(
     """List saved accounts; the active one is marked ●."""
     config = Config.load()
     if not config.accounts:
-        raise fail("Not logged in. Run [bold]aj auth login[/].")
+        raise fail("Not logged in. Run [bold]acli-py auth login[/].")
     accounts = list(config.accounts.values())
     if as_json:
         output.print_json(
@@ -168,7 +168,7 @@ def switch(
     """Make another saved account the active one (asks which when there are several)."""
     config = Config.load()
     if not config.accounts:
-        raise fail("Not logged in. Run [bold]aj auth login[/].")
+        raise fail("Not logged in. Run [bold]acli-py auth login[/].")
     if account:
         matches = _match(config, account)
     elif site or email:
@@ -176,10 +176,12 @@ def switch(
     else:
         matches = list(config.accounts.values())
     if not matches:
-        raise fail("No saved account matches. See [bold]aj auth status[/].")
+        raise fail("No saved account matches. See [bold]acli-py auth status[/].")
     if len(matches) > 1:
         if not sys.stdin.isatty():
-            raise fail("Several accounts match; name one, e.g. [bold]aj auth switch EMAIL@SITE[/].")
+            raise fail(
+                "Several accounts match; name one, e.g. [bold]acli-py auth switch EMAIL@SITE[/]."
+            )
         for n, a in enumerate(matches, 1):
             mark = "●" if a.name == config.active else " "
             output.errors.print(f"  [cyan]{n}[/] {mark} {escape(a.name)}")

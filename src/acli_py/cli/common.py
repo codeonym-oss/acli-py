@@ -33,7 +33,7 @@ TRUTHY = ("1", "true", "yes", "on")
 
 @dataclass
 class State:
-    """Options given before the command (`aj --dry-run --debug issue …`)."""
+    """Options given before the command (`acli-py --dry-run --debug issue …`)."""
 
     dry_run: bool = False
     debug: bool = False
@@ -93,7 +93,7 @@ FromFileOpt = Annotated[
 ]
 ProjectOpt = Annotated[
     str | None,
-    typer.Option("--project", "-p", help="Project key (default: `aj config set project`)."),
+    typer.Option("--project", "-p", help="Project key (default: `acli-py config set project`)."),
 ]
 
 
@@ -169,7 +169,7 @@ class Session:
         if not chosen:
             raise fail(
                 "No project given. Pass [bold]-p KEY[/] or set a default with "
-                "[bold]aj config set project KEY[/]."
+                "[bold]acli-py config set project KEY[/]."
             )
         return chosen.upper()
 
@@ -204,7 +204,7 @@ def find_account(config: Config, wanted: str, option: str = "--account") -> Acco
     if len(matches) != 1:
         raise fail(
             f"{option} {escape(wanted)} matches {len(matches)} saved accounts. "
-            "See [bold]aj auth status[/]."
+            "See [bold]acli-py auth status[/]."
         )
     return matches[0]
 
@@ -216,7 +216,7 @@ def pick_account(config: Config) -> Account:
     if account := env_account():
         return account
     if config.account is None:
-        raise fail("Not logged in. Run [bold]aj auth login[/] first.")
+        raise fail("Not logged in. Run [bold]acli-py auth login[/] first.")
     return config.account
 
 
@@ -229,7 +229,7 @@ def connect(dry_run: bool = False, account_name: str | None = None) -> Session:
     token = credentials.load_token(account.name, account.token_backend)
     if not token:
         raise fail(
-            f"No API token saved for {escape(account.name)}. Run [bold]aj auth login[/] again."
+            f"No API token saved for {escape(account.name)}. Run [bold]acli-py auth login[/] again."
         )
     client = JiraClient(
         account.url,
@@ -277,7 +277,7 @@ def edit_text(initial: str = "", suffix: str = ".md", config: Config | None = No
         or os.environ.get("EDITOR")
         or ("notepad" if os.name == "nt" else "vi")
     )
-    fd, name = tempfile.mkstemp(suffix=suffix, prefix="aj-")
+    fd, name = tempfile.mkstemp(suffix=suffix, prefix="acli-py-")
     path = Path(name)
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as handle:

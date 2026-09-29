@@ -4,11 +4,11 @@ import json
 
 from acli_py.adf import to_text
 from tests import fake_jira
-from tests.conftest import aj
+from tests.conftest import run_cli
 
 
 def ok(*args: str, input: str | None = None) -> str:
-    result, out = aj(*args, input=input)
+    result, out = run_cli(*args, input=input)
     assert result.exit_code == 0, out
     return out
 
@@ -52,14 +52,16 @@ def test_comment_edit_last_replaces_my_latest(site):
 
 
 def test_comment_needs_a_body_and_one_visibility(site, tmp_path):
-    result, out = aj("issue", "comment", "add", "DEMO-2")
+    result, out = run_cli("issue", "comment", "add", "DEMO-2")
     assert result.exit_code == 1
     assert "comment is empty" in out
-    result, out = aj("issue", "comment", "add", "DEMO-2", "-b", "x", "--role", "a", "--group", "b")
+    result, out = run_cli(
+        "issue", "comment", "add", "DEMO-2", "-b", "x", "--role", "a", "--group", "b"
+    )
     assert "not both" in out
     body = tmp_path / "c.md"
     body.write_text("from a file")
-    result, out = aj("issue", "comment", "add", "DEMO-2", "-b", "x", "-B", str(body))
+    result, out = run_cli("issue", "comment", "add", "DEMO-2", "-b", "x", "-B", str(body))
     assert "not both" in out
     ok("issue", "comment", "add", "DEMO-2", "-B", str(body))
 
@@ -86,11 +88,11 @@ def test_link_add_reads_as_a_sentence(site):
 
 
 def test_link_errors(site):
-    result, out = aj("issue", "link", "add", "DEMO-1", "fixes", "DEMO-2")
+    result, out = run_cli("issue", "link", "add", "DEMO-1", "fixes", "DEMO-2")
     assert result.exit_code == 1
     assert "no link type 'fixes'" in out
     assert "Blocks (blocks / is blocked by)" in out
-    result, out = aj("issue", "link", "add", "DEMO-1", "blocks")
+    result, out = run_cli("issue", "link", "add", "DEMO-1", "blocks")
     assert "Give three words" in out
 
 
@@ -106,7 +108,7 @@ def test_links_from_files_and_delete(site, tmp_path):
     assert len(link_ids) == 2
     ok("issue", "link", "delete", ",".join(link_ids), "-y")
     assert "has no links" in ok("issue", "link", "list", "DEMO-2")
-    _, out = aj("issue", "link", "delete")
+    _, out = run_cli("issue", "link", "delete")
     assert "Which links" in out
 
 
@@ -160,6 +162,6 @@ def test_worklogs(site):
     assert "Pairing" in out
     ok("issue", "worklog", "delete", "DEMO-1", log["id"], "-y")
     assert site.issues["DEMO-1"]["worklogs"] == []
-    result, out = aj("issue", "worklog", "add", "DEMO-1", "a while")
+    result, out = run_cli("issue", "worklog", "add", "DEMO-1", "a while")
     assert result.exit_code == 1
     assert "not a duration" in out

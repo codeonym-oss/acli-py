@@ -8,7 +8,7 @@ with AND; the same filter given twice means either (`s:todo s:review`), and a le
 negates a term (`-#legacy`). Words that aren't filters are searched as text, and issue keys
 (`DEMO-12`) are picked directly. Anything that already looks like JQL is passed through.
 
-`cheatsheet()` lists every term; `aj issue search --syntax` prints it.
+`cheatsheet()` lists every term; `acli-py issue search --syntax` prints it.
 """
 
 from __future__ import annotations

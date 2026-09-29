@@ -1,16 +1,16 @@
 # acli-py
 
-`aj` is a friendly command line for **Jira Cloud**: a Python port of the Jira side of
+`acli-py` is a friendly command line for **Jira Cloud**: a Python port of the Jira side of
 Atlassian's `acli`, redesigned around short, predictable commands and a **dry-run mode for
 every change**.
 
 ```sh
-aj auth login
-aj issue create -p DEMO -t Bug -s "Login fails on Safari" -a @me -L web
-aj issue transition DEMO-12 --to "In Progress" -m "On it"
-aj issue edit --jql 'project = DEMO AND labels = legacy' --remove-label legacy --dry-run
-aj issue search '@me is:open #web sort:-priority'
-aj tui
+acli-py auth login
+acli-py issue create -p DEMO -t Bug -s "Login fails on Safari" -a @me -L web
+acli-py issue transition DEMO-12 --to "In Progress" -m "On it"
+acli-py issue edit --jql 'project = DEMO AND labels = legacy' --remove-label legacy --dry-run
+acli-py issue search '@me is:open #web sort:-priority'
+acli-py tui
 ```
 
 Start with [Getting started](guide/getting-started.md), then try the
