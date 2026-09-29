@@ -15,7 +15,6 @@ from acli_py.application.messages import (
     CountIssues,
     CreateIssue,
     FindAssignees,
-    GetIssue,
     GetTransitions,
     IssueChanged,
     ListFilters,
@@ -28,6 +27,7 @@ from acli_py.application.messages import (
     ValidateJql,
     WatchIssue,
 )
+from acli_py.application.queries.get_issue.query import GetIssue
 from acli_py.application.site import Site
 from acli_py.bootstrap import build_bus
 from acli_py.infrastructure.jira.client import JiraClient, NotFoundError
@@ -55,8 +55,8 @@ def test_queries_read_and_are_cached(site, fake):
         assert [i["key"] for i in more.issues] == ["DEMO-3"]
         assert more.next_token is None
         assert await bus.send(CountIssues("project = DEMO")) == 3
-        issue = await bus.send(GetIssue("DEMO-1"))
-        assert issue["fields"]["summary"] == "Login fails on Safari"
+        view = await bus.send(GetIssue("DEMO-1"))
+        assert view.issue.summary == "Login fails on Safari"
         assert [t["name"] for t in await bus.send(GetTransitions("DEMO-1"))] == [
             "Start work",
             "Finish",
@@ -92,7 +92,7 @@ def test_commands_change_jira_empty_the_cache_and_announce(site, fake):
     async def scenario():
         await bus.send(GetIssue("DEMO-2"))
         await bus.send(TransitionIssue("DEMO-2", "21", "In Progress", comment="Starting"))
-        assert (await bus.send(GetIssue("DEMO-2")))["fields"]["status"]["name"] == "In Progress"
+        assert (await bus.send(GetIssue("DEMO-2"))).issue.status.name == "In Progress"
         await bus.send(AssignIssue("DEMO-2", fake_jira.CAROL["accountId"], "Carol"))
         await bus.send(CommentOnIssue("DEMO-2", "Looks **good**"))
         await bus.send(

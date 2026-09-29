@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import functools
 import os
 import shlex
@@ -19,6 +20,9 @@ import requests
 import typer
 from rich.markup import escape
 
+from acli_py.application.bus import Bus
+from acli_py.application.site import Site
+from acli_py.bootstrap import build_bus
 from acli_py.infrastructure import credentials
 from acli_py.infrastructure.config import Account, Config
 from acli_py.infrastructure.jira.client import JiraClient, JiraError, normalize_url, site_host
@@ -142,6 +146,7 @@ class Session:
     client: JiraClient
     account: Account
     config: Config
+    _bus: Bus | None = field(default=None, repr=False)
 
     @property
     def dry_run(self) -> bool:
@@ -163,6 +168,16 @@ class Session:
     def browse(self, key: str) -> str:
         """Return an issue's web URL."""
         return f"{self.url}/browse/{key}"
+
+    def site(self) -> Site:
+        """Return the site the application layer works on."""
+        return Site(self.client, self.url, self.account.account_id, self.account.display_name)
+
+    def send(self, message: Any) -> Any:
+        """Send a query or command on the bus, and wait for its answer."""
+        if self._bus is None:
+            self._bus = build_bus(self.site())
+        return asyncio.run(self._bus.send(message))
 
     def project(self, key: str | None) -> str:
         """Return the given project key, or the configured default, or fail."""

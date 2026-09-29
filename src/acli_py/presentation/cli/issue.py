@@ -9,13 +9,10 @@ from typing import Annotated, Any
 from urllib.parse import quote
 
 import typer
-from rich.console import Group
-from rich.markdown import Markdown
 from rich.markup import escape
-from rich.panel import Panel
-from rich.rule import Rule
 from rich.table import Table
 
+from acli_py.application.queries.get_issue.query import GetIssue
 from acli_py.bootstrap import build_catalog
 from acli_py.domain import adf
 from acli_py.domain.jql import compile_query, looks_like_jql
@@ -24,7 +21,7 @@ from acli_py.domain.jql.smart import cheatsheet
 from acli_py.infrastructure.jira import fields as issue_fields
 from acli_py.infrastructure.jira import resolve
 from acli_py.infrastructure.jira.client import API, DRY_RUN_ID
-from acli_py.infrastructure.jira.fields import IssueInput, flat, when
+from acli_py.infrastructure.jira.fields import IssueInput, flat
 from acli_py.presentation import output
 from acli_py.presentation.cli.common import (
     AllOpt,
@@ -52,15 +49,10 @@ from acli_py.presentation.cli.common import (
     plural,
     run_bulk,
 )
-from acli_py.presentation.output import Column, Format, dig, status_text
+from acli_py.presentation.output import Column, Format, dig
 
 app = typer.Typer(help="Work with issues (Jira's work items).", no_args_is_help=True)
 
-VIEW_FIELDS = [
-    "summary", "status", "issuetype", "priority", "assignee", "reporter", "labels",
-    "components", "fixVersions", "parent", "duedate", "created", "updated", "resolution",
-    "description", "subtasks", "issuelinks", "comment", "attachment",
-]  # fmt: skip
 LIST_FIELDS = ["issuetype", "status", "priority", "assignee", "summary"]
 
 # ── shared field options (create and edit) ───────────────────────────────────
@@ -130,111 +122,26 @@ def view(
     web: WebOpt = False,
     as_json: JsonOpt = False,
 ) -> None:
-    """Show an issue: its details, description, subtasks, links and latest comments."""
+    """Show an issue: its details, description, subtasks, links and latest comments.
+
+    [bold]--json[/] prints the issue with plain names (status, assignee, links, comments…),
+    Markdown text and ISO dates; fields asked for with [bold]--fields[/] are under "fields".
+
+    [dim]acli-py issue view DEMO-12
+    acli-py issue view DEMO-12 --fields customfield_10016 -c 10
+    acli-py issue view DEMO-12 --json | jq -r .status.name[/]
+    """
     session = connect()
     key = key.upper()
     if web:
         open_url(session.browse(key))
         return
-    extra = [f.strip() for f in (fields or "").split(",") if f.strip()]
-    wanted = ["*all"] if "*all" in extra else [*VIEW_FIELDS, *extra]
-    issue = session.client.issue(key, wanted, expand="names" if extra else None)
+    extra = tuple(f.strip() for f in (fields or "").split(",") if f.strip())
+    issue_view = session.send(GetIssue(key, extra))
     if as_json:
-        output.print_json(issue)
+        output.print_json(issue_view.to_json())
         return
-    output.console.print(render_issue(session, issue, extra, comments))
-
-
-def render_issue(session: Session, issue: dict, extra: list[str], comments: int) -> Group:
-    """Return the rich rendering of one issue."""
-    f = issue.get("fields", {})
-    names = issue.get("names", {})
-    rows: list[tuple[str, Any]] = [
-        ("Type", escape(dig(f, "issuetype", "name", default=""))),
-        ("Status", status_text(f.get("status"))),
-        ("Priority", escape(dig(f, "priority", "name", default=""))),
-        ("Assignee", escape(dig(f, "assignee", "displayName", default="")) or "[dim]unassigned[/]"),
-        ("Reporter", escape(dig(f, "reporter", "displayName", default=""))),
-        ("Parent", _issue_ref(f.get("parent"))),
-        ("Labels", escape(", ".join(f.get("labels") or []))),
-        ("Components", escape(issue_fields.text(f.get("components")))),
-        ("Fix versions", escape(issue_fields.text(f.get("fixVersions")))),
-        ("Resolution", escape(dig(f, "resolution", "name", default=""))),
-        ("Due", f.get("duedate")),
-        ("Created", when(f.get("created"))),
-        ("Updated", when(f.get("updated"))),
-    ]
-    shown = {"description", "comment", "subtasks", "issuelinks", "attachment", "summary"}
-    for field_id in extra if extra != ["*all"] else sorted(f):
-        if field_id in shown or field_id == "*all" or field_id in dict(rows):
-            continue
-        value = issue_fields.text(f.get(field_id))
-        if value:
-            rows.append((escape(names.get(field_id, field_id)), escape(value)))
-    parts: list[Any] = [
-        output.details(
-            f"{escape(issue['key'])}  {escape(f.get('summary', ''))}",
-            [*rows, ("URL", f"[dim]{escape(session.browse(issue['key']))}[/]")],
-        )
-    ]
-    description = adf.to_text(f.get("description"))
-    if description:
-        parts.append(Panel(Markdown(description), title="Description", title_align="left"))
-    if subtasks := f.get("subtasks"):
-        parts.append(Rule("Subtasks", align="left", style="dim"))
-        parts.extend(
-            f"  {escape(s['key'])}  {status_text(dig(s, 'fields', 'status'))}  "
-            f"{escape(dig(s, 'fields', 'summary', default=''))}"
-            for s in subtasks
-        )
-    if links := f.get("issuelinks"):
-        parts.append(Rule("Links", align="left", style="dim"))
-        parts.extend(f"  {line}" for line in (_link_line(link) for link in links))
-    if attachments := f.get("attachment"):
-        parts.append(Rule("Attachments", align="left", style="dim"))
-        parts.extend(
-            f"  [dim]{a['id']}[/]  {escape(a.get('filename', '?'))}  "
-            f"[dim]{_size(a.get('size', 0))}[/]"
-            for a in attachments
-        )
-    all_comments = dig(f, "comment", "comments", default=[])
-    if comments and all_comments:
-        total = dig(f, "comment", "total", default=len(all_comments))
-        parts.append(Rule(f"Comments ({total})", align="left", style="dim"))
-        for c in all_comments[-comments:]:
-            author = dig(c, "author", "displayName", default="?")
-            parts.append(
-                f"[bold]{escape(author)}[/] [dim]{when(c.get('created'))} · id {c.get('id')}[/]"
-            )
-            parts.append(Markdown(adf.to_text(c.get("body")) or "_(empty)_"))
-    return Group(*parts)
-
-
-def _issue_ref(issue: dict | None) -> str:
-    if not issue:
-        return ""
-    return f"{escape(issue['key'])} {escape(dig(issue, 'fields', 'summary', default=''))}"
-
-
-def _link_line(link: dict) -> str:
-    kind = link.get("type", {})
-    if "outwardIssue" in link:
-        phrase, other = kind.get("outward", "relates to"), link["outwardIssue"]
-    else:
-        phrase, other = kind.get("inward", "relates to"), link.get("inwardIssue", {})
-    return (
-        f"[dim]{phrase}[/] {escape(other.get('key', '?'))} "
-        f"{status_text(dig(other, 'fields', 'status'))} "
-        f"{escape(dig(other, 'fields', 'summary', default=''))} [dim](link {link.get('id')})[/]"
-    )
-
-
-def _size(size: float) -> str:
-    for unit in ("B", "KB", "MB", "GB"):
-        if size < 1024 or unit == "GB":
-            return f"{size:.0f} {unit}" if unit == "B" else f"{size:.1f} {unit}"
-        size /= 1024
-    return str(size)
+    output.console.print(issue_view.to_rich(comments=comments))
 
 
 # ── search ───────────────────────────────────────────────────────────────────

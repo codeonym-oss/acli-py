@@ -183,9 +183,40 @@ site in `tests/fake_jira.py`.
 ### Adding a query
 
 A query only reads. Its folder has a third file, `view.py`, holding the read model that front
-ends display: the handler returns a view built from domain objects, and the view knows how to
-show itself (as a table, JSON, Markdown…). Queries are frozen dataclasses because they are the
-query cache's keys.
+ends display. `application/queries/get_issue/` is the worked example to copy:
+
+```text
+application/queries/get_issue/
+  query.py      # GetIssue(key, fields): the question
+  handler.py    # asks the IssueReader port, returns an IssueView
+  view.py       # IssueView: to_rich(), to_json(), to_markdown()
+```
+
+```python
+# handler.py
+from mediary.cqrs import query_handler
+
+from acli_py.application.ports import IssueReader
+
+
+@query_handler
+def get_issue(request: GetIssue, issues: IssueReader) -> IssueView:
+    """Read the issue and wrap it in its view."""
+    issue = issues.get_issue(request.key.strip().upper(), request.fields)
+    return IssueView(issue, issues.browse_url(issue.key))
+```
+
+- The handler depends on a **port** (a `Protocol` in `application/ports.py`), never on the
+  Jira client. The adapter lives in `infrastructure/jira/`, and `bootstrap.SiteResolver` maps
+  the port to it.
+- The adapter turns Jira's JSON into **domain objects** (`domain/issue.py`) once; views and
+  front ends never dig through raw JSON.
+- The **view** knows how to show itself, so the CLI (`print(view.to_rich())`,
+  `print_json(view.to_json())`), the TUI (`view.to_markdown()`) and the shell all show the
+  same thing.
+- Queries are frozen dataclasses because they are the query cache's keys.
+- Tests (see `tests/test_get_issue.py`): the domain parsing on plain dicts, the handler with a
+  stub port and against the fake Jira, each rendering of the view, and the command end to end.
 
 ### Adding a subscriber
 

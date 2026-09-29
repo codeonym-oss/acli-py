@@ -182,5 +182,4 @@ ignore_imports = [
     "acli_py.presentation.tui.app -> acli_py.infrastructure.jira.client",
     "acli_py.presentation.tui.app -> acli_py.infrastructure.jira.resolve",
     "acli_py.presentation.tui.app -> acli_py.infrastructure.storage",
-    "acli_py.presentation.tui.widgets -> acli_py.infrastructure.jira.fields",
 ]

@@ -9,8 +9,17 @@ Work with issues (Jira's work items).
 
 Show an issue: its details, description, subtasks, links and latest comments.
 
+--json prints the issue with plain names (status, assignee, links, comments…),
+Markdown text and ISO dates; fields asked for with --fields are under "fields".
+
 ```text
 acli-py issue view KEY [OPTIONS]
+```
+
+```sh
+acli-py issue view DEMO-12
+acli-py issue view DEMO-12 --fields customfield_10016 -c 10
+acli-py issue view DEMO-12 --json | jq -r .status.name
 ```
 
 | Option | Default | Description |

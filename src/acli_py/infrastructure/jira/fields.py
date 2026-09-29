@@ -1,14 +1,18 @@
-"""Building issue field payloads, and showing Jira field values as text."""
+"""Building issue field payloads.
+
+`text` and `when` live in `acli_py.domain.values`; they are re-exported for older callers.
+"""
 
 from __future__ import annotations
 
 import csv
 import json
 from dataclasses import dataclass, field
-from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 from acli_py.domain import adf
+from acli_py.domain.values import text as text
+from acli_py.domain.values import when as when
 from acli_py.infrastructure.jira import resolve
 
 if TYPE_CHECKING:
@@ -174,41 +178,3 @@ def read_rows(path: Path) -> list[dict[str, Any]]:
     if isinstance(data, dict) and isinstance(data.get("issueUpdates"), list):
         data = data["issueUpdates"]
     return data if isinstance(data, list) else [data]
-
-
-# ── display ──────────────────────────────────────────────────────────────────
-
-
-def when(value: str | None, with_time: bool = True) -> str:
-    """Format a Jira timestamp as 'YYYY-MM-DD HH:MM' (in the offset Jira sent)."""
-    if not value:
-        return ""
-    try:
-        moment = datetime.strptime(value[:19], "%Y-%m-%dT%H:%M:%S")
-    except ValueError:
-        return value
-    return moment.strftime("%Y-%m-%d %H:%M" if with_time else "%Y-%m-%d")
-
-
-def text(value: Any) -> str:
-    """Show any Jira field value as short text."""
-    if value is None:
-        return ""
-    if isinstance(value, bool):
-        return "yes" if value else "no"
-    if isinstance(value, float):
-        return f"{value:g}"
-    if isinstance(value, (str, int)):
-        return str(value)
-    if isinstance(value, list):
-        return ", ".join(t for t in (text(v) for v in value) if t)
-    if isinstance(value, dict):
-        if adf.is_adf(value):
-            return " ".join(adf.to_text(value).split())
-        for key in ("displayName", "name", "value", "key", "title", "id"):
-            if key in value and value[key] not in (None, ""):
-                inner = value.get("child")
-                shown = str(value[key])
-                return f"{shown} > {text(inner)}" if inner else shown
-        return json.dumps(value, ensure_ascii=False)
-    return str(value)

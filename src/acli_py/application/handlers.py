@@ -11,13 +11,11 @@ from typing import Any
 from mediary.cqrs import command_handler, query_handler
 
 from acli_py.application.messages import (
-    DETAIL_FIELDS,
     AssignIssue,
     CommentOnIssue,
     CountIssues,
     CreateIssue,
     FindAssignees,
-    GetIssue,
     GetTransitions,
     ListFilters,
     ListIssueTypes,
@@ -50,12 +48,6 @@ def search_issues(request: SearchIssues, site: Site) -> Page:
 def count_issues(request: CountIssues, site: Site) -> int:
     """Return the approximate count."""
     return site.client.count(request.jql)
-
-
-@query_handler
-def get_issue(request: GetIssue, site: Site) -> dict:
-    """Return the issue, with rendered names for its fields."""
-    return site.client.issue(request.key, list(DETAIL_FIELDS))
 
 
 @query_handler
