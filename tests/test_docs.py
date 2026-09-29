@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 from pathlib import Path
+from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -38,3 +39,62 @@ def test_every_group_is_in_the_reference():
         "api",
     ):
         assert f"\n{group}\n" in index
+
+
+def _snippets(path: Path) -> list[str]:
+    """Return every `aj …` code span in a page, alternatives included (`… / --x`)."""
+    import re
+
+    return re.findall(r"`(aj [^`]+)`", path.read_text(encoding="utf-8"))
+
+
+def test_documented_commands_and_options_exist():
+    """Every `aj …` in the guides and README names real commands and options."""
+    import shlex
+
+    import typer
+
+    from acli_py.cli import app
+
+    root: Any = typer.main.get_command(app)  # Typer bundles its own click: typed loosely
+
+    def option(command: Any, name: str) -> Any:
+        for param in command.params:
+            if name in (*param.opts, *getattr(param, "secondary_opts", [])):
+                return param
+        return None
+
+    def check(words: list[str]) -> str | None:
+        command: Any = root
+        index = 0
+        while index < len(words):
+            word = words[index]
+            if word == "…":
+                return None  # "and so on"
+            if word.startswith("-") and not word[1:2].isdigit():
+                param = option(command, word.split("=", 1)[0]) or option(root, word)
+                if param is None:
+                    return f"no option {word}"
+                takes_value = not (param.is_flag or getattr(param, "count", False))
+                index += 2 if takes_value and "=" not in word else 1
+                continue
+            if hasattr(command, "commands"):
+                names = word.split("/")  # "search/view": both must exist
+                missing = [n for n in names if n not in command.commands]
+                if missing:
+                    return f"no command {missing[0]!r}"
+                command = command.commands[names[0]]
+            index += 1
+        return None
+
+    pages = [ROOT / "README.md", *sorted((ROOT / "docs" / "guide").glob("*.md"))]
+    problems = []
+    for page in pages:
+        for snippet in _snippets(page):
+            try:
+                words = shlex.split(snippet.split(" #")[0])[1:]
+            except ValueError:
+                continue
+            if problem := check(words):
+                problems.append(f"{page.name}: {snippet!r}: {problem}")
+    assert not problems, "\n".join(problems)

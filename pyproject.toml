@@ -6,12 +6,15 @@ readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
 authors = [{ name = "codeonym-oss" }]
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
     "keyring>=24",
+    "mediary>=0.3",
     "platformdirs>=4",
+    "prompt-toolkit>=3.0.50",
     "requests>=2.31",
     "rich>=13",
+    "textual>=8.2",
     "typer>=0.12",
 ]
 keywords = ["jira", "atlassian", "acli", "cli", "issues", "sprints", "dry-run"]
@@ -23,7 +26,6 @@ classifiers = [
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3 :: Only",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
@@ -72,7 +74,7 @@ docs = [
 
 [tool.ruff]
 line-length = 100
-target-version = "py310"
+target-version = "py311"
 
 [tool.ruff.lint]
 select = [
@@ -90,6 +92,10 @@ ignore = [
 "tests/**" = ["D", "E501"]
 # Typer reads the command signatures' annotations at runtime, so their imports must stay real.
 "src/acli_py/cli/**" = ["TC"]
+# mediary reads handler signatures at runtime to find their messages and dependencies.
+"src/acli_py/app/**" = ["TC"]
+# Textual's BINDINGS and CSS are class attributes by design.
+"src/acli_py/tui/**" = ["RUF012"]
 
 [tool.commitizen]
 # Only used to validate messages (commit-msg hook + CI); versions and changelog are release-please's job.
@@ -98,7 +104,7 @@ allowed_prefixes = ["Merge", "Revert", "fixup!", "squash!"]
 
 [tool.pyright]
 include = ["src", "tests", "scripts"]
-pythonVersion = "3.10"
+pythonVersion = "3.11"
 typeCheckingMode = "standard"
 
 [tool.pytest.ini_options]

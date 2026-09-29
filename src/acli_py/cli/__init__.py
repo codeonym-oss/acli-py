@@ -7,7 +7,17 @@ from typing import Annotated
 import typer
 
 from acli_py import __version__, output
-from acli_py.cli import agile, auth, config_cmd, filters, issue, issue_parts, misc, project
+from acli_py.cli import (
+    agile,
+    auth,
+    config_cmd,
+    filters,
+    interactive,
+    issue,
+    issue_parts,
+    misc,
+    project,
+)
 from acli_py.cli.common import close_clients, state
 
 app = typer.Typer(
@@ -37,6 +47,8 @@ app.add_typer(filters.field_app, name="field", rich_help_panel="Site")
 app.add_typer(misc.user_app, name="user", rich_help_panel="Site")
 app.add_typer(misc.meta_app, name="meta", rich_help_panel="Site")
 app.command("api", rich_help_panel="Site")(misc.api)
+app.command("tui", rich_help_panel="Interactive")(interactive.tui)
+app.command("shell", rich_help_panel="Interactive")(interactive.shell)
 # acli's name for issues, for muscle memory.
 app.add_typer(issue.app, name="workitem", hidden=True)
 

@@ -229,3 +229,23 @@ def test_raw_api(site, tmp_path):
 def test_debug_traces_http(site):
     out = ok("--debug", "user", "view")
     assert "HTTP GET 200" in out
+
+
+def test_project_create_from_another_shares_its_schemes(site):
+    result, out = aj("project", "create", "-k", "web2", "--name", "Web 2", "--from-project", "demo")
+    assert result.exit_code == 0, out
+    assert "Sharing DEMO's configuration: permission, notification, issueType" in out
+    body = next(b for m, p, b in site.writes() if p == "/rest/api/3/project")
+    assert "projectTemplateKey" not in body
+    assert body["projectTypeKey"] == "software"
+    assert site.projects["WEB2"]["schemes"] == {
+        "permissionScheme": 0, "notificationScheme": 10000, "issueTypeScheme": 10010,
+        "issueTypeScreenScheme": 10020, "workflowScheme": 10030,
+    }  # fmt: skip
+
+
+def test_project_create_from_a_team_managed_project_is_refused(site):
+    site.projects["DEMO"]["style"] = "next-gen"
+    result, out = aj("project", "create", "-k", "X", "--name", "X", "--from-project", "DEMO")
+    assert result.exit_code == 1
+    assert "team-managed" in out

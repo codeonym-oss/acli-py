@@ -281,6 +281,23 @@ class JiraClient:
             if not token or data.get("isLast", False):
                 return
 
+    def search_page(
+        self, jql: str, fields: list[str], *, size: int = PAGE_SIZE, token: str | None = None
+    ) -> tuple[list[dict], str | None]:
+        """Return one page of issues matching `jql`, and the token of the next (None: last)."""
+        body: dict[str, Any] = {"jql": jql, "maxResults": size, "fields": fields}
+        if token:
+            body["nextPageToken"] = token
+        data = self.post(f"{API}/search/jql", body)
+        following = None if data.get("isLast", False) else data.get("nextPageToken")
+        return list(data.get("issues", [])), following
+
+    def validate_jql(self, jql: str) -> list[str]:
+        """Return Jira's errors for `jql` (empty when it is valid)."""
+        data = self.post(f"{API}/jql/parse", {"queries": [jql]}, validation="strict")
+        queries = data.get("queries") or [{}]
+        return list(queries[0].get("errors") or [])
+
     def count(self, jql: str) -> int:
         """Return Jira's approximate count of issues matching `jql`."""
         return int(self.post(f"{API}/search/approximate-count", {"jql": jql}).get("count", 0))

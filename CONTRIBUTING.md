@@ -34,7 +34,7 @@ a write command, add it to that test's list.
 Keep test data fictional, since the repository is public. To test another Python version:
 `uv run --isolated --python 3.14 pytest`.
 
-CI runs the tests on Linux for Python 3.10 to 3.14, and on macOS and Windows for 3.12.
+CI runs the tests on Linux for Python 3.11 to 3.14, and on macOS and Windows for 3.12.
 
 ## Workflow
 

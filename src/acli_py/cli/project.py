@@ -26,7 +26,7 @@ from acli_py.cli.common import (
     limit_of,
     open_url,
 )
-from acli_py.client import API
+from acli_py.client import API, NotFoundError
 from acli_py.output import Column, dig
 
 app = typer.Typer(help="Work with projects.", no_args_is_help=True)
@@ -128,7 +128,47 @@ def view(key: KeyArg, web: WebOpt = False, as_json: JsonOpt = False) -> None:
     output.console.print(output.details(escape(project.get("key", key)), rows))
 
 
-def _project_body(session: Any, data: dict[str, Any], creating: bool) -> dict[str, Any]:
+# Where to read each scheme a project uses: (body field, path, key in a values entry).
+_SCHEMES_BY_PROJECT = (
+    ("issueTypeScheme", "issuetypescheme/project", "issueTypeScheme"),
+    ("issueTypeScreenScheme", "issuetypescreenscheme/project", "issueTypeScreenScheme"),
+    ("workflowScheme", "workflowscheme/project", "workflowScheme"),
+)
+
+
+def shared_configuration(client: Any, key: str) -> dict[str, Any]:
+    """Return the POST /project fields that make a new project share `key`'s configuration."""
+    source = client.get(f"{API}/project/{key.upper()}")
+    if source.get("style") == "next-gen" or source.get("simplified"):
+        raise fail(
+            f"{escape(key.upper())} is team-managed; only company-managed projects "
+            "can share their configuration."
+        )
+    shared: dict[str, Any] = {"projectTypeKey": source.get("projectTypeKey", "software")}
+    if category := (source.get("projectCategory") or {}).get("id"):
+        shared["categoryId"] = int(category)
+    for field_name, path in (
+        ("permissionScheme", "permissionscheme"),
+        ("notificationScheme", "notificationscheme"),
+        ("issueSecurityScheme", "issuesecuritylevelscheme"),
+    ):
+        try:
+            scheme = client.get(f"{API}/project/{key.upper()}/{path}")
+        except NotFoundError:  # no issue security scheme, say
+            continue
+        if scheme and scheme.get("id") is not None:
+            shared[field_name] = int(scheme["id"])
+    for field_name, path, inner in _SCHEMES_BY_PROJECT:
+        values = client.get(f"{API}/{path}", projectId=source["id"]).get("values") or []
+        scheme_id = (values[0].get(inner) or {}).get("id") if values else None
+        if scheme_id is not None:
+            shared[field_name] = int(scheme_id)
+    return shared
+
+
+def _project_body(
+    session: Any, data: dict[str, Any], creating: bool, *, schemes: bool = False
+) -> dict[str, Any]:
     body: dict[str, Any] = {}
     for src, dest in (
         ("key", "key"),
@@ -151,7 +191,12 @@ def _project_body(session: Any, data: dict[str, Any], creating: bool) -> dict[st
         body["projectTypeKey"] = data["type"]
     if creating:
         body.setdefault("projectTypeKey", "software")
-        if "projectTemplateKey" not in body and body["projectTypeKey"] == "software":
+        # A template and shared schemes are two ways to configure a project: not both.
+        if (
+            not schemes
+            and "projectTemplateKey" not in body
+            and body["projectTypeKey"] == "software"
+        ):
             body["projectTemplateKey"] = TEMPLATES["kanban"][1]
         body.setdefault("assigneeType", "UNASSIGNED")
     # Anything else in a JSON file is Jira's own field name: pass it through.
@@ -183,6 +228,14 @@ def create(
     from_json: Annotated[
         Path | None, typer.Option("--from-json", help="Read the details from a JSON file.")
     ] = None,
+    from_project: Annotated[
+        str | None,
+        typer.Option(
+            "--from-project",
+            help="Share this company-managed project's configuration: its type, category, "
+            "and permission, notification, security, issue type, screen and workflow schemes.",
+        ),
+    ] = None,
     print_template: Annotated[
         bool, typer.Option("--print-template", help="Print an example --from-json file.")
     ] = False,
@@ -191,7 +244,8 @@ def create(
 ) -> None:
     """Create a company-managed project.
 
-    [dim]aj project create -k OPS -n "Operations" -T kanban[/]
+    [dim]aj project create -k OPS -n "Operations" -T kanban
+    aj project create -k WEB2 -n "Web 2" --from-project WEB[/]
     """
     if print_template:
         output.print_json(PROJECT_TEMPLATE)
@@ -204,7 +258,16 @@ def create(
         raise fail("A new project needs [bold]--key[/] and [bold]--name[/].")
     data["key"] = data["key"].upper()
     session = connect(dry_run)
-    result = session.client.post(f"{API}/project", _project_body(session, data, creating=True))
+    shared: dict[str, Any] = {}
+    if from_project:
+        shared = shared_configuration(session.client, from_project)
+        data.pop("template", None)
+        data.setdefault("type", shared.pop("projectTypeKey"))
+        copied = ", ".join(k.removesuffix("Scheme") for k in shared if k.endswith("Scheme"))
+        output.info(f"Sharing {escape(from_project.upper())}'s configuration: {copied}.")
+    body = _project_body(session, data, creating=True, schemes=bool(shared))
+    body.update({k: v for k, v in shared.items() if k not in body})
+    result = session.client.post(f"{API}/project", body)
     if as_json:
         output.print_json(result)
     if not session.dry_run:

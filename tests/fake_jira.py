@@ -281,7 +281,11 @@ class FakeJira:
 
     def writes(self) -> list[tuple[str, str, Any]]:
         """Return the logged requests that change something."""
-        read_posts = ("/rest/api/3/search/jql", "/rest/api/3/search/approximate-count")
+        read_posts = (
+            "/rest/api/3/search/jql",
+            "/rest/api/3/search/approximate-count",
+            "/rest/api/3/jql/parse",
+        )
         return [
             entry
             for entry in self.log
@@ -350,8 +354,22 @@ class FakeJira:
                 for i in found
                 if (i["fields"]["assignee"] or {}).get("accountId") == ALICE["accountId"]
             ]
+        if m := re.search(r'(?i)assignee\s*=\s*"([^"]+:[^"]+)"', where):
+            found = [
+                i for i in found if (i["fields"]["assignee"] or {}).get("accountId") == m.group(1)
+            ]
         if m := re.search(r"(?i)sprint\s*=\s*(\d+)", where):
             found = [i for i in found if i["sprint"] == int(m.group(1))]
+        if m := re.search(r'(?i)\btext\s*~\s*"([^"]+)"', where):
+            words = m.group(1).lower().split()
+            found = [i for i in found if all(w in i["fields"]["summary"].lower() for w in words)]
+        if m := re.search(r"(?i)statusCategory\s*(!?=)\s*Done", where):
+            done = m.group(1) == "="
+            found = [
+                i
+                for i in found
+                if (i["fields"]["status"]["statusCategory"]["key"] == "done") == done
+            ]
         return found
 
     # ── writes, shared by several routes ─────────────────────────────────────
@@ -614,6 +632,13 @@ def _delete_comment(jira, q, body, key, cid):
     return 204, None
 
 
+@route("POST", f"{A}/issue/(?P<key>[^/]+)/remotelink")
+def _remote_link(jira, q, body, key):
+    issue = jira.issue(key)
+    issue.setdefault("remote_links", []).append(body["object"])
+    return 201, {"id": int(jira.new_id())}
+
+
 @route("GET", f"{A}/issueLinkType")
 def _link_types(jira, q, body):
     return {"issueLinkTypes": LINK_TYPES}
@@ -730,6 +755,80 @@ def _user_search(jira, q, body):
     return [u for u in USERS if needle in u["displayName"].lower() or needle in u["emailAddress"]]
 
 
+@route("GET", f"{A}/user/assignable/search")
+def _assignable(jira, q, body):
+    jira.issue(q["issueKey"][0])
+    return _user_search(jira, q, body)
+
+
+@route("GET", f"{A}/jql/autocompletedata")
+def _jql_reference(jira, q, body):
+    eq = ["=", "!=", "in", "not in", "is", "is not"]
+    names = ["project", "status", "assignee", "reporter", "issuetype", "priority", "labels",
+             "sprint", "key", "created", "updated"]  # fmt: skip
+    fields = [{"value": n, "displayName": n, "operators": eq, "orderable": "true",
+               "searchable": "true", "types": []} for n in names]  # fmt: skip
+    fields.append({"value": "summary", "displayName": "summary", "operators": ["~", "!~"],
+                   "orderable": "true", "types": []})  # fmt: skip
+    fields.append({"value": "cf[10016]", "displayName": "Story point estimate - cf[10016]",
+                   "cfid": "cf[10016]", "operators": ["=", ">", "<"], "orderable": "true",
+                   "types": ["java.lang.Number"]})  # fmt: skip
+    functions = [{"value": "currentUser()", "displayName": "currentUser()", "isList": "false"},
+                 {"value": "openSprints()", "displayName": "openSprints()", "isList": "true"}]  # fmt: skip
+    return {"visibleFieldNames": fields, "visibleFunctionNames": functions,
+            "jqlReservedWords": ["and", "or", "in"]}  # fmt: skip
+
+
+@route("GET", f"{A}/jql/autocompletedata/suggestions")
+def _jql_suggestions(jira, q, body):
+    name = q.get("fieldName", [""])[0].lower()
+    typed = q.get("fieldValue", [""])[0].lower()
+    if name == "status":
+        values = [(s["name"], s["name"]) for s in STATUSES.values()]
+    elif name == "project":
+        values = [(k, f"{p['name']} ({k})") for k, p in jira.projects.items()]
+    elif name == "issuetype":
+        values = [(t, t) for t in ISSUE_TYPES]
+    elif name == "priority":
+        values = [(p["name"], p["name"]) for p in PRIORITIES]
+    elif name == "labels":
+        labels = sorted({label for i in jira.issues.values() for label in i["fields"]["labels"]})
+        values = [(label, label) for label in labels]
+    elif name in ("assignee", "reporter"):
+        values = [(u["accountId"], u["displayName"]) for u in USERS]
+    else:
+        values = []
+    hits = [(v, d) for v, d in values if typed in v.lower() or typed in d.lower()]
+    return {"results": [{"value": v, "displayName": d} for v, d in hits]}
+
+
+@route("POST", f"{A}/jql/parse")
+def _jql_parse(jira, q, body):
+    results = []
+    for query in body.get("queries", []):
+        errors = []
+        if query.count("(") != query.count(")") or query.count('"') % 2:
+            errors.append("Error in the JQL Query: the query is not complete.")
+        if m := re.search(r"(?i)\b(nosuch\w*)\s*(=|~|in)", query):
+            errors.append(f"Field '{m.group(1)}' does not exist or you do not have permission.")
+        results.append({"query": query, "errors": errors})
+    return {"queries": results}
+
+
+@route("GET", f"{A}/issue/picker")
+def _picker(jira, q, body):
+    typed = q.get("query", [""])[0].lower()
+    hits = [
+        {"key": i["key"], "summaryText": i["fields"]["summary"]}
+        for i in jira.issues.values()
+        if i["key"].lower().startswith(typed) or typed in i["fields"]["summary"].lower()
+    ]
+    return {"sections": [{"label": "History Search", "issues": hits}]}
+
+
+ROUTES.insert(0, ROUTES.pop())  # before GET /issue/{key}, which would take "picker" for a key
+
+
 @route("GET", f"{A}/user")
 def _user(jira, q, body):
     account = q["accountId"][0]
@@ -798,12 +897,35 @@ def _create_project(jira, q, body):
     for required in ("key", "name", "projectTypeKey", "leadAccountId"):
         if not body.get(required):
             raise BadRequestError(json.dumps({"errors": {required: "required"}}))
+    if body.get("projectTemplateKey") and body.get("workflowScheme"):
+        raise BadRequestError(json.dumps({"errorMessages": ["template or schemes, not both"]}))
     project = {"id": jira.new_id(), "key": body["key"], "name": body["name"],
                "projectTypeKey": body["projectTypeKey"], "style": "classic", "lead": ALICE,
-               "components": [], "versions": []}  # fmt: skip
+               "components": [], "versions": [],
+               "schemes": {k: v for k, v in body.items() if k.endswith("Scheme")}}  # fmt: skip
     jira.projects[body["key"]] = project
     jira.counters[body["key"]] = 0
     return 201, {"id": project["id"], "key": project["key"]}
+
+
+@route(
+    "GET",
+    f"{A}/project/(?P<key>[^/]+)/(?P<kind>permissionscheme|notificationscheme|issuesecuritylevelscheme)",
+)
+def _project_scheme(jira, q, body, key, kind):
+    if key not in jira.projects:
+        raise NotFoundError("no project")
+    if kind == "issuesecuritylevelscheme":
+        raise NotFoundError("no issue security scheme")
+    return {"id": {"permissionscheme": 0, "notificationscheme": 10000}[kind], "name": kind}
+
+
+@route("GET", f"{A}/(?P<kind>issuetypescheme|issuetypescreenscheme|workflowscheme)/project")
+def _schemes_by_project(jira, q, body, kind):
+    inner = {"issuetypescheme": "issueTypeScheme", "issuetypescreenscheme": "issueTypeScreenScheme",
+             "workflowscheme": "workflowScheme"}[kind]  # fmt: skip
+    ids = {"issuetypescheme": "10010", "issuetypescreenscheme": "10020", "workflowscheme": "10030"}
+    return {"values": [{inner: {"id": ids[kind]}, "projectIds": q["projectId"]}]}
 
 
 @route("PUT", f"{A}/project/(?P<key>[^/]+)")

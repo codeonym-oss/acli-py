@@ -2,7 +2,7 @@
 
 ## Install
 
-`aj` needs Python 3.10 or newer, on Linux, macOS or Windows. Install it in its own environment
+`aj` needs Python 3.11 or newer, on Linux, macOS or Windows. Install it in its own environment
 with [uv](https://docs.astral.sh/uv/) or [pipx](https://pipx.pypa.io/):
 
 ```sh

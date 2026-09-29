@@ -192,21 +192,27 @@ def env_account() -> Account | None:
     return None
 
 
+def find_account(config: Config, wanted: str, option: str = "--account") -> Account:
+    """Return the one saved account `wanted` names: email@site, an email, or a site."""
+    low = wanted.strip().lower()
+    host = site_host(low) if "." in low or ":" in low else low
+    matches = [
+        a
+        for a in config.accounts.values()
+        if low in (a.name.lower(), a.email.lower(), a.host.lower()) or host == a.host.lower()
+    ]
+    if len(matches) != 1:
+        raise fail(
+            f"{option} {escape(wanted)} matches {len(matches)} saved accounts. "
+            "See [bold]aj auth status[/]."
+        )
+    return matches[0]
+
+
 def pick_account(config: Config) -> Account:
     """Return the account to use: --account, the environment, or the active one."""
     if state.account:
-        wanted = state.account.lower()
-        matches = [
-            a
-            for a in config.accounts.values()
-            if wanted in (a.name.lower(), a.email.lower(), a.host.lower())
-        ]
-        if len(matches) != 1:
-            raise fail(
-                f"--account {escape(state.account)} matches {len(matches)} saved accounts. "
-                "See [bold]aj auth status[/]."
-            )
-        return matches[0]
+        return find_account(config, state.account)
     if account := env_account():
         return account
     if config.account is None:
@@ -214,10 +220,12 @@ def pick_account(config: Config) -> Account:
     return config.account
 
 
-def connect(dry_run: bool = False) -> Session:
-    """Open a client for the active account, closed when the command ends."""
+def connect(dry_run: bool = False, account_name: str | None = None) -> Session:
+    """Open a client for the active account (or the one named), closed when the command ends."""
     config = Config.load()
-    account = pick_account(config)
+    account = (
+        find_account(config, account_name, "--to-site") if account_name else pick_account(config)
+    )
     token = credentials.load_token(account.name, account.token_backend)
     if not token:
         raise fail(
