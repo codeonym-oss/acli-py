@@ -60,3 +60,9 @@ aj sprint issues 42 --csv > sprint.csv
 
 People can be named as `@me`, by email, by part of their name, or by account id. When a
 name matches several people, `aj` lists them and asks you to be more specific.
+
+## Next
+
+Browse and change issues in the full-screen UI with `aj tui`, or run commands with completion
+in `aj shell`. Both take smart queries such as `@me is:open #web`. See
+[Interactive](interactive.md).
