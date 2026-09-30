@@ -13,7 +13,7 @@ import webbrowser
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Annotated, Any
+from typing import TYPE_CHECKING, Annotated, Any
 from urllib.parse import unquote
 
 import requests
@@ -24,17 +24,20 @@ from rich.table import Table
 from acli_py.application.bulk import CONCURRENCY, MAX_CONCURRENCY, SAFETY_CAP, Report, TooManyError
 from acli_py.application.bus import Bus
 from acli_py.application.changes import Change, Declined
+from acli_py.application.queries.compile_search.query import CompileSearch
+from acli_py.application.queries.issue_columns import Template
 from acli_py.application.site import Site
-from acli_py.bootstrap import build_bus, build_catalog
-from acli_py.domain.jql import compile_query, looks_like_jql
-from acli_py.domain.jql.catalog import spelling
+from acli_py.bootstrap import build_bus
 from acli_py.infrastructure import credentials
 from acli_py.infrastructure.config import Account, Config
 from acli_py.infrastructure.jira import resolve
 from acli_py.infrastructure.jira.client import JiraClient, JiraError, normalize_url, site_host
 from acli_py.infrastructure.jira.resolve import ResolveError
 from acli_py.presentation import output, terminal
-from acli_py.presentation.output import Format, pick_format
+from acli_py.presentation.output import Column, Format, pick_format
+
+if TYPE_CHECKING:
+    from acli_py.application.queries.search_issues.view import IssuesView
 
 TRUTHY = ("1", "true", "yes", "on")
 
@@ -93,6 +96,23 @@ LimitOpt = Annotated[
 ]
 AllOpt = Annotated[bool, typer.Option("--all", "-A", help="Fetch every page, ignoring --limit.")]
 WebOpt = Annotated[bool, typer.Option("--web", "-w", help="Open it in the browser instead.")]
+FieldsOpt = Annotated[
+    str | None,
+    typer.Option(
+        "--fields",
+        help="Columns, comma-separated: key,status,assignee,summary… or field ids "
+        "(customfield_10016).",
+        show_default=False,
+    ),
+]
+FormatOpt = Annotated[
+    str | None,
+    typer.Option(
+        "--format",
+        help="One line per issue from a template: '{key}\\t{status}\\t{summary}'.",
+        show_default=False,
+    ),
+]
 IgnoreErrorsOpt = Annotated[
     bool,
     typer.Option("--ignore-errors", help="Keep going when one item fails; exit 1 at the end."),
@@ -509,14 +529,47 @@ def pick_issues(
 
     Stops fetching just past the safety cap (the engine then refuses) unless `force`.
     """
-    if jql and not looks_like_jql(jql):
-        compiled = compile_query(jql, resolve=spelling(build_catalog(session.client)))
+    if jql:
+        compiled = session.send(CompileSearch(jql))
         for warning in compiled.warnings:
             output.warn(escape(warning))
         jql = compiled.jql
     fetch = limit or (None if force else SAFETY_CAP + 1)
     picked = resolve.targets(session.client, keys, jql, saved_filter, from_file, limit=fetch)
     return picked[:limit] if limit else picked
+
+
+def template_of(source: str | None, chosen: Format) -> Template | None:
+    """Return the `--format` template, if any; it can't go with another output format."""
+    if source is None:
+        return None
+    if chosen is not Format.table:
+        raise ValueError("choose one of --format and --json, --csv or --output")
+    return Template(source)
+
+
+def show_issues(
+    view: IssuesView, chosen: Format, template: Template | None = None, *, empty: str
+) -> None:
+    """Print a list of issues: a line per issue from `template`, or in the chosen format."""
+    if template is not None:
+        output.lines(view.lines(template))
+        if not view.issues:
+            output.info(empty)
+        return
+    if chosen not in (Format.table, Format.csv):
+        output.emit(view.to_json(), [], chosen, empty=empty)
+        return
+    columns = [
+        Column(
+            c.header,
+            lambda row, name=c.name: row[name],
+            style="cyan" if c.name == "key" else None,
+            no_wrap=c.name not in ("summary", "description"),
+        )
+        for c in view.columns
+    ]
+    output.emit(view.to_text(), columns, chosen, empty=empty)
 
 
 def plain(outcome: Any) -> Any:

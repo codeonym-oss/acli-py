@@ -17,8 +17,8 @@ from acli_py.application.commands import assign_issue, edit_issue, watch_issue
 from acli_py.application.commands.assign_issue.command import AssignIssue
 from acli_py.application.commands.edit_issue.command import EditIssue
 from acli_py.application.commands.watch_issue.command import WatchIssue
-from acli_py.application.messages import SearchIssues
 from acli_py.application.ports import IssueEditor, Watchers
+from acli_py.application.queries.search_issues.query import SearchIssues
 from acli_py.application.site import Site
 from acli_py.bootstrap import build_bus
 from acli_py.domain import edits

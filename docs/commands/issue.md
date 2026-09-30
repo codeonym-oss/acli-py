@@ -42,8 +42,9 @@ acli-py issue search [JQL] [OPTIONS]
 ```sh
 acli-py issue search '@me is:open #web sort:-priority'
 acli-py issue search 'p:DEMO s:progress updated:7d "login"'
-acli-py issue search -p DEMO -a @me --open
+acli-py issue search -p DEMO -a @me --open --fields key,status,due
 acli-py issue search 'project = DEMO AND sprint in openSprints()' --csv
+acli-py issue search @me --format '{key}\t{status}\t{summary}'
 ```
 
 | Option | Default | Description |
@@ -58,7 +59,8 @@ acli-py issue search 'project = DEMO AND sprint in openSprints()' --csv
 | `-o`, `--open` |  | Only issues not done yet. |
 | `--filter` `TEXT` |  | Use a saved filter's JQL (by id). |
 | `--order` `TEXT` |  | Sort field; prefix '-' for descending, e.g. -created. |
-| `--fields` `TEXT` |  | Columns to show, comma-separated field ids. |
+| `--fields` `TEXT` |  | Columns, comma-separated: key,status,assignee,summary… or field ids (customfield_10016). |
+| `--format` `TEXT` |  | One line per issue from a template: '{key}\t{status}\t{summary}'. |
 | `-l`, `--limit` `INTEGER` | `50` | Show at most this many results. |
 | `-A`, `--all` |  | Fetch every page, ignoring --limit. |
 | `--count` |  | Only print how many match. |
@@ -68,6 +70,58 @@ acli-py issue search 'project = DEMO AND sprint in openSprints()' --csv
 | `--output` `[table\|json\|csv\|keys\|jsonl]` |  | How to print: table, json, csv, or keys / jsonl (one per line, for pipes). |
 | `--syntax` |  | Show the smart query syntax and exit. |
 | `--raw` |  | Send the query as JQL, never as a smart query. |
+
+
+## `acli-py issue count`
+
+Count the issues a search finds (Jira's estimate), with the same query and options.
+
+```text
+acli-py issue count [JQL] [OPTIONS]
+```
+
+```sh
+acli-py issue count '@me is:open'
+acli-py issue count -p DEMO -s 'In Progress' --json
+```
+
+| Option | Default | Description |
+|---|---|---|
+| `JQL` |  | A smart query ('@me #web is:open', see --syntax) or JQL (optional). |
+| `-p`, `--project` `TEXT` |  | Project key (default: `acli-py config set project`). |
+| `-a`, `--assignee` `TEXT` |  | @me, 'none', email or name. |
+| `-s`, `--status` `TEXT` |  | Status name (repeatable). |
+| `-t`, `--type` `TEXT` |  | Issue type (repeatable). |
+| `-L`, `--label` `TEXT` |  | Label (repeatable). |
+| `-T`, `--text` `TEXT` |  | Full-text search. |
+| `-o`, `--open` |  | Only issues not done yet. |
+| `--filter` `TEXT` |  | Use a saved filter's JQL (by id). |
+| `--json` |  | Print JSON. |
+| `--raw` |  | Send the query as JQL, never as a smart query. |
+
+
+## `acli-py issue history`
+
+Show who changed what on an issue, and when.
+
+```text
+acli-py issue history KEY [OPTIONS]
+```
+
+```sh
+acli-py issue history DEMO-12
+acli-py issue history DEMO-12 --field status --newest-first
+```
+
+| Option | Default | Description |
+|---|---|---|
+| `KEY` | required | Issue key. |
+| `-f`, `--field` `TEXT` |  | Only this field's changes (name or id). |
+| `-r`, `--newest-first` |  | Newest change first. |
+| `-l`, `--limit` `INTEGER` |  | Show at most this many changes. |
+| `--json` |  | Print JSON. |
+| `--csv` |  | Print CSV. |
+| `--output` `[table\|json\|csv\|keys\|jsonl]` |  | How to print: table, json, csv, or keys / jsonl (one per line, for pipes). |
 
 
 ## `acli-py issue create`

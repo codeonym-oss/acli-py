@@ -7,7 +7,7 @@ tests, another backend later) means changing this module only.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, TypeVar
+from typing import TypeVar
 
 from mediary import Mediator
 
@@ -25,23 +25,22 @@ from acli_py.application.ports import (
     IssueEditor,
     IssueLinks,
     IssueReader,
+    IssueSearch,
     IssueStore,
     Watchers,
     Workflow,
     Worklogs,
 )
 from acli_py.application.site import Site
+from acli_py.domain.jql.catalog import Catalog
 from acli_py.infrastructure.audit import AuditFile
 from acli_py.infrastructure.jira.catalog import JiraCatalog
 from acli_py.infrastructure.jira.client import JiraClient
 from acli_py.infrastructure.jira.editor import JiraEditor, JiraWatchers
-from acli_py.infrastructure.jira.issues import JiraIssues
+from acli_py.infrastructure.jira.issues import JiraIssues, JiraSearch
 from acli_py.infrastructure.jira.lifecycle import JiraLinks, JiraStore
 from acli_py.infrastructure.jira.parts import JiraAttachments, JiraComments, JiraWorklogs
 from acli_py.infrastructure.jira.workflow import JiraWorkflow
-
-if TYPE_CHECKING:
-    from acli_py.domain.jql.catalog import Catalog
 
 T = TypeVar("T")
 
@@ -60,6 +59,8 @@ class SiteResolver:
             Site: site,
             JiraClient: site.client,
             IssueReader: JiraIssues(site.client, site.url),
+            IssueSearch: JiraSearch(site.client),
+            Catalog: JiraCatalog(site.client),
             Workflow: JiraWorkflow(site.client),
             IssueEditor: JiraEditor(site.client),
             Watchers: JiraWatchers(site.client),

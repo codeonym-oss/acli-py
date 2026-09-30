@@ -136,7 +136,8 @@ acli-py sprint issues SPRINT [OPTIONS]
 |---|---|---|
 | `SPRINT` | required | Sprint id (see `acli-py sprint list`). |
 | `-q`, `--jql` `TEXT` |  | Act on the issues this JQL or smart query finds. |
-| `--fields` `TEXT` |  | Columns, comma-separated field ids. |
+| `--fields` `TEXT` |  | Columns, comma-separated: key,status,assignee,summary… or field ids (customfield_10016). |
+| `--format` `TEXT` |  | One line per issue from a template: '{key}\t{status}\t{summary}'. |
 | `-l`, `--limit` `INTEGER` | `50` | Show at most this many results. |
 | `-A`, `--all` |  | Fetch every page, ignoring --limit. |
 | `--json` |  | Print JSON. |

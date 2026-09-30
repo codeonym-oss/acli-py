@@ -123,6 +123,12 @@ def print_json(data: Any) -> None:
     sys.stdout.flush()
 
 
+def lines(texts: Iterable[str]) -> None:
+    """Print lines of plain text to stdout, for the next command to read."""
+    sys.stdout.write("".join(f"{line}\n" for line in texts))
+    sys.stdout.flush()
+
+
 def silence_stdout() -> None:
     """Send what is left for stdout nowhere: its reader has gone (`acli-py … | head`).
 

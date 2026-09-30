@@ -8,6 +8,9 @@ from typing import Annotated, Any
 import typer
 from rich.markup import escape
 
+from acli_py.application.queries.issue_columns import columns, jira_fields, split
+from acli_py.application.queries.search_issues.view import IssuesView
+from acli_py.domain.issue import Issue
 from acli_py.infrastructure.jira import resolve
 from acli_py.infrastructure.jira.client import AGILE
 from acli_py.infrastructure.jira.fields import when
@@ -16,6 +19,8 @@ from acli_py.presentation.cli.common import (
     AllOpt,
     CsvOpt,
     DryRunOpt,
+    FieldsOpt,
+    FormatOpt,
     IgnoreErrorsOpt,
     JqlOpt,
     JsonOpt,
@@ -33,9 +38,10 @@ from acli_py.presentation.cli.common import (
     limit_of,
     open_url,
     run_bulk,
+    show_issues,
+    template_of,
 )
-from acli_py.presentation.cli.issue import LIST_FIELDS, issue_columns
-from acli_py.presentation.output import Column, dig
+from acli_py.presentation.output import Column, Format, dig
 
 board_app = typer.Typer(help="Work with boards.", no_args_is_help=True)
 sprint_app = typer.Typer(help="Plan, start and close sprints.", no_args_is_help=True)
@@ -84,6 +90,27 @@ def iso_date(text: str | None, end_of_day: bool = False) -> str | None:
     if end_of_day:
         moment = moment.replace(hour=23, minute=59)
     return moment.strftime("%Y-%m-%dT%H:%M:%S.000Z")
+
+
+def _issue_list(
+    path: str,
+    jql: str | None,
+    limit: int | None,
+    fields: str | None,
+    template: str | None,
+    chosen: Format,
+    *,
+    empty: str,
+) -> None:
+    """Print the issues an agile resource lists, like `issue search` does."""
+    shape = template_of(template, chosen)
+    shown = columns((*split(fields), *(shape.names if shape else ())))
+    session = connect()
+    found = session.client.paged(
+        path, key="issues", limit=limit, jql=jql, fields=",".join(jira_fields(shown))
+    )
+    view = IssuesView(jql or "", tuple(Issue.from_jira(i) for i in found), shown)
+    show_issues(view, chosen, shape, empty=empty)
 
 
 # ── boards ───────────────────────────────────────────────────────────────────
@@ -247,18 +274,18 @@ def board_backlog(
     as_json: JsonOpt = False,
     as_csv: CsvOpt = False,
     out: OutputOpt = None,
+    fields: FieldsOpt = None,
+    template: FormatOpt = None,
 ) -> None:
     """List the issues in a board's backlog."""
-    session = connect()
-    issues = session.client.paged(
+    _issue_list(
         f"{AGILE}/board/{board}/backlog",
-        key="issues",
-        limit=limit_of(limit, all_pages),
-        jql=jql,
-        fields=",".join(LIST_FIELDS),
-    )
-    output.emit(
-        issues, issue_columns(session, []), fmt(as_json, as_csv, out), empty="The backlog is empty."
+        jql,
+        limit_of(limit, all_pages),
+        fields,
+        template,
+        fmt(as_json, as_csv, out),
+        empty="The backlog is empty.",
     )
 
 
@@ -440,9 +467,8 @@ def sprint_delete(
 def sprint_issues(
     sprint: SprintIdArg,
     jql: JqlOpt = None,
-    fields: Annotated[
-        str | None, typer.Option("--fields", help="Columns, comma-separated field ids.")
-    ] = None,
+    fields: FieldsOpt = None,
+    template: FormatOpt = None,
     limit: LimitOpt = 50,
     all_pages: AllOpt = False,
     as_json: JsonOpt = False,
@@ -450,17 +476,14 @@ def sprint_issues(
     out: OutputOpt = None,
 ) -> None:
     """List the issues in a sprint."""
-    session = connect()
-    extra = [f.strip() for f in (fields or "").split(",") if f.strip()]
-    issues = session.client.paged(
+    _issue_list(
         f"{AGILE}/sprint/{sprint}/issue",
-        key="issues",
-        limit=limit_of(limit, all_pages),
-        jql=jql,
-        fields=",".join(extra or LIST_FIELDS),
-    )
-    output.emit(
-        issues, issue_columns(session, extra), fmt(as_json, as_csv, out), empty="No issues."
+        jql,
+        limit_of(limit, all_pages),
+        fields,
+        template,
+        fmt(as_json, as_csv, out),
+        empty="No issues.",
     )
 
 

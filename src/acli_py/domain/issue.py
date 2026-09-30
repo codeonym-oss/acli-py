@@ -16,6 +16,7 @@ from acli_py.domain import adf
 from acli_py.domain.values import day, moment
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
     from datetime import date, datetime
 
 # The fields `Issue` reads itself; any other field it is given lands in `Issue.other`.
@@ -302,6 +303,8 @@ class Issue:
     watchers: int = 0
     watching: bool = False
     other: tuple[Field, ...] = ()
+    # Every field as Jira sent it, for what the attributes above don't model the same way.
+    values: Mapping[str, Any] = field(default_factory=dict, compare=False, repr=False)
 
     @classmethod
     def from_jira(cls, data: dict) -> Issue:
@@ -342,4 +345,9 @@ class Issue:
                 for field_id, value in sorted(f.items())
                 if field_id not in KNOWN_FIELDS and value not in (None, "", [], {})
             ),
+            values=f,
         )
+
+    def value(self, field_id: str) -> Any:
+        """Return field `field_id`'s value as Jira sent it, or None."""
+        return self.values.get(field_id)

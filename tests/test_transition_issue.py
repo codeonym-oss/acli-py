@@ -15,8 +15,8 @@ from mediary import Mediator
 from acli_py.application.changes import AuditRecord, Change, Changed, Declined
 from acli_py.application.commands import transition_issue as transition_package
 from acli_py.application.commands.transition_issue.command import TransitionIssue
-from acli_py.application.messages import CountIssues
 from acli_py.application.ports import AuditLog, Workflow
+from acli_py.application.queries.count_issues.query import CountIssues
 from acli_py.application.site import Site
 from acli_py.bootstrap import build_bus
 from acli_py.domain.issue import Status, StatusCategory

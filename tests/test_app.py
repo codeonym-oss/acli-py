@@ -17,17 +17,17 @@ from acli_py.application.commands.edit_issue.command import EditIssue
 from acli_py.application.commands.transition_issue.command import TransitionIssue
 from acli_py.application.commands.watch_issue.command import WatchIssue
 from acli_py.application.messages import (
-    CountIssues,
     FindAssignees,
     GetTransitions,
     ListFilters,
     ListIssueTypes,
     ListPriorities,
     ListProjects,
-    SearchIssues,
     ValidateJql,
 )
+from acli_py.application.queries.count_issues.query import CountIssues
 from acli_py.application.queries.get_issue.query import GetIssue
+from acli_py.application.queries.search_issues.query import SearchIssues
 from acli_py.application.site import Site
 from acli_py.bootstrap import build_bus
 from acli_py.infrastructure.jira.client import JiraClient, NotFoundError
@@ -49,10 +49,10 @@ def test_queries_read_and_are_cached(site, fake):
     bus = make_bus(url)
 
     async def scenario():
-        page = await bus.send(SearchIssues("project = DEMO ORDER BY key", size=2))
-        assert [i["key"] for i in page.issues] == ["DEMO-1", "DEMO-2"]
-        more = await bus.send(SearchIssues(page.jql, token=page.next_token, size=2))
-        assert [i["key"] for i in more.issues] == ["DEMO-3"]
+        page = await bus.send(SearchIssues("project = DEMO ORDER BY key", 2))
+        assert [i.key for i in page.issues] == ["DEMO-1", "DEMO-2"]
+        more = await bus.send(SearchIssues(page.jql, 2, token=page.next_token))
+        assert [i.key for i in more.issues] == ["DEMO-3"]
         assert more.next_token is None
         assert await bus.send(CountIssues("project = DEMO")) == 3
         view = await bus.send(GetIssue("DEMO-1"))

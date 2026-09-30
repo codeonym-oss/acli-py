@@ -13,6 +13,7 @@ from textual.widgets import Input, Markdown, OptionList, TextArea
 
 from acli_py.application.site import Site
 from acli_py.bootstrap import build_bus
+from acli_py.domain.issue import IssueType
 from acli_py.domain.values import ago
 from acli_py.infrastructure.jira.catalog import JiraCatalog
 from acli_py.infrastructure.jira.client import JiraClient
@@ -104,7 +105,7 @@ def drive(fake, tmp_path, scenario, **kwargs):
 
 
 def keys(app) -> list[str]:
-    return [row["key"] for row in app.rows]
+    return [row.key for row in app.rows]
 
 
 # ── searching ────────────────────────────────────────────────────────────────
@@ -254,7 +255,8 @@ def test_transition_assign_and_comment(site, fake, tmp_path):
         await pilot.press("y")
         await settle(pilot, app)
         row = app.rows[0]
-        assert row["fields"]["status"]["name"] == "Done"
+        assert row.status is not None
+        assert row.status.name == "Done"
 
         await pilot.press("a")
         picker = await screen_of(pilot, app, PickScreen)
@@ -339,7 +341,7 @@ def test_edit_summary_description_and_watch(site, fake, tmp_path):
         prompt.query_one(Input).value = "Login fails on Safari 18"
         await pilot.press("enter")
         await agree(pilot, app, "Edit DEMO-1: summary → Login fails on Safari 18?")
-        assert app.rows[0]["fields"]["summary"] == "Login fails on Safari 18"
+        assert app.rows[0].summary == "Login fails on Safari 18"
 
         await pilot.press("d")
         editor = await screen_of(pilot, app, TextScreen)
@@ -370,7 +372,7 @@ def test_new_issue(site, fake, tmp_path):
         form.query_one("#description", TextArea).text = "Please."
         await pilot.press("ctrl+s")
         await settle(pilot, app)
-        assert "Add dark mode" in [r["fields"]["summary"] for r in app.rows]
+        assert "Add dark mode" in [r.summary for r in app.rows]
 
     drive(fake, tmp_path, scenario)
     created = next(i for i in site.issues.values() if i["fields"]["summary"] == "Add dark mode")
@@ -510,7 +512,7 @@ def test_ago(stamp, shown):
 
 
 def test_type_badges():
-    assert type_cell({"name": "Bug"}).plain == "B"
-    assert type_cell({"name": "Sub-task", "subtask": True}).plain == "↳"
-    assert type_cell({"name": "Idea"}).plain == "I"
+    assert type_cell(IssueType("Bug")).plain == "B"
+    assert type_cell(IssueType("Sub-task", subtask=True)).plain == "↳"
+    assert type_cell(IssueType("Idea")).plain == "I"
     assert type_cell(None).plain == ""

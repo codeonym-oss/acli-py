@@ -79,7 +79,9 @@ Every command has `--help` with examples. The whole tree:
 | `acli-py issue view KEY` | Details, description (rendered Markdown), subtasks, links, attachments, latest comments. `--web`, `--json`. |
 | `acli-py tui [QUERY]` | The full-screen issue browser. `--view NAME` starts from a saved view. |
 | `acli-py shell` | Every command at a prompt, with completion from your site. |
-| `acli-py issue search [QUERY]` | Search with a smart query or JQL, and/or `-p -a -s -t -L --text --open --filter --order`. `--count`, `--all`, `--fields`, `--csv`, `--web`, `--syntax`. Alias `list`. |
+| `acli-py issue search [QUERY]` | Search with a smart query or JQL, and/or `-p -a -s -t -L --text --open --filter --order`. `--all`, `--fields key,status,due`, `--format '{key} {summary}'`, `--csv`, `--web`, `--syntax`. Alias `list`. |
+| `acli-py issue count [QUERY]` | How many issues a search finds, with the same options. |
+| `acli-py issue history KEY` | Who changed which field, when, from what to what. `--field status`, `--newest-first`. |
 | `acli-py issue create` | One issue from options, `--editor` or `--from-file`, or many from `--from-json` / `--from-csv` (`--template` prints an example). |
 | `acli-py issue edit KEYS…` | Summary, description, type, priority, labels (`--add-label`, `--remove-label`), components, versions, parent, due date, any `-F` field. |
 | `acli-py issue assign KEYS… --to USER` | Assign to `@me`, a person, `default`, or `--unassign`. |
