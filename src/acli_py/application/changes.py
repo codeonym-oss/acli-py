@@ -32,6 +32,8 @@ class Change:
     `Change("Move", ("DEMO-1",), "to Done")` reads "Move DEMO-1 to Done". A `subject` names
     what is changed instead of the keys, for issues that don't exist yet:
     `Change("Create", ("#1",), subject="a Bug in DEMO")` reads "Create a Bug in DEMO".
+    A change to a part of an issue (a comment, a link) keys it by the part's id, names it in
+    `subject`, and says what it is in `noun`: several read "Delete 3 comments".
     """
 
     verb: str
@@ -41,6 +43,7 @@ class Change:
     subject: str = field(default="", compare=False)
     adds: bool = field(default=False, compare=False)
     destructive: bool = field(default=False, compare=False)
+    noun: str = field(default="issue", compare=False)
 
     def covers(self, other: Change) -> bool:
         """Return whether agreeing to this change also agrees to `other`."""
@@ -56,7 +59,7 @@ class Change:
             what = self.keys[0]
         else:
             shown = ", ".join(self.keys[:SHOWN_KEYS]) + ("…" if len(self.keys) > SHOWN_KEYS else "")
-            what = f"{len(self.keys)} issues ({shown})"
+            what = f"{len(self.keys)} {self.noun}s ({shown})"
         sentence = " ".join(part for part in (self.verb, what) if part)
         if not self.detail:
             return sentence

@@ -7,6 +7,7 @@ values (None, "", ()), never errors: Jira leaves out whatever a screen or a perm
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any
@@ -69,6 +70,7 @@ class User:
     account_id: str
     name: str
     email: str = ""
+    active: bool = field(default=True, compare=False)
 
     @classmethod
     def from_jira(cls, data: Any) -> User | None:
@@ -79,6 +81,7 @@ class User:
             str(data.get("accountId") or ""),
             str(data.get("displayName") or data.get("accountId")),
             str(data.get("emailAddress") or ""),
+            bool(data.get("active", True)),
         )
 
 
@@ -155,23 +158,41 @@ class Link:
 
 
 @dataclass(frozen=True)
+class Audience:
+    """Who a comment is kept to: a project `role` or a `group`."""
+
+    kind: str  # "role" or "group"
+    name: str
+
+    def __str__(self) -> str:
+        """Return 'role Developers'."""
+        return f"{self.kind} {self.name}"
+
+
+@dataclass(frozen=True)
 class Comment:
-    """A comment, its body as Markdown."""
+    """A comment, its body as Markdown; `visible_to` names the role or group it is kept to."""
 
     id: str
     author: User | None
     created: datetime | None
     body: str
+    updated: datetime | None = None
+    visible_to: str = ""
 
     @classmethod
     def from_jira(cls, data: Any) -> Comment:
         """Return the comment in `data`."""
         data = _dict(data)
+        created = moment(data.get("created"))
+        updated = moment(data.get("updated"))
         return cls(
             str(data.get("id") or ""),
             User.from_jira(data.get("author")),
-            moment(data.get("created")),
+            created,
             adf.to_text(data.get("body")).strip(),
+            updated if updated != created else None,
+            str(_dict(data.get("visibility")).get("value") or ""),
         )
 
 
@@ -182,13 +203,64 @@ class Attachment:
     id: str
     filename: str
     size: int = 0
+    mime_type: str = ""
+    author: User | None = None
+    created: datetime | None = None
 
     @classmethod
     def from_jira(cls, data: Any) -> Attachment:
         """Return the attachment in `data`."""
         data = _dict(data)
         filename = str(data.get("filename") or "?")
-        return cls(str(data.get("id") or ""), filename, int(data.get("size") or 0))
+        return cls(
+            str(data.get("id") or ""),
+            filename,
+            int(data.get("size") or 0),
+            str(data.get("mimeType") or ""),
+            User.from_jira(data.get("author")),
+            moment(data.get("created")),
+        )
+
+
+ISSUE_KEY = re.compile(r"^[A-Za-z][A-Za-z0-9_]*-\d+$")
+
+
+def looks_like_key(text: str) -> bool:
+    """Return whether `text` reads as an issue key: DEMO-12."""
+    return bool(ISSUE_KEY.match(text.strip()))
+
+
+DURATION = re.compile(r"^\s*(\d+(?:\.\d+)?\s*[wdhm]\s*)+$", re.IGNORECASE)
+
+
+def is_duration(text: str) -> bool:
+    """Return whether `text` is a duration as Jira writes them: '1h 30m', '2d', '1.5h'."""
+    return bool(DURATION.match(text))
+
+
+@dataclass(frozen=True)
+class Worklog:
+    """Time someone logged on an issue; `spent` in Jira's words ('1h 30m')."""
+
+    id: str
+    author: User | None
+    started: datetime | None
+    spent: str
+    comment: str = ""
+    seconds: int = 0
+
+    @classmethod
+    def from_jira(cls, data: Any) -> Worklog:
+        """Return the worklog in `data`."""
+        data = _dict(data)
+        return cls(
+            str(data.get("id") or ""),
+            User.from_jira(data.get("author")),
+            moment(data.get("started")),
+            str(data.get("timeSpent") or ""),
+            " ".join(adf.to_text(data.get("comment")).split()),
+            int(data.get("timeSpentSeconds") or 0),
+        )
 
 
 @dataclass(frozen=True)

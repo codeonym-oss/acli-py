@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 from rich.console import Group
@@ -13,7 +13,15 @@ from rich.panel import Panel
 from rich.rule import Rule
 from rich.table import Table
 
-from acli_py.domain.issue import Comment, Issue, IssueRef, Link, Status, StatusCategory, User
+from acli_py.application.queries.shapes import (
+    comment_json,
+    iso,
+    link_json,
+    ref_json,
+    status_json,
+    user_json,
+)
+from acli_py.domain.issue import Issue, IssueRef, Link, Status, StatusCategory
 from acli_py.domain.values import ago, text, when
 
 if TYPE_CHECKING:
@@ -45,24 +53,24 @@ class IssueView:
             "project": i.project,
             "summary": i.summary,
             "type": i.type.name if i.type else None,
-            "status": _status_json(i.status),
+            "status": status_json(i.status),
             "priority": i.priority or None,
             "resolution": i.resolution or None,
-            "assignee": _user_json(i.assignee),
-            "reporter": _user_json(i.reporter),
+            "assignee": user_json(i.assignee),
+            "reporter": user_json(i.reporter),
             "labels": list(i.labels),
             "components": list(i.components),
             "fixVersions": list(i.fix_versions),
-            "parent": _ref_json(i.parent),
-            "due": _iso(i.due),
-            "created": _iso(i.created),
-            "updated": _iso(i.updated),
+            "parent": ref_json(i.parent),
+            "due": iso(i.due),
+            "created": iso(i.created),
+            "updated": iso(i.updated),
             "description": i.description,
-            "subtasks": [_ref_json(s) for s in i.subtasks],
-            "links": [_link_json(link) for link in i.links],
+            "subtasks": [ref_json(s) for s in i.subtasks],
+            "links": [link_json(link) for link in i.links],
             "comments": {
                 "total": i.comment_count,
-                "items": [_comment_json(c) for c in i.comments],
+                "items": [comment_json(c) for c in i.comments],
             },
             "attachments": [
                 {"id": a.id, "filename": a.filename, "size": a.size} for a in i.attachments
@@ -88,7 +96,7 @@ class IssueView:
             ("Components", ", ".join(i.components)),
             ("Fix versions", ", ".join(i.fix_versions)),
             ("Parent", _ref_text(i.parent)),
-            ("Due", _iso(i.due)),
+            ("Due", iso(i.due)),
             ("Resolution", i.resolution),
             ("Watchers", i.watchers or ""),
             ("Created", when(i.created)),
@@ -137,7 +145,7 @@ class IssueView:
             ("Components", escape(", ".join(i.components))),
             ("Fix versions", escape(", ".join(i.fix_versions))),
             ("Resolution", escape(i.resolution)),
-            ("Due", _iso(i.due) or ""),
+            ("Due", iso(i.due) or ""),
             ("Created", when(i.created)),
             ("Updated", when(i.updated)),
             *((escape(f.name), escape(text(f.value))) for f in i.other),
@@ -190,10 +198,6 @@ def size(count: float) -> str:
     return str(count)  # pragma: no cover - the loop always returns
 
 
-def _iso(value: date | None) -> str | None:
-    return value.isoformat() if value else None
-
-
 def _ref_text(ref: IssueRef | None) -> str:
     return f"{ref.key} {ref.summary}".strip() if ref else ""
 
@@ -208,29 +212,3 @@ def _link_markup(link: Link) -> str:
         f"[dim]{escape(link.phrase)}[/] {escape(other.key)} {status_markup(other.status)} "
         f"{escape(other.summary)} [dim](link {escape(link.id)})[/]"
     )
-
-
-def _status_json(status: Status | None) -> dict | None:
-    return {"name": status.name, "category": status.category.value} if status else None
-
-
-def _user_json(user: User | None) -> dict | None:
-    if user is None:
-        return None
-    return {"accountId": user.account_id, "name": user.name, "email": user.email or None}
-
-
-def _ref_json(ref: IssueRef | None) -> dict | None:
-    if ref is None:
-        return None
-    return {"key": ref.key, "summary": ref.summary, "status": _status_json(ref.status)}
-
-
-def _comment_json(comment: Comment) -> dict:
-    return {"id": comment.id, "author": _user_json(comment.author),
-            "created": _iso(comment.created), "body": comment.body}  # fmt: skip
-
-
-def _link_json(link: Link) -> dict:
-    return {"id": link.id, "type": link.type, "direction": link.direction.value,
-            "phrase": link.phrase, "issue": _ref_json(link.issue)}  # fmt: skip

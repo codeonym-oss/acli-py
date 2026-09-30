@@ -1,10 +1,15 @@
-"""The parts of an issue: comments, links, attachments, watchers and worklogs."""
+"""The parts of an issue: comments, links, attachments, watchers and worklogs.
+
+Every command here sends messages on the bus: queries to read, commands to change (they ask
+first, run over many issues or items through the bulk engine, and land in the audit log).
+"""
 
 from __future__ import annotations
 
 import csv
 import json
 import re
+from datetime import datetime
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -12,32 +17,51 @@ import typer
 from rich.markdown import Markdown
 from rich.markup import escape
 
+from acli_py.application.commands.attach_file.command import AttachFile
+from acli_py.application.commands.comment_on_issue.command import CommentOnIssue
+from acli_py.application.commands.delete_attachment.command import DeleteAttachment
+from acli_py.application.commands.delete_comment.command import DeleteComment
+from acli_py.application.commands.delete_worklog.command import DeleteWorklog
+from acli_py.application.commands.edit_comment.command import EditComment
+from acli_py.application.commands.link_issues.command import LinkIssues
+from acli_py.application.commands.log_work.command import LogWork
+from acli_py.application.commands.unlink_issues.command import UnlinkIssues
 from acli_py.application.commands.watch_issue.command import WatchIssue
-from acli_py.domain import adf
-from acli_py.infrastructure.jira import resolve
-from acli_py.infrastructure.jira.client import API
-from acli_py.infrastructure.jira.fields import when
+from acli_py.application.queries.download_attachment.query import DownloadAttachment
+from acli_py.application.queries.get_comment.query import GetComment
+from acli_py.application.queries.list_attachments.query import ListAttachments
+from acli_py.application.queries.list_audiences.query import ListAudiences
+from acli_py.application.queries.list_comments.query import ListComments
+from acli_py.application.queries.list_link_types.query import ListLinkTypes
+from acli_py.application.queries.list_links.query import ListLinks
+from acli_py.application.queries.list_watchers.query import ListWatchers
+from acli_py.application.queries.list_worklogs.query import ListWorklogs
+from acli_py.domain.issue import Audience, is_duration, looks_like_key
+from acli_py.domain.values import when
 from acli_py.presentation import output
 from acli_py.presentation.cli.common import (
     AllOpt,
+    BulkLimitOpt,
+    ConcurrencyOpt,
     DryRunOpt,
     FilterOpt,
+    ForceOpt,
     FromFileOpt,
-    IgnoreErrorsOpt,
     JqlOpt,
     JsonOpt,
+    KeepGoingOpt,
     KeysArg,
     LimitOpt,
     OutputOpt,
     YesOpt,
-    confirm,
     connect,
     edit_text,
     fail,
     fmt,
     guarded,
     limit_of,
-    run_bulk,
+    pick_issues,
+    read_text,
     run_many,
 )
 from acli_py.presentation.output import Column, dig
@@ -45,13 +69,18 @@ from acli_py.presentation.output import Column, dig
 KeyArg = Annotated[str, typer.Argument(help="Issue key, e.g. DEMO-12.")]
 
 
-def _visibility(role: str | None, group: str | None) -> dict | None:
+def _ids(values: list[str] | None) -> list[str]:
+    """Return ids given as separate words, or joined with commas or spaces."""
+    return [i for value in values or [] for i in re.split(r"[\s,]+", value) if i]
+
+
+def _audience(role: str | None, group: str | None) -> Audience | None:
     if role and group:
         raise fail("Restrict a comment to a role or a group, not both.")
     if role:
-        return {"type": "role", "value": role}
+        return Audience("role", role)
     if group:
-        return {"type": "group", "value": group}
+        return Audience("group", group)
     return None
 
 
@@ -76,13 +105,13 @@ RoleOpt = Annotated[str | None, typer.Option("--role", help="Only this project r
 GroupOpt = Annotated[str | None, typer.Option("--group", help="Only this group can see it.")]
 
 
-def _body(session: Any, body: str | None, body_file: Path | None, editor: bool) -> dict:
-    text = resolve.read_text_arg(body, body_file)
+def _body(session: Any, body: str | None, body_file: Path | None, editor: bool) -> str:
+    text = read_text(body, body_file)
     if editor:
         text = edit_text(text or "", config=session.config)
     if not text or not text.strip():
         raise fail("The comment is empty: pass [bold]-b TEXT[/], [bold]-B FILE[/] or --editor.")
-    return adf.to_adf(text)
+    return text
 
 
 @comment_app.command("list")
@@ -98,33 +127,21 @@ def comment_list(
 ) -> None:
     """Show an issue's comments, oldest first."""
     session = connect()
-    comments = list(
-        session.client.paged(
-            f"{API}/issue/{key.upper()}/comment",
-            key="comments",
-            limit=limit_of(limit, all_pages),
-            orderBy="-created" if newest_first else "created",
-        )
-    )
+    view = session.send(ListComments(key, newest_first, limit_of(limit, all_pages)))
     if as_json:
-        output.print_json(comments)
+        output.print_json(view.to_json())
         return
-    if not comments:
-        output.info(f"{key.upper()} has no comments.")
-    for c in comments:
-        seen_by = dig(c, "visibility", "value")
+    if not view.comments:
+        output.info(f"{view.key} has no comments.")
+    for c in view.comments:
+        author = c.author.name if c.author else "?"
         output.console.print(
-            f"[bold]{escape(dig(c, 'author', 'displayName', default='?'))}[/] "
-            f"[dim]{when(c.get('created'))} · id {c.get('id')}"
-            + (
-                f" · edited {when(c.get('updated'))}"
-                if c.get("updated") != c.get("created")
-                else ""
-            )
-            + (f" · visible to {escape(seen_by)}" if seen_by else "")
+            f"[bold]{escape(author)}[/] [dim]{when(c.created)} · id {c.id}"
+            + (f" · edited {when(c.updated)}" if c.updated else "")
+            + (f" · visible to {escape(c.visible_to)}" if c.visible_to else "")
             + "[/]"
         )
-        output.console.print(Markdown(adf.to_text(c.get("body")) or "_(empty)_"))
+        output.console.print(Markdown(c.body or "_(empty)_"))
         output.console.print()
 
 
@@ -143,8 +160,11 @@ def comment_add(
     jql: JqlOpt = None,
     saved_filter: FilterOpt = None,
     from_file: FromFileOpt = None,
+    limit: BulkLimitOpt = None,
+    concurrency: ConcurrencyOpt = 4,
+    keep_going: KeepGoingOpt = False,
+    force: ForceOpt = False,
     yes: YesOpt = False,
-    ignore_errors: IgnoreErrorsOpt = False,
     dry_run: DryRunOpt = False,
     as_json: JsonOpt = False,
 ) -> None:
@@ -154,33 +174,20 @@ def comment_add(
     echo "Deployed" | acli-py issue comment add --jql 'fixVersion = 2.4' -b - -y[/]
     """
     session = connect(dry_run)
-    picked = resolve.targets(session.client, keys, jql, saved_filter, from_file)
-    payload: dict[str, Any] = {"body": _body(session, body, body_file, editor)}
-    if visibility := _visibility(role, group):
-        payload["visibility"] = visibility
-    if len(picked) > 1:
-        confirm(f"Comment on {len(picked)} issues?", yes, session)
-
-    def one(key: str) -> dict:
-        if edit_last:
-            mine = [
-                c
-                for c in session.client.paged(
-                    f"{API}/issue/{key}/comment", key="comments", orderBy="-created"
-                )
-                if dig(c, "author", "accountId") == session.me
-            ]
-            if mine:
-                return session.client.put(f"{API}/issue/{key}/comment/{mine[0]['id']}", payload)
-        return session.client.post(f"{API}/issue/{key}/comment", payload)
-
-    run_bulk(
-        picked,
-        one,
+    audience = _audience(role, group)
+    text = _body(session, body, body_file, editor)
+    picked = pick_issues(session, keys, jql, saved_filter, from_file, limit=limit, force=force)
+    replacing = session.me if edit_last else ""
+    run_many(
+        session,
+        [CommentOnIssue(k, text, audience, replacing) for k in picked],
         done="would get the comment" if session.dry_run else "commented",
-        ignore_errors=ignore_errors,
+        yes=yes,
+        concurrency=concurrency,
+        keep_going=keep_going,
+        force=force,
         as_json=as_json,
-        describe=lambda _k, r: "" if r.get("dryRun") else f"[dim](id {r.get('id')})[/]",
+        describe=lambda r: "" if session.dry_run else f"[dim](id {r.after.get('comment')})[/]",
     )
 
 
@@ -197,19 +204,21 @@ def comment_edit(
     notify: Annotated[
         bool, typer.Option("--notify/--no-notify", help="Email watchers about the change.")
     ] = False,
+    yes: YesOpt = False,
     dry_run: DryRunOpt = False,
 ) -> None:
     """Replace a comment's text."""
     session = connect(dry_run)
-    path = f"{API}/issue/{key.upper()}/comment/{comment_id}"
+    audience = _audience(role, group)
     if editor and body is None and body_file is None:
-        body = adf.to_text(session.client.get(path).get("body"))
-    payload: dict[str, Any] = {"body": _body(session, body, body_file, editor)}
-    if visibility := _visibility(role, group):
-        payload["visibility"] = visibility
-    session.client.put(path, payload, notifyUsers="true" if notify else "false")
-    if not session.dry_run:
-        output.success(f"Comment {comment_id} on {key.upper()} updated")
+        body = session.send(GetComment(key, comment_id)).body
+    text = _body(session, body, body_file, editor)
+    run_many(
+        session,
+        [EditComment(key, comment_id, text, audience, notify)],
+        done="would be edited" if session.dry_run else "edited",
+        yes=yes,
+    )
 
 
 @comment_app.command("delete")
@@ -217,16 +226,19 @@ def comment_edit(
 def comment_delete(
     key: KeyArg,
     comment_ids: Annotated[list[str], typer.Argument(help="Comment ids.")],
+    keep_going: KeepGoingOpt = False,
     yes: YesOpt = False,
     dry_run: DryRunOpt = False,
 ) -> None:
     """Delete comments."""
     session = connect(dry_run)
-    confirm(f"Delete {len(comment_ids)} comment(s) from {key.upper()}?", yes, session)
-    run_bulk(
-        comment_ids,
-        lambda cid: session.client.delete(f"{API}/issue/{key.upper()}/comment/{cid}"),
+    run_many(
+        session,
+        [DeleteComment(key, cid) for cid in _ids(comment_ids)],
         done="would be deleted" if session.dry_run else "deleted",
+        yes=yes,
+        keep_going=keep_going,
+        concurrency=1,
     )
 
 
@@ -241,12 +253,7 @@ def comment_visibility(
 ) -> None:
     """List the roles (with --project) or groups a comment can be restricted to."""
     session = connect()
-    if project:
-        roles = session.client.get(f"{API}/project/{project.upper()}/role")
-        rows = [{"type": "role", "name": name} for name in sorted(roles)]
-    else:
-        found = session.client.get(f"{API}/groups/picker", maxResults=100)
-        rows = [{"type": "group", "name": g["name"]} for g in found.get("groups", [])]
+    rows = session.send(ListAudiences(project or "")).to_json()
     columns = [
         Column("Type", lambda r: r["type"], style="dim"),
         Column("Name", lambda r: r["name"]),
@@ -259,31 +266,30 @@ def comment_visibility(
 link_app = typer.Typer(help="Link issues to each other.", no_args_is_help=True)
 
 
-def link_body(client: Any, source: str, kind: str, target: str) -> tuple[dict, str]:
-    """Return the issueLink payload for "SOURCE <kind> TARGET", and the sentence it says."""
-    link_type, outward = resolve.link_type(client, kind)
-    if not outward:
-        source, target = target, source
-    # POST /issueLink: the outward ("from") issue is the one the outward phrase starts with.
-    body = {
-        "type": {"name": link_type["name"]},
-        "outwardIssue": {"key": source.upper()},
-        "inwardIssue": {"key": target.upper()},
-    }
-    return body, f"{source.upper()} {link_type['outward']} {target.upper()}"
+def _link_rows(from_json: Path | None, from_csv: Path | None) -> list[tuple[str, str, str]]:
+    triples: list[tuple[str, str, str]] = []
+    if from_json:
+        triples += [
+            (str(r["from"]), str(r["type"]), str(r["to"]))
+            for r in json.loads(from_json.read_text(encoding="utf-8"))
+        ]
+    if from_csv:
+        rows = list(csv.reader(from_csv.read_text(encoding="utf-8-sig").splitlines()))
+        triples += [(r[0], r[1], r[2]) for r in rows[1:] if len(r) >= 3]
+    return triples
 
 
 @link_app.command("add")
 @guarded
 def link_add(
-    source: Annotated[
-        str | None, typer.Argument(help="The issue the sentence starts with.")
+    words: Annotated[
+        list[str] | None,
+        typer.Argument(
+            help="FROM TYPE TO, read as a sentence (TYPE: blocks, 'is blocked by', relates to, "
+            "Duplicate…). With --jql, --filter or FROM '-', each issue found is FROM.",
+            show_default=False,
+        ),
     ] = None,
-    kind: Annotated[
-        str | None,
-        typer.Argument(help="Link type or phrase: blocks, 'is blocked by', relates to, Duplicate…"),
-    ] = None,
-    target: Annotated[str | None, typer.Argument(help="The other issue.")] = None,
     from_json: Annotated[
         Path | None,
         typer.Option(
@@ -299,14 +305,21 @@ def link_add(
     template: Annotated[
         bool, typer.Option("--template", help="Print an example --from-json file and exit.")
     ] = False,
+    jql: JqlOpt = None,
+    saved_filter: FilterOpt = None,
+    limit: BulkLimitOpt = None,
+    concurrency: ConcurrencyOpt = 4,
+    keep_going: KeepGoingOpt = False,
+    force: ForceOpt = False,
     yes: YesOpt = False,
-    ignore_errors: IgnoreErrorsOpt = False,
     dry_run: DryRunOpt = False,
+    as_json: JsonOpt = False,
 ) -> None:
-    """Link two issues, read as a sentence.
+    """Link issues, read as a sentence.
 
     [dim]acli-py issue link add DEMO-1 blocks DEMO-2
-    acli-py issue link add DEMO-5 "is duplicated by" DEMO-9[/]
+    acli-py issue link add DEMO-5 "is duplicated by" DEMO-9
+    acli-py issue link add --jql 'labels = login' "relates to" DEMO-1[/]
     """
     if template:
         output.print_json(
@@ -316,65 +329,51 @@ def link_add(
             ]
         )
         return
+    words = words or []
     session = connect(dry_run)
-    triples: list[tuple[str, str, str]] = []
-    if from_json:
-        triples += [
-            (str(r["from"]), str(r["type"]), str(r["to"]))
-            for r in json.loads(from_json.read_text(encoding="utf-8"))
-        ]
-    if from_csv:
-        rows = list(csv.reader(from_csv.read_text(encoding="utf-8-sig").splitlines()))
-        triples += [(r[0], r[1], r[2]) for r in rows[1:] if len(r) >= 3]
-    if source or kind or target:
-        if not (source and kind and target):
-            raise fail("Give three words: [bold]acli-py issue link add FROM TYPE TO[/].")
-        triples.append((source, kind, target))
+    triples = _link_rows(from_json, from_csv)
+    if len(words) == 3 and words[0] != "-" and not (jql or saved_filter):
+        triples.append((words[0], words[1], words[2]))
+    elif len(words) in (2, 3) and (jql or saved_filter or words[0] == "-"):
+        kind, target = words[-2:]
+        sources = pick_issues(
+            session, words[:1] if len(words) == 3 else None, jql, saved_filter,
+            limit=limit, force=force,
+        )  # fmt: skip
+        triples += [(source, kind, target) for source in sources]
+    elif words:
+        raise fail("Give three words: [bold]acli-py issue link add FROM TYPE TO[/].")
     if not triples:
         raise fail("Nothing to link. See [bold]acli-py issue link add --help[/].")
-    if len(triples) > 1:
-        confirm(f"Create {len(triples)} links?", yes, session)
-    labels = {f"{a.upper()} {k} {b.upper()}": (a, k, b) for a, k, b in triples}
-
-    def one(label: str) -> None:
-        body, _ = link_body(session.client, *labels[label])
-        if comment:
-            body["comment"] = {"body": adf.to_adf(comment)}
-        session.client.post(f"{API}/issueLink", body)
-
-    run_bulk(
-        list(labels),
-        one,
+    run_many(
+        session,
+        [LinkIssues(a, k, b, comment or "") for a, k, b in triples],
         done="would be linked" if session.dry_run else "linked",
-        ignore_errors=ignore_errors,
+        yes=yes,
+        concurrency=concurrency,
+        keep_going=keep_going,
+        force=force,
+        as_json=as_json,
     )
 
 
 @link_app.command("list")
 @guarded
 def link_list(key: KeyArg, as_json: JsonOpt = False, out: OutputOpt = None) -> None:
-    """Show an issue's links."""
+    """Show an issue's links (`--output keys` prints the linked issues, for a pipe)."""
     session = connect()
-    links = session.client.issue(key.upper(), ["issuelinks"])["fields"].get("issuelinks", [])
-
-    def phrase(link: dict) -> str:
-        kind = link.get("type", {})
-        return kind.get("outward") if "outwardIssue" in link else kind.get("inward")
-
-    def other(link: dict) -> dict:
-        return link.get("outwardIssue") or link.get("inwardIssue") or {}
-
+    view = session.send(ListLinks(key))
     output.emit(
-        links,
+        view.to_json(),
         [
-            Column("Link id", lambda r: r.get("id"), style="dim"),
-            Column("Relation", phrase),
-            Column("Issue", lambda r: other(r).get("key"), style="cyan"),
-            Column("Status", lambda r: dig(other(r), "fields", "status", "name")),
-            Column("Summary", lambda r: dig(other(r), "fields", "summary")),
+            Column("Link id", lambda r: r["id"], style="dim"),
+            Column("Relation", lambda r: r["phrase"]),
+            Column("Issue", lambda r: r["key"], style="cyan"),
+            Column("Status", lambda r: r["status"]),
+            Column("Summary", lambda r: r["summary"]),
         ],
         fmt(as_json, chosen=out),
-        empty=f"{key.upper()} has no links.",
+        empty=f"{view.key} has no links.",
     )
 
 
@@ -390,12 +389,12 @@ def link_delete(
     from_csv: Annotated[
         Path | None, typer.Option("--from-csv", help="A CSV whose first column holds link ids.")
     ] = None,
+    keep_going: KeepGoingOpt = False,
     yes: YesOpt = False,
-    ignore_errors: IgnoreErrorsOpt = False,
     dry_run: DryRunOpt = False,
 ) -> None:
     """Remove links between issues."""
-    ids = [i for value in link_ids or [] for i in re.split(r"[\s,]+", value) if i]
+    ids = _ids(link_ids)
     if from_json:
         ids += [
             str(v["id"] if isinstance(v, dict) else v) for v in json.loads(from_json.read_text())
@@ -406,12 +405,12 @@ def link_delete(
     if not ids:
         raise fail("Which links? Give ids; [bold]acli-py issue link list KEY[/] shows them.")
     session = connect(dry_run)
-    confirm(f"Delete {len(ids)} link(s)?", yes, session)
-    run_bulk(
-        ids,
-        lambda lid: session.client.delete(f"{API}/issueLink/{lid}"),
+    run_many(
+        session,
+        [UnlinkIssues(i) for i in ids],
         done="would be deleted" if session.dry_run else "deleted",
-        ignore_errors=ignore_errors,
+        yes=yes,
+        keep_going=keep_going,
     )
 
 
@@ -421,12 +420,12 @@ def link_types(as_json: JsonOpt = False, out: OutputOpt = None) -> None:
     """List the kinds of link the site offers."""
     session = connect()
     output.emit(
-        session.client.link_types(),
+        session.send(ListLinkTypes()).to_json(),
         [
-            Column("Id", lambda t: t.get("id"), style="dim"),
-            Column("Name", lambda t: t.get("name"), style="bold"),
-            Column("Outward (A … B)", lambda t: t.get("outward")),
-            Column("Inward (B … A)", lambda t: t.get("inward")),
+            Column("Id", lambda t: t["id"], style="dim"),
+            Column("Name", lambda t: t["name"], style="bold"),
+            Column("Outward (A … B)", lambda t: t["outward"]),
+            Column("Inward (B … A)", lambda t: t["inward"]),
         ],
         fmt(as_json, chosen=out),
     )
@@ -444,19 +443,19 @@ attachment_app = typer.Typer(
 def attachment_list(key: KeyArg, as_json: JsonOpt = False, out: OutputOpt = None) -> None:
     """Show an issue's attachments."""
     session = connect()
-    files = session.client.issue(key.upper(), ["attachment"])["fields"].get("attachment", [])
+    view = session.send(ListAttachments(key))
     output.emit(
-        files,
+        view.to_json(),
         [
-            Column("Id", lambda a: a.get("id"), style="dim"),
-            Column("File", lambda a: a.get("filename"), style="bold"),
-            Column("Size", lambda a: f"{a.get('size', 0):,} B", justify="right"),
-            Column("Type", lambda a: a.get("mimeType"), style="dim"),
-            Column("By", lambda a: dig(a, "author", "displayName")),
-            Column("Added", lambda a: when(a.get("created"))),
+            Column("Id", lambda a: a["id"], style="dim"),
+            Column("File", lambda a: a["filename"], style="bold"),
+            Column("Size", lambda a: f"{a['size']:,} B", justify="right"),
+            Column("Type", lambda a: a["mimeType"], style="dim"),
+            Column("By", lambda a: dig(a, "author", "name")),
+            Column("Added", lambda a: when(a["created"])),
         ],
         fmt(as_json, chosen=out),
-        empty=f"{key.upper()} has no attachments.",
+        empty=f"{view.key} has no attachments.",
     )
 
 
@@ -467,26 +466,24 @@ def attachment_upload(
     files: Annotated[
         list[Path], typer.Argument(help="Files to attach.", exists=True, dir_okay=False)
     ],
+    keep_going: KeepGoingOpt = False,
+    yes: YesOpt = False,
     dry_run: DryRunOpt = False,
     as_json: JsonOpt = False,
 ) -> None:
     """Attach files to an issue."""
     session = connect(dry_run)
-    uploaded: list[dict] = []
-    for path in files:
-        with path.open("rb") as handle:
-            result = session.client.request(
-                "POST",
-                f"{API}/issue/{key.upper()}/attachments",
-                files={"file": (path.name, handle)},
-                headers={"X-Atlassian-Token": "no-check"},
-            )
-        if isinstance(result, list):
-            uploaded.extend(result)
-        if not session.dry_run:
-            output.success(f"Attached {escape(path.name)} to {key.upper()}")
-    if as_json:
-        output.print_json(uploaded)
+    verb = "Would attach" if session.dry_run else "Attached"
+    run_many(
+        session,
+        [AttachFile(key, path) for path in files],
+        done="attached",
+        yes=yes,
+        keep_going=keep_going,
+        concurrency=1,
+        as_json=as_json,
+        line=lambda r: f"{verb} {escape(r.after['file'])} to {r.key}",
+    )
 
 
 @attachment_app.command("download")
@@ -500,34 +497,33 @@ def attachment_download(
     """Download attachments by id."""
     session = connect()
     out.mkdir(parents=True, exist_ok=True)
-    for attachment_id in attachment_ids:
-        meta = session.client.get(f"{API}/attachment/{attachment_id}")
-        dest = out / Path(meta.get("filename", attachment_id)).name
-        size = session.client.download(f"{API}/attachment/content/{attachment_id}", dest)
-        output.success(f"Saved {escape(str(dest))} ({size:,} bytes)")
+    for attachment_id in _ids(attachment_ids):
+        saved = session.send(DownloadAttachment(attachment_id, out))
+        output.success(f"Saved {escape(str(saved.path))} ({saved.size:,} bytes)")
 
 
 @attachment_app.command("delete")
 @guarded
 def attachment_delete(
     attachment_ids: Annotated[list[str], typer.Argument(help="Attachment ids.")],
+    keep_going: KeepGoingOpt = False,
     yes: YesOpt = False,
     dry_run: DryRunOpt = False,
 ) -> None:
     """Delete attachments by id."""
     session = connect(dry_run)
-    confirm(f"Delete {len(attachment_ids)} attachment(s)?", yes, session)
-    run_bulk(
-        attachment_ids,
-        lambda aid: session.client.delete(f"{API}/attachment/{aid}"),
+    run_many(
+        session,
+        [DeleteAttachment(i) for i in _ids(attachment_ids)],
         done="would be deleted" if session.dry_run else "deleted",
+        yes=yes,
+        keep_going=keep_going,
     )
 
 
 # ── watchers ─────────────────────────────────────────────────────────────────
 
 watcher_app = typer.Typer(help="See, add and remove watchers.", no_args_is_help=True)
-UserArg = Annotated[str, typer.Argument(help="Email, account id, name or @me.")]
 
 
 @watcher_app.command("list")
@@ -535,16 +531,16 @@ UserArg = Annotated[str, typer.Argument(help="Email, account id, name or @me.")]
 def watcher_list(key: KeyArg, as_json: JsonOpt = False, out: OutputOpt = None) -> None:
     """Show who watches an issue."""
     session = connect()
-    data = session.client.get(f"{API}/issue/{key.upper()}/watchers")
+    view = session.send(ListWatchers(key))
     output.emit(
-        data.get("watchers", []),
+        view.to_json(),
         [
-            Column("Name", lambda u: u.get("displayName"), style="bold"),
-            Column("Account id", lambda u: u.get("accountId"), style="dim"),
-            Column("Active", lambda u: "yes" if u.get("active", True) else "no"),
+            Column("Name", lambda u: u["name"], style="bold"),
+            Column("Account id", lambda u: u["accountId"], style="dim"),
+            Column("Active", lambda u: "yes" if u["active"] else "no"),
         ],
         fmt(as_json, chosen=out),
-        empty=f"Nobody watches {key.upper()}.",
+        empty=f"Nobody watches {view.key}.",
     )
 
 
@@ -580,7 +576,7 @@ def watcher_remove(
 
 def _watch(key: str, who: str, watch: bool, yes: bool, dry_run: bool) -> None:
     session = connect(dry_run)
-    account = resolve.user(session.client, who, session.me)["accountId"]
+    account = session.account_id(who)
     name = "" if account == session.me else who
     done = "now watched" if watch else "no longer watched"
     run_many(
@@ -597,34 +593,42 @@ def _watch(key: str, who: str, watch: bool, yes: bool, dry_run: bool) -> None:
 
 worklog_app = typer.Typer(help="Log time and see logged work.", no_args_is_help=True)
 
-DURATION = re.compile(r"^\s*(\d+(?:\.\d+)?\s*[wdhm]\s*)+$", re.IGNORECASE)
-
 
 @worklog_app.command("list")
 @guarded
 def worklog_list(key: KeyArg, as_json: JsonOpt = False, out: OutputOpt = None) -> None:
     """Show the work logged on an issue."""
     session = connect()
-    logs = list(session.client.paged(f"{API}/issue/{key.upper()}/worklog", key="worklogs"))
+    view = session.send(ListWorklogs(key))
     output.emit(
-        logs,
+        view.to_json(),
         [
-            Column("Id", lambda w: w.get("id"), style="dim"),
-            Column("Who", lambda w: dig(w, "author", "displayName"), style="bold"),
-            Column("Started", lambda w: when(w.get("started"))),
-            Column("Time", lambda w: w.get("timeSpent"), justify="right"),
-            Column("Comment", lambda w: " ".join(adf.to_text(w.get("comment")).split())),
+            Column("Id", lambda w: w["id"], style="dim"),
+            Column("Who", lambda w: dig(w, "author", "name"), style="bold"),
+            Column("Started", lambda w: when(w["started"])),
+            Column("Time", lambda w: w["timeSpent"], justify="right"),
+            Column("Comment", lambda w: w["comment"]),
         ],
         fmt(as_json, chosen=out),
-        empty=f"No work logged on {key.upper()}.",
+        empty=f"No work logged on {view.key}.",
     )
 
 
 @worklog_app.command("add")
 @guarded
 def worklog_add(
-    key: KeyArg,
-    time: Annotated[str, typer.Argument(help="Time spent, Jira style: 1h 30m, 2d, 45m.")],
+    keys: Annotated[
+        list[str] | None,
+        typer.Argument(
+            help="Issue keys ('-' reads them from stdin), then the time unless --time gives it: "
+            "DEMO-1 1h 30m.",
+            show_default=False,
+        ),
+    ] = None,
+    time: Annotated[
+        str | None,
+        typer.Option("--time", "-t", help="Time spent, Jira style: 1h 30m, 2d, 45m."),
+    ] = None,
     comment: Annotated[str | None, typer.Option("--comment", "-m", help="What you did.")] = None,
     started: Annotated[
         str | None,
@@ -634,21 +638,45 @@ def worklog_add(
         str | None,
         typer.Option("--remaining", help="Set the remaining estimate, e.g. 3h (default: auto)."),
     ] = None,
+    jql: JqlOpt = None,
+    saved_filter: FilterOpt = None,
+    from_file: FromFileOpt = None,
+    limit: BulkLimitOpt = None,
+    concurrency: ConcurrencyOpt = 4,
+    keep_going: KeepGoingOpt = False,
+    force: ForceOpt = False,
+    yes: YesOpt = False,
     dry_run: DryRunOpt = False,
+    as_json: JsonOpt = False,
 ) -> None:
-    """Log time on an issue."""
-    if not DURATION.match(time):
+    """Log time on one or many issues.
+
+    [dim]acli-py issue worklog add DEMO-1 1h 30m -m Pairing
+    acli-py issue worklog add --jql 'sprint in openSprints() and assignee = currentUser()' -t 15m[/]
+    """
+    keys = list(keys or [])
+    if time is None and len(keys) > 1 and not looks_like_key(keys[-1]):
+        keys, time = keys[:1], " ".join(keys[1:])
+    if not time:
+        raise fail("How long? Give the time after the key, or as [bold]--time 1h 30m[/].")
+    if not is_duration(time):
         raise fail(f"{escape(time)!r} is not a duration like 1h 30m, 2d or 45m.")
+    moment = _moment(started) if started else None
     session = connect(dry_run)
-    body: dict[str, Any] = {"timeSpent": time.strip()}
-    if comment:
-        body["comment"] = adf.to_adf(comment)
-    if started:
-        body["started"] = _jira_datetime(started)
-    params = {"adjustEstimate": "new", "newEstimate": estimate} if estimate else {}
-    result = session.client.post(f"{API}/issue/{key.upper()}/worklog", body, **params)
-    if not session.dry_run:
-        output.success(f"Logged {escape(time)} on {key.upper()} [dim](id {result.get('id')})[/]")
+    picked = pick_issues(
+        session, keys or None, jql, saved_filter, from_file, limit=limit, force=force
+    )
+    run_many(
+        session,
+        [LogWork(k, time, comment or "", moment, estimate or "") for k in picked],
+        done=f"would get {time}" if session.dry_run else f"logged {time}",
+        yes=yes,
+        concurrency=concurrency,
+        keep_going=keep_going,
+        force=force,
+        as_json=as_json,
+        describe=lambda r: "" if session.dry_run else f"[dim](id {r.after.get('worklog')})[/]",
+    )
 
 
 @worklog_app.command("delete")
@@ -656,25 +684,26 @@ def worklog_add(
 def worklog_delete(
     key: KeyArg,
     worklog_ids: Annotated[list[str], typer.Argument(help="Worklog ids.")],
+    keep_going: KeepGoingOpt = False,
     yes: YesOpt = False,
     dry_run: DryRunOpt = False,
 ) -> None:
     """Delete logged work."""
     session = connect(dry_run)
-    confirm(f"Delete {len(worklog_ids)} worklog(s) from {key.upper()}?", yes, session)
-    run_bulk(
-        worklog_ids,
-        lambda wid: session.client.delete(f"{API}/issue/{key.upper()}/worklog/{wid}"),
+    run_many(
+        session,
+        [DeleteWorklog(key, wid) for wid in _ids(worklog_ids)],
         done="would be deleted" if session.dry_run else "deleted",
+        yes=yes,
+        keep_going=keep_going,
+        concurrency=1,
     )
 
 
-def _jira_datetime(text: str) -> str:
-    """Return Jira's worklog timestamp form for a date or local date-time."""
-    from datetime import datetime
-
+def _moment(text: str) -> datetime:
+    """Return a date (at 09:00) or a local date-time the user typed."""
     text = text.strip()
-    moment = datetime.fromisoformat(text if "T" in text or " " in text else f"{text}T09:00")
-    if moment.tzinfo is None:
-        moment = moment.astimezone()
-    return moment.strftime("%Y-%m-%dT%H:%M:%S.000%z")
+    try:
+        return datetime.fromisoformat(text if "T" in text or " " in text else f"{text}T09:00")
+    except ValueError:
+        raise fail(f"{escape(text)!r} is not a date like 2026-09-24 or 2026-09-24T14:30.") from None

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from acli_py.domain.issue import User
 from acli_py.infrastructure.jira.client import API
 
 if TYPE_CHECKING:
@@ -62,3 +63,8 @@ class JiraWatchers:
             self.client.post(f"{API}/issue/{key}/watchers", account_id)
         else:
             self.client.delete(f"{API}/issue/{key}/watchers", accountId=account_id)
+
+    def watchers(self, key: str) -> list[User]:
+        """Return the watchers."""
+        found = self.client.get(f"{API}/issue/{key}/watchers") or {}
+        return [u for u in map(User.from_jira, found.get("watchers") or []) if u]

@@ -194,6 +194,16 @@ class FakeJira:
             self.issues["DEMO-1"]["comments"].append(
                 self.comment(BOB, "Seen on **Safari 18** too.")
             )
+            # Parts on DEMO-3 for the dry-run tests to aim at: worklog 20007, attachment 20008.
+            self.issues["DEMO-3"]["worklogs"].append(
+                {"id": self.new_id(), "author": BOB, "timeSpent": "2h",
+                 "started": "2026-09-23T09:00:00.000+0200", "comment": None}
+            )  # fmt: skip
+            attachment = {"id": self.new_id(), "filename": "trace.log", "size": 3,
+                          "mimeType": "text/plain", "author": BOB,
+                          "created": "2026-09-23T10:00:00.000+0200"}  # fmt: skip
+            self.issues["DEMO-3"]["attachments"].append(attachment)
+            self.blobs[attachment["id"]] = b"log"
 
     def new_id(self) -> str:
         """Return a fresh id."""
@@ -663,6 +673,16 @@ def _add_link(jira, q, body):
     return 201, None
 
 
+@route("GET", f"{A}/issueLink/(?P<lid>\\d+)")
+def _get_link(jira, q, body, lid):
+    if lid not in jira.links:
+        raise NotFoundError("No issue link with id")
+    link = jira.links[lid]
+    kind = next(t for t in LINK_TYPES if t["name"] == link["type"])
+    return {"id": lid, "type": kind, "outwardIssue": {"key": link["outward"]},
+            "inwardIssue": {"key": link["inward"]}}  # fmt: skip
+
+
 @route("DELETE", f"{A}/issueLink/(?P<lid>\\d+)")
 def _delete_link(jira, q, body, lid):
     if lid not in jira.links:
@@ -742,6 +762,14 @@ def _add_worklog(jira, q, body, key):
            "comment": body.get("comment")}  # fmt: skip
     jira.issue(key)["worklogs"].append(log)
     return 201, log
+
+
+@route("GET", f"{A}/issue/(?P<key>[^/]+)/worklog/(?P<wid>\\d+)")
+def _get_worklog(jira, q, body, key, wid):
+    for log in jira.issue(key)["worklogs"]:
+        if log["id"] == wid:
+            return log
+    raise NotFoundError("Cannot find worklog with id")
 
 
 @route("DELETE", f"{A}/issue/(?P<key>[^/]+)/worklog/(?P<wid>\\d+)")

@@ -120,13 +120,6 @@ def test_textarea_becomes_adf_and_bad_json_is_explained():
         resolve.field_values(client, ["Team:={nope"])
 
 
-def test_link_type_direction():
-    kind, outward = resolve.link_type(client, "is blocked by")
-    assert (kind["name"], outward) == ("Blocks", False)
-    assert resolve.link_type(client, "BLOCKS")[1] is True
-    assert resolve.link_type(client, "duplicate")[0]["name"] == "Duplicate"
-
-
 def test_read_text_arg(tmp_path, monkeypatch):
     import io
 

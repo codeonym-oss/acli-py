@@ -496,8 +496,11 @@ echo "Deployed" | acli-py issue comment add --jql 'fixVersion = 2.4' -b - -y
 | `-q`, `--jql` `TEXT` |  | Act on the issues this JQL or smart query finds. |
 | `--filter` `TEXT` |  | Act on the issues of this saved filter id. |
 | `-f`, `--from-file` `PATH` |  | Read issue keys from a file (commas, spaces or lines; '-' for stdin). |
+| `-l`, `--limit` `INTEGER` |  | Act on at most this many issues. |
+| `-c`, `--concurrency` `INTEGER` | `4` | How many issues to work on at once. |
+| `--ignore-errors`, `--continue-on-error` |  | Keep going when an issue fails (else stop starting new ones); exit 1 at the end. |
+| `--force` |  | Allow acting on more than 200 issues at once. |
 | `-y`, `--yes` |  | Don't ask for confirmation. |
-| `--ignore-errors` |  | Keep going when one item fails; exit 1 at the end. |
 | `-n`, `--dry-run` |  | Show what would change without changing anything. Reads still run. |
 | `--json` |  | Print JSON. |
 
@@ -520,6 +523,7 @@ acli-py issue comment edit KEY COMMENT_ID [OPTIONS]
 | `--role` `TEXT` |  | Only this project role can see it. |
 | `--group` `TEXT` |  | Only this group can see it. |
 | `--notify`, `--no-notify` |  | Email watchers about the change. |
+| `-y`, `--yes` |  | Don't ask for confirmation. |
 | `-n`, `--dry-run` |  | Show what would change without changing anything. Reads still run. |
 
 
@@ -535,6 +539,7 @@ acli-py issue comment delete KEY COMMENT_IDS [OPTIONS]
 |---|---|---|
 | `KEY` | required | Issue key, e.g. DEMO-12. |
 | `COMMENT_IDS` | required | Comment ids. |
+| `--ignore-errors`, `--continue-on-error` |  | Keep going when an issue fails (else stop starting new ones); exit 1 at the end. |
 | `-y`, `--yes` |  | Don't ask for confirmation. |
 | `-n`, `--dry-run` |  | Show what would change without changing anything. Reads still run. |
 
@@ -561,34 +566,39 @@ Link issues to each other.
 
 ### `acli-py issue link add`
 
-Link two issues, read as a sentence.
+Link issues, read as a sentence.
 
 ```text
-acli-py issue link add [SOURCE] [KIND] [TARGET] [OPTIONS]
+acli-py issue link add [WORDS] [OPTIONS]
 ```
 
 ```sh
 acli-py issue link add DEMO-1 blocks DEMO-2
 acli-py issue link add DEMO-5 "is duplicated by" DEMO-9
+acli-py issue link add --jql 'labels = login' "relates to" DEMO-1
 ```
 
 | Option | Default | Description |
 |---|---|---|
-| `SOURCE` |  | The issue the sentence starts with. |
-| `KIND` |  | Link type or phrase: blocks, 'is blocked by', relates to, Duplicate… |
-| `TARGET` |  | The other issue. |
+| `WORDS` |  | FROM TYPE TO, read as a sentence (TYPE: blocks, 'is blocked by', relates to, Duplicate…). With --jql, --filter or FROM '-', each issue found is FROM. |
 | `--from-json` `PATH` |  | Many links: [{"from": "A-1", "type": "blocks", "to": "A-2"}]. |
 | `--from-csv` `PATH` |  | Many links: CSV with from,type,to columns. |
 | `-m`, `--comment` `TEXT` |  | Also comment on the first issue. |
 | `--template` |  | Print an example --from-json file and exit. |
+| `-q`, `--jql` `TEXT` |  | Act on the issues this JQL or smart query finds. |
+| `--filter` `TEXT` |  | Act on the issues of this saved filter id. |
+| `-l`, `--limit` `INTEGER` |  | Act on at most this many issues. |
+| `-c`, `--concurrency` `INTEGER` | `4` | How many issues to work on at once. |
+| `--ignore-errors`, `--continue-on-error` |  | Keep going when an issue fails (else stop starting new ones); exit 1 at the end. |
+| `--force` |  | Allow acting on more than 200 issues at once. |
 | `-y`, `--yes` |  | Don't ask for confirmation. |
-| `--ignore-errors` |  | Keep going when one item fails; exit 1 at the end. |
 | `-n`, `--dry-run` |  | Show what would change without changing anything. Reads still run. |
+| `--json` |  | Print JSON. |
 
 
 ### `acli-py issue link list`
 
-Show an issue's links.
+Show an issue's links (`--output keys` prints the linked issues, for a pipe).
 
 ```text
 acli-py issue link list KEY [OPTIONS]
@@ -614,8 +624,8 @@ acli-py issue link delete [LINK_IDS] [OPTIONS]
 | `LINK_IDS` |  | Link ids (see `link list`). |
 | `--from-json` `PATH` |  | A JSON list of ids, or [{"id": …}]. |
 | `--from-csv` `PATH` |  | A CSV whose first column holds link ids. |
+| `--ignore-errors`, `--continue-on-error` |  | Keep going when an issue fails (else stop starting new ones); exit 1 at the end. |
 | `-y`, `--yes` |  | Don't ask for confirmation. |
-| `--ignore-errors` |  | Keep going when one item fails; exit 1 at the end. |
 | `-n`, `--dry-run` |  | Show what would change without changing anything. Reads still run. |
 
 
@@ -665,6 +675,8 @@ acli-py issue attachment upload KEY FILES [OPTIONS]
 |---|---|---|
 | `KEY` | required | Issue key, e.g. DEMO-12. |
 | `FILES` | required | Files to attach. |
+| `--ignore-errors`, `--continue-on-error` |  | Keep going when an issue fails (else stop starting new ones); exit 1 at the end. |
+| `-y`, `--yes` |  | Don't ask for confirmation. |
 | `-n`, `--dry-run` |  | Show what would change without changing anything. Reads still run. |
 | `--json` |  | Print JSON. |
 
@@ -694,6 +706,7 @@ acli-py issue attachment delete ATTACHMENT_IDS [OPTIONS]
 | Option | Default | Description |
 |---|---|---|
 | `ATTACHMENT_IDS` | required | Attachment ids. |
+| `--ignore-errors`, `--continue-on-error` |  | Keep going when an issue fails (else stop starting new ones); exit 1 at the end. |
 | `-y`, `--yes` |  | Don't ask for confirmation. |
 | `-n`, `--dry-run` |  | Show what would change without changing anything. Reads still run. |
 
@@ -776,20 +789,34 @@ acli-py issue worklog list KEY [OPTIONS]
 
 ### `acli-py issue worklog add`
 
-Log time on an issue.
+Log time on one or many issues.
 
 ```text
-acli-py issue worklog add KEY TIME [OPTIONS]
+acli-py issue worklog add [KEYS] [OPTIONS]
+```
+
+```sh
+acli-py issue worklog add DEMO-1 1h 30m -m Pairing
+acli-py issue worklog add --jql 'sprint in openSprints() and assignee = currentUser()' -t 15m
 ```
 
 | Option | Default | Description |
 |---|---|---|
-| `KEY` | required | Issue key, e.g. DEMO-12. |
-| `TIME` | required | Time spent, Jira style: 1h 30m, 2d, 45m. |
+| `KEYS` |  | Issue keys ('-' reads them from stdin), then the time unless --time gives it: DEMO-1 1h 30m. |
+| `-t`, `--time` `TEXT` |  | Time spent, Jira style: 1h 30m, 2d, 45m. |
 | `-m`, `--comment` `TEXT` |  | What you did. |
 | `--started` `TEXT` |  | When: YYYY-MM-DD or YYYY-MM-DDTHH:MM (default: now). |
 | `--remaining` `TEXT` |  | Set the remaining estimate, e.g. 3h (default: auto). |
+| `-q`, `--jql` `TEXT` |  | Act on the issues this JQL or smart query finds. |
+| `--filter` `TEXT` |  | Act on the issues of this saved filter id. |
+| `-f`, `--from-file` `PATH` |  | Read issue keys from a file (commas, spaces or lines; '-' for stdin). |
+| `-l`, `--limit` `INTEGER` |  | Act on at most this many issues. |
+| `-c`, `--concurrency` `INTEGER` | `4` | How many issues to work on at once. |
+| `--ignore-errors`, `--continue-on-error` |  | Keep going when an issue fails (else stop starting new ones); exit 1 at the end. |
+| `--force` |  | Allow acting on more than 200 issues at once. |
+| `-y`, `--yes` |  | Don't ask for confirmation. |
 | `-n`, `--dry-run` |  | Show what would change without changing anything. Reads still run. |
+| `--json` |  | Print JSON. |
 
 
 ### `acli-py issue worklog delete`
@@ -804,5 +831,6 @@ acli-py issue worklog delete KEY WORKLOG_IDS [OPTIONS]
 |---|---|---|
 | `KEY` | required | Issue key, e.g. DEMO-12. |
 | `WORKLOG_IDS` | required | Worklog ids. |
+| `--ignore-errors`, `--continue-on-error` |  | Keep going when an issue fails (else stop starting new ones); exit 1 at the end. |
 | `-y`, `--yes` |  | Don't ask for confirmation. |
 | `-n`, `--dry-run` |  | Show what would change without changing anything. Reads still run. |

@@ -109,6 +109,15 @@ Combine piped issues with keys typed on the command line:
 acli-py issue search '#web is:open' --output keys | acli-py issue assign - DEMO-42 --to @me
 ```
 
+Log the same time on every issue a search finds, or link each one to an epic's blocker:
+
+```sh
+acli-py issue search 'sprint:open assignee:me' --output keys | acli-py issue worklog add - -t 15m -y
+acli-py issue link add --jql 'labels = login' "is blocked by" DEMO-7
+```
+
+`issue link list KEY --output keys` prints the linked issues, ready for the next command.
+
 In scripts, where there is no terminal to ask on, pass `--yes`:
 
 ```sh

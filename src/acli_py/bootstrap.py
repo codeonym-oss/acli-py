@@ -17,7 +17,9 @@ from acli_py.application.behaviors import CACHE_SECONDS, QueryCache
 from acli_py.application.bus import Bus
 from acli_py.application.events.issue_changed.subscribers import Screens
 from acli_py.application.ports import (
+    Attachments,
     AuditLog,
+    Comments,
     Confirmer,
     Destination,
     IssueEditor,
@@ -26,6 +28,7 @@ from acli_py.application.ports import (
     IssueStore,
     Watchers,
     Workflow,
+    Worklogs,
 )
 from acli_py.application.site import Site
 from acli_py.infrastructure.audit import AuditFile
@@ -34,6 +37,7 @@ from acli_py.infrastructure.jira.client import JiraClient
 from acli_py.infrastructure.jira.editor import JiraEditor, JiraWatchers
 from acli_py.infrastructure.jira.issues import JiraIssues
 from acli_py.infrastructure.jira.lifecycle import JiraLinks, JiraStore
+from acli_py.infrastructure.jira.parts import JiraAttachments, JiraComments, JiraWorklogs
 from acli_py.infrastructure.jira.workflow import JiraWorkflow
 
 if TYPE_CHECKING:
@@ -61,6 +65,9 @@ class SiteResolver:
             Watchers: JiraWatchers(site.client),
             IssueStore: store,
             IssueLinks: JiraLinks(site.client),
+            Comments: JiraComments(site.client),
+            Attachments: JiraAttachments(site.client),
+            Worklogs: JiraWorklogs(site.client),
             Destination: store
             if there is site
             else JiraStore(there.client, there.url, elsewhere=there.url != site.url),

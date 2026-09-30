@@ -1,4 +1,4 @@
-"""The handlers behind each query and command: plain functions over the Jira client.
+"""The handlers behind each query here: plain functions over the Jira client.
 
 They are sync, so mediary runs each on a worker thread and the UI never blocks on the network.
 Their `Site` parameter is supplied by the mediator's resolver.
@@ -6,10 +6,9 @@ Their `Site` parameter is supplied by the mediator's resolver.
 
 from __future__ import annotations
 
-from mediary.cqrs import command_handler, query_handler
+from mediary.cqrs import query_handler
 
 from acli_py.application.messages import (
-    CommentOnIssue,
     CountIssues,
     FindAssignees,
     GetTransitions,
@@ -22,7 +21,6 @@ from acli_py.application.messages import (
     ValidateJql,
 )
 from acli_py.application.site import Site
-from acli_py.domain import adf
 from acli_py.infrastructure.jira.client import API
 
 # ── queries ──────────────────────────────────────────────────────────────────
@@ -100,15 +98,3 @@ def list_issue_types(request: ListIssueTypes, site: Site) -> list:
         f"{API}/issuetype/project", projectId=project["id"]
     )
     return [t for t in types if not t.get("subtask")]
-
-
-# ── commands ─────────────────────────────────────────────────────────────────
-
-
-@command_handler
-def comment_on_issue(request: CommentOnIssue, site: Site) -> str:
-    """Add the comment."""
-    created = site.client.post(
-        f"{API}/issue/{request.key}/comment", {"body": adf.to_adf(request.body)}
-    )
-    return str((created or {}).get("id", ""))

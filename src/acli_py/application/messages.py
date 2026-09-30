@@ -1,16 +1,14 @@
-"""What the interactive front ends can ask for (queries) and do (commands).
+"""What the interactive front ends can ask for, before these queries get packages of their own.
 
-Queries only read, so their answers can be cached; commands change Jira, and each successful
-one announces an `IssueChanged` event (`events/issue_changed/`), which drops the cache and
-tells the screens to refresh.
-Messages are frozen dataclasses: they are the cache keys.
+Queries only read, so their answers can be cached. Messages are frozen dataclasses: they are
+the cache keys. Commands live in `acli_py.application.commands`, one package each.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 
-from mediary.cqrs import Command, Query, command, query
+from mediary.cqrs import Query, query
 
 LIST_FIELDS = ("summary", "status", "issuetype", "priority", "assignee", "labels", "updated")
 
@@ -95,15 +93,3 @@ class ListIssueTypes(Query[list]):
     """The issue types a project can create."""
 
     project: str
-
-
-# ── commands ─────────────────────────────────────────────────────────────────
-
-
-@command
-@dataclass(frozen=True)
-class CommentOnIssue(Command[str]):
-    """Add a Markdown comment; returns the comment id."""
-
-    key: str
-    body: str

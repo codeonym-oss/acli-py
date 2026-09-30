@@ -83,7 +83,9 @@ class Report:
 
 
 def key_of(command: Any) -> str:
-    """Return the issue a command works on."""
+    """Return what a command works on: its `item` ('DEMO-1 comment 10001'), else its issue."""
+    if item := getattr(command, "item", None):
+        return str(item)
     return str(getattr(command, "key", "")).strip().upper()
 
 
@@ -91,7 +93,7 @@ def change_of(commands: Sequence[Any]) -> Change | None:
     """Return the one change the commands make together, or None when they don't say.
 
     Commands whose changes differ only by issue merge into one ("Move 3 issues … to Done").
-    Named subjects ("a Bug in DEMO") that differ become a count ("3 issues").
+    Named subjects ("a Bug in DEMO") that differ become a count ("3 issues", "3 comments").
     """
     if not commands or not all(isinstance(c, Write) for c in commands):
         return None
@@ -100,7 +102,8 @@ def change_of(commands: Sequence[Any]) -> Change | None:
     keys = tuple(dict.fromkeys(k for c in changes for k in c.keys))
     subject = first.subject
     if len(changes) > 1 and any(c.subject for c in changes):
-        subject = subject if all(c.subject == subject for c in changes) else f"{len(keys)} issues"
+        count = f"{len(keys)} {first.noun}s"
+        subject = subject if all(c.subject == subject for c in changes) else count
     return Change(
         first.verb,
         keys,
@@ -108,6 +111,7 @@ def change_of(commands: Sequence[Any]) -> Change | None:
         subject=subject,
         adds=all(c.adds for c in changes),
         destructive=any(c.destructive for c in changes),
+        noun=first.noun,
     )
 
 

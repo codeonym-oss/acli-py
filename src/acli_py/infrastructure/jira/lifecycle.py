@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from acli_py.domain.issue import Link
+from acli_py.domain.links import IssueLink, LinkType
 from acli_py.infrastructure.jira.client import API
 
 if TYPE_CHECKING:
@@ -52,21 +54,26 @@ class JiraLinks:
     def __init__(self, client: JiraClient) -> None:
         self.client = client
 
-    def link_type(self, name: str) -> str | None:
-        """Return the type's name as the site spells it."""
-        wanted = name.lower()
-        return next(
-            (t["name"] for t in self.client.link_types() if t.get("name", "").lower() == wanted),
-            None,
-        )
+    def link_types(self) -> tuple[LinkType, ...]:
+        """Return the site's link types."""
+        return tuple(LinkType.from_jira(t) for t in self.client.link_types())
 
-    def link(self, type_name: str, outward: str, inward: str) -> None:
-        """Link the two issues."""
-        self.client.post(
-            f"{API}/issueLink",
-            {
-                "type": {"name": type_name},
-                "outwardIssue": {"key": outward},
-                "inwardIssue": {"key": inward},
-            },
-        )
+    def links_of(self, key: str) -> tuple[Link, ...]:
+        """Return the issue's links."""
+        found = self.client.issue(key, ["issuelinks"]).get("fields") or {}
+        return tuple(link for link in map(Link.from_jira, found.get("issuelinks") or []) if link)
+
+    def get_link(self, link_id: str) -> IssueLink:
+        """Return the link."""
+        return IssueLink.from_jira(self.client.get(f"{API}/issueLink/{link_id}"))
+
+    def link(self, link: IssueLink, comment: Mapping[str, Any] | None = None) -> None:
+        """Store the link (POST /issueLink returns nothing, not even the new id)."""
+        body = link.to_jira()
+        if comment:
+            body["comment"] = {"body": dict(comment)}
+        self.client.post(f"{API}/issueLink", body)
+
+    def unlink(self, link_id: str) -> None:
+        """Remove the link."""
+        self.client.delete(f"{API}/issueLink/{link_id}")
