@@ -27,7 +27,8 @@ acli_py/
     commands/<use_case>/  command.py · handler.py
     queries/<use_case>/   query.py · handler.py · view.py
     events/<event>/       event.py · subscribers.py
-    behaviors/            activity, cache, announce (later: confirm, bulk, audit)
+    behaviors/            activity, cache, confirm, announce
+    bulk.py · audit.py    the bulk engine, and the audit trail (one record per run)
   infrastructure/    the outside world: the Jira client, config, credentials, files
   presentation/      the front ends: cli/, shell.py, tui/, and output.py
   bootstrap.py       the composition root: builds the bus and the adapters
@@ -112,18 +113,30 @@ on, the CLI refuses unless given `--yes`. A front end running one change over ma
 approves the whole change first (`bus.confirm.approve` or `batch`), so the user is asked once,
 not once per issue.
 
+### The bulk engine
+
+`application/bulk.py` runs one kind of command over many issues, for every front end
+(`bus.bulk.run(commands)`). It refuses more than `SAFETY_CAP` issues unless forced, asks once
+about the change the commands make together, with a preview of each issue's value now and
+after (from commands that are `Previewable`, fetched in one search), runs them a few at a time
+and reports each `Outcome` as it lands. After a failure it starts no new commands unless told
+to keep going. Its `Report` says what worked, what failed and what was never tried.
+
 ### The audit log
 
-Each `IssueChanged` that was not a dry run is appended to `audit.jsonl` in the config
-directory, one JSON object per line: `at`, `command`, `keys`, `before`, `after`. Undo (#19)
-reads it back. A log that cannot be written never fails the change it records.
+Each run of a command that was not a dry run is appended to `audit.jsonl` in the config
+directory, one JSON object per line: `at`, `command`, `keys`, `changes` (each issue's `key`,
+`before` and `after`) and `failed` (issue → why). The `issue_changed` subscriber notes each
+change in the `AuditTrail`; a command on its own is recorded at once, while a bulk run
+gathers its changes and is recorded once at the end. Undo (#19) reads it back. A log that
+cannot be written never fails the change it records.
 
 ### mediary is the only way to reach Jira
 
 Every front end, the command line included, sends messages through the same bus
 (`acli_py.application.bus.Bus`, built by `acli_py.bootstrap.build_bus`). Behaviors wrap every
 message, so cross-cutting rules live in one place: activity tracking, caching, confirmation,
-events after a change and the audit log (and soon bulk runs). A new command gets them all by
+events after a change, the audit log and bulk runs. A new command gets them all by
 being a command.
 
 ## Where the existing modules went
@@ -142,6 +155,7 @@ being a command.
 | `infrastructure/jira/issues.py` | infrastructure | `JiraIssues`, the `IssueReader` port over the client |
 | `domain/workflow.py`, `infrastructure/jira/workflow.py` | domain, infrastructure | Transitions, and `JiraWorkflow`, the `Workflow` port |
 | `application/changes.py` | application | `Change`, `Changed`, `Declined`: what commands change |
+| `application/bulk.py`, `audit.py` | application | The bulk engine; the audit trail, one record per run |
 | `infrastructure/audit.py` | infrastructure | `AuditFile`, the `AuditLog` port as JSON lines |
 | `application/messages.py`, `handlers.py`, `site.py` | application | The use cases written before this layout |
 | `presentation/cli/`, `shell.py`, `tui/`, `output.py` | presentation | The front ends |

@@ -295,6 +295,10 @@ def test_bulk_actions_on_marked_issues(site, fake, tmp_path):
         await pilot.press("enter")
         question = await screen_of(pilot, app, ConfirmScreen)
         assert question.question == "Move 2 issues (DEMO-1, DEMO-2) to Done?"
+        assert [(r.key, r.now, r.after) for r in question.preview] == [
+            ("DEMO-1", "To Do", "Done"),
+            ("DEMO-2", "To Do", "Done"),
+        ]
         await pilot.press("n")  # asked once for both, and declined: nothing moves
         await settle(pilot, app)
         assert not isinstance(app.screen, ConfirmScreen)

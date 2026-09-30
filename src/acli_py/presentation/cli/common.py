@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import functools
 import os
 import shlex
@@ -19,19 +20,28 @@ from urllib.parse import unquote
 import requests
 import typer
 from rich.markup import escape
+from rich.table import Table
 
+from acli_py.application.bulk import CONCURRENCY, MAX_CONCURRENCY, SAFETY_CAP, Report, TooManyError
 from acli_py.application.bus import Bus
 from acli_py.application.changes import Change, Declined
 from acli_py.application.site import Site
-from acli_py.bootstrap import build_bus
+from acli_py.bootstrap import build_bus, build_catalog
+from acli_py.domain.jql import compile_query, looks_like_jql
+from acli_py.domain.jql.catalog import spelling
 from acli_py.infrastructure import credentials
 from acli_py.infrastructure.config import Account, Config
+from acli_py.infrastructure.jira import resolve
 from acli_py.infrastructure.jira.client import JiraClient, JiraError, normalize_url, site_host
 from acli_py.infrastructure.jira.resolve import ResolveError
 from acli_py.presentation import output
 from acli_py.presentation.output import Format, pick_format
 
 TRUTHY = ("1", "true", "yes", "on")
+
+# Commands over many issues exit 1 when some failed, and this when nothing ran: the change
+# was declined, or went over the safety cap.
+EXIT_ABORTED = 2
 
 
 # ── process-wide state set by the root callback ──────────────────────────────
@@ -84,7 +94,8 @@ KeysArg = Annotated[
     typer.Argument(help="Issue keys (DEMO-1 DEMO-2, or DEMO-1,DEMO-2).", show_default=False),
 ]
 JqlOpt = Annotated[
-    str | None, typer.Option("--jql", "-q", help="Act on the issues this JQL finds.")
+    str | None,
+    typer.Option("--jql", "-q", help="Act on the issues this JQL or smart query finds."),
 ]
 FilterOpt = Annotated[
     str | None, typer.Option("--filter", help="Act on the issues of this saved filter id.")
@@ -96,6 +107,35 @@ FromFileOpt = Annotated[
         "-f",
         help="Read issue keys from a file (commas, spaces or lines; '-' for stdin).",
     ),
+]
+# Running a command over many issues (the bulk engine).
+ConcurrencyOpt = Annotated[
+    int,
+    typer.Option(
+        "--concurrency",
+        "-c",
+        min=1,
+        max=MAX_CONCURRENCY,
+        help="How many issues to work on at once.",
+    ),
+]
+KeepGoingOpt = Annotated[
+    bool,
+    typer.Option(
+        "--continue-on-error",
+        "--ignore-errors",
+        help="Keep going when an issue fails (else stop starting new ones); exit 1 at the end.",
+    ),
+]
+BulkLimitOpt = Annotated[
+    int | None,
+    typer.Option(
+        "--limit", "-l", min=1, help="Act on at most this many issues.", show_default=False
+    ),
+]
+ForceOpt = Annotated[
+    bool,
+    typer.Option("--force", help=f"Allow acting on more than {SAFETY_CAP} issues at once."),
 ]
 ProjectOpt = Annotated[
     str | None,
@@ -129,10 +169,14 @@ def guarded(command: Callable) -> Callable:
     def wrapper(*args: object, **kwargs: object) -> object:
         try:
             return command(*args, **kwargs)
+        except TooManyError as error:
+            raise fail(
+                f"{error} Narrow it down, or pass [bold]--force[/] to go ahead.", EXIT_ABORTED
+            ) from None
         except (JiraError, ResolveError, credentials.CredentialError, ValueError) as error:
             raise fail(escape(str(error))) from None
         except Declined as declined:
-            raise fail(escape(str(declined))) from None
+            raise fail(escape(str(declined)), EXIT_ABORTED) from None
         except OSError as error:
             raise fail(escape(f"{error.strerror or error}: {error.filename or ''}")) from None
 
@@ -186,13 +230,6 @@ class Session:
     def send(self, message: Any) -> Any:
         """Send a query or command on the bus, and wait for its answer."""
         return asyncio.run(self.bus.send(message))
-
-    def approve(self, change: Change, yes: bool = False) -> None:
-        """Ask once about a change over many issues; the commands it covers then just run.
-
-        --yes and dry runs skip the question. Raises `Declined` when the answer is no.
-        """
-        asyncio.run(self.bus.confirm.approve(change, yes=yes))
 
     def project(self, key: str | None) -> str:
         """Return the given project key, or the configured default, or fail."""
@@ -290,22 +327,46 @@ def close_clients() -> None:
 # ── interaction ──────────────────────────────────────────────────────────────
 
 
+def interactive() -> bool:
+    """Return whether there is a terminal to ask questions on."""
+    return sys.stdin.isatty()
+
+
 class TerminalConfirmer:
-    """The CLI's and the shell's way to ask before a change: a y/N question on stderr."""
+    """The CLI's and the shell's way to ask before a change: a y/N question on stderr.
+
+    A change over several issues shows its preview first: each issue, its value now and after.
+    """
 
     async def confirm(self, change: Change) -> bool:
         """Ask; with no terminal to ask on, refuse and point at --yes."""
         question = f"{change}?"
-        if not sys.stdin.isatty():
+        if not interactive():
             raise Declined(f"{question} Refusing without --yes (no terminal to ask on).")
+        if len(change.preview) > 1:
+            output.errors.print(preview_table(change))
         return typer.confirm(question, default=False, err=True)
+
+
+def preview_table(change: Change) -> Table:
+    """Return a change's preview as a table: issue, summary, now → after."""
+    table = Table(box=None, pad_edge=False, header_style="bold dim")
+    table.add_column("Issue", style="bold cyan", no_wrap=True)
+    table.add_column("Summary", overflow="ellipsis", no_wrap=True, max_width=50)
+    table.add_column("Now")
+    table.add_column("")
+    table.add_column("After", style="bold")
+    for row in change.preview:
+        arrow = "[dim]=[/]" if row.now.lower() == row.after.lower() else "[dim]→[/]"
+        table.add_row(row.key, escape(row.summary), escape(row.now), arrow, escape(row.after))
+    return table
 
 
 def confirm(question: str, yes: bool, session: Session | None = None) -> None:
     """Ask before a change; --yes and dry runs skip the question. Exits when declined."""
     if yes or (session is not None and session.dry_run):
         return
-    if not sys.stdin.isatty():
+    if not interactive():
         raise fail(f"{question} Refusing without [bold]--yes[/] (no terminal to ask on).")
     if not typer.confirm(question, default=False, err=True):
         raise fail("Cancelled.", code=1)
@@ -394,6 +455,91 @@ def run_bulk(
     if failed:
         raise typer.Exit(1)
     return outcomes
+
+
+def pick_issues(
+    session: Session,
+    keys: list[str] | None,
+    jql: str | None = None,
+    saved_filter: str | None = None,
+    from_file: Path | None = None,
+    *,
+    limit: int | None = None,
+    force: bool = False,
+) -> list[str]:
+    """Return the issues a bulk command acts on: keys, a JQL or smart query, a filter, a file.
+
+    Stops fetching just past the safety cap (the engine then refuses) unless `force`.
+    """
+    if jql and not looks_like_jql(jql):
+        compiled = compile_query(jql, resolve=spelling(build_catalog(session.client)))
+        for warning in compiled.warnings:
+            output.warn(escape(warning))
+        jql = compiled.jql
+    fetch = limit or (None if force else SAFETY_CAP + 1)
+    picked = resolve.targets(session.client, keys, jql, saved_filter, from_file, limit=fetch)
+    return picked[:limit] if limit else picked
+
+
+def plain(outcome: Any) -> Any:
+    """Return an outcome's result as JSON-ready data."""
+    result = outcome.result
+    if dataclasses.is_dataclass(result) and not isinstance(result, type):
+        return dataclasses.asdict(result)
+    return result
+
+
+def run_many(
+    session: Session,
+    commands: list[Any],
+    *,
+    done: str,
+    yes: bool = False,
+    concurrency: int = CONCURRENCY,
+    keep_going: bool = False,
+    force: bool = False,
+    as_json: bool = False,
+    describe: Callable[[Any], str] | None = None,
+) -> Report:
+    """Run one command per issue through the bulk engine: preview, ask once, run, sum up.
+
+    Prints a line per issue as it finishes and a summary at the end; exits 1 if any failed.
+    """
+
+    def show(outcome: Any) -> None:
+        if not outcome.ok:
+            output.error(f"{escape(outcome.key)}: {escape(outcome.error)}")
+            return
+        detail = describe(outcome.result) if describe else ""
+        output.success(f"{escape(outcome.key)} {done}" + (f" {detail}" if detail else ""))
+
+    report: Report = asyncio.run(
+        session.bus.bulk.run(
+            commands,
+            yes=yes,
+            concurrency=concurrency,
+            keep_going=keep_going,
+            force=force,
+            on_outcome=None if as_json else show,
+        )
+    )
+    if as_json:
+        output.print_json(
+            [
+                {"item": o.key, "ok": o.ok, "error" if not o.ok else "result": o.error or plain(o)}
+                for o in report.outcomes
+            ]
+        )
+    if report.total > 1 and not as_json:
+        summary = f"{len(report.succeeded)} of {report.total} {done}"
+        if report.failed:
+            summary += f", {len(report.failed)} failed"
+        if report.not_tried:
+            summary += f", {report.not_tried} not tried"
+        output.info(summary + ".")
+    if report.exit_code:
+        raise typer.Exit(report.exit_code)
+    return report
 
 
 def plural(count: int, word: str) -> str:

@@ -7,15 +7,14 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Callable
-from datetime import UTC, datetime
 from typing import Any
 
 from mediary.cqrs import event_handler
 
+from acli_py.application.audit import AuditTrail
 from acli_py.application.behaviors.cache import QueryCache
-from acli_py.application.changes import AuditRecord
+from acli_py.application.changes import Changed
 from acli_py.application.events.issue_changed.event import IssueChanged
-from acli_py.application.ports import AuditLog
 
 
 class Screens(list[Callable[[IssueChanged], Any]]):
@@ -29,13 +28,10 @@ def drop_cached_answers(change: IssueChanged, cache: QueryCache) -> None:
 
 
 @event_handler
-def record_in_audit_log(change: IssueChanged, audit: AuditLog) -> None:
+def record_in_audit_log(change: IssueChanged, trail: AuditTrail) -> None:
     """Keep the change, with what it replaced; a dry run changed nothing, so it is not kept."""
-    if change.dry_run:
-        return
-    audit.record(
-        AuditRecord(change.what, (change.key,), change.before, change.after, datetime.now(UTC))
-    )
+    if not change.dry_run:
+        trail.note(change.what, Changed(change.key, change.before, change.after))
 
 
 @event_handler

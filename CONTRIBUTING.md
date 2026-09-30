@@ -160,6 +160,10 @@ class TransitionIssue(Command[Changed]):
     def change(self) -> Change:
         """Return what this command changes."""
         return Change("Move", (self.key.strip().upper(),), f"to {self.to.strip()}")
+
+    def previews(self) -> tuple[str, str]:
+        """Return the field this command sets, and to what (for a bulk run's preview)."""
+        return "status", self.to.strip()
 ```
 
 ```python
@@ -175,9 +179,12 @@ def transition_issue(request: TransitionIssue, workflow: Workflow) -> Changed:
 ```
 
 - **`change()`** says what the command will do. The `Confirm` behavior shows it and asks
-  before the handler runs (not in a dry run, not with `--yes`). A front end applying one change
-  to many issues calls `session.approve(change, yes)` (CLI) or `bus.confirm.batch(change)`
-  first, so the user is asked once.
+  before the handler runs (not in a dry run, not with `--yes`).
+- **`previews()`** (optional) names the field the command sets and its new value, so a bulk
+  run can show each issue's value now and after before asking.
+- Front ends run one command per issue through the **bulk engine**: `run_many(session,
+  commands, …)` on the CLI, `bus.bulk.run(commands)` elsewhere. It asks once for them all,
+  runs a few at a time, and keeps the run as one audit entry.
 - **`Changed`** says what the handler did: the fields it touched, before and after. It is
   published as `IssueChanged`, and the audit log keeps it.
 - The handler depends on **ports**, never on the Jira client; see "Adding a query".
@@ -237,7 +244,7 @@ from mediary.cqrs import event_handler
 
 
 @event_handler
-def record_in_audit_log(change: IssueChanged, audit: AuditLog) -> None:
+def record_in_audit_log(change: IssueChanged, trail: AuditTrail) -> None:
     """Keep the change, with what it replaced."""
 ```
 

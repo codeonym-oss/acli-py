@@ -12,7 +12,7 @@ import typer
 from rich.markup import escape
 from rich.table import Table
 
-from acli_py.application.changes import Change
+from acli_py.application.bulk import CONCURRENCY
 from acli_py.application.commands.transition_issue.command import TransitionIssue
 from acli_py.application.queries.get_issue.query import GetIssue
 from acli_py.bootstrap import build_catalog
@@ -27,13 +27,17 @@ from acli_py.infrastructure.jira.fields import IssueInput, flat
 from acli_py.presentation import output
 from acli_py.presentation.cli.common import (
     AllOpt,
+    BulkLimitOpt,
+    ConcurrencyOpt,
     CsvOpt,
     DryRunOpt,
     FilterOpt,
+    ForceOpt,
     FromFileOpt,
     IgnoreErrorsOpt,
     JqlOpt,
     JsonOpt,
+    KeepGoingOpt,
     KeysArg,
     LimitOpt,
     ProjectOpt,
@@ -48,8 +52,10 @@ from acli_py.presentation.cli.common import (
     guarded,
     limit_of,
     open_url,
+    pick_issues,
     plural,
     run_bulk,
+    run_many,
 )
 from acli_py.presentation.output import Column, Format, dig
 
@@ -749,18 +755,25 @@ def transition(
     jql: JqlOpt = None,
     saved_filter: FilterOpt = None,
     from_file: FromFileOpt = None,
+    limit: BulkLimitOpt = None,
+    concurrency: ConcurrencyOpt = CONCURRENCY,
+    keep_going: KeepGoingOpt = False,
+    force: ForceOpt = False,
     yes: YesOpt = False,
-    ignore_errors: IgnoreErrorsOpt = False,
     dry_run: DryRunOpt = False,
     as_json: JsonOpt = False,
 ) -> None:
     """Move issues to another status (alias: move).
 
-    Asks first, naming the issues and the status; [bold]--yes[/] skips the question, and
-    without a terminal to ask on it refuses unless given. Each move is kept in the audit log.
+    Pick the issues by key, [bold]--jql[/] (JQL or a smart query), [bold]--filter[/] or
+    [bold]--from-file[/]. Shows each issue's status now and after, then asks once;
+    [bold]--yes[/] skips the question, and without a terminal to ask on it refuses unless
+    given. Runs a few issues at a time and stops at the first failure unless
+    [bold]--continue-on-error[/]. More than 200 issues needs [bold]--force[/]. The run is kept
+    in the audit log. Exits 0 when all moved, 1 when some failed, 2 when nothing ran.
 
     [dim]acli-py issue transition DEMO-1 --to Done -m "Shipped in 2.4"
-    acli-py issue move --jql 'sprint in openSprints()' --to 'In Review' --yes[/]
+    acli-py issue move --jql 's:review sprint:open' --to Done --continue-on-error --yes[/]
     """
     if not to:
         raise fail(
@@ -768,23 +781,23 @@ def transition(
             "[bold]acli-py issue transitions KEY[/]."
         )
     session = connect(dry_run)
-    picked = resolve.targets(session.client, keys, jql, saved_filter, from_file)
+    picked = pick_issues(session, keys, jql, saved_filter, from_file, limit=limit, force=force)
+    if not picked:
+        output.info("No issues match; nothing to move.")
+        return
     extra = resolve.field_values(session.client, list(field or []), session.me)
     if resolution:
         extra["resolution"] = {"name": resolution}
-    session.approve(Change("Move", tuple(picked), f"to {to.strip()}"), yes)
-
-    def one(key: str) -> str:
-        changed = session.send(TransitionIssue(key, to, comment or "", extra))
-        return str(changed.after["status"])
-
-    run_bulk(
-        picked,
-        one,
+    run_many(
+        session,
+        [TransitionIssue(key, to, comment or "", extra) for key in picked],
         done="would move" if session.dry_run else "moved",
-        ignore_errors=ignore_errors,
+        yes=yes,
+        concurrency=concurrency,
+        keep_going=keep_going,
+        force=force,
         as_json=as_json,
-        describe=lambda _key, target: f"to [bold]{escape(target)}[/]",
+        describe=lambda changed: f"to [bold]{escape(str(changed.after['status']))}[/]",
     )
 
 

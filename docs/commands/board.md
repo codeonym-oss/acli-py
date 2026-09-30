@@ -104,7 +104,7 @@ acli-py board backlog BOARD [OPTIONS]
 | Option | Default | Description |
 |---|---|---|
 | `BOARD` | required | Board id (see `acli-py board list`). |
-| `-q`, `--jql` `TEXT` |  | Act on the issues this JQL finds. |
+| `-q`, `--jql` `TEXT` |  | Act on the issues this JQL or smart query finds. |
 | `-l`, `--limit` `INTEGER` | `50` | Show at most this many results. |
 | `-A`, `--all` |  | Fetch every page, ignoring --limit. |
 | `--json` |  | Print JSON. |
