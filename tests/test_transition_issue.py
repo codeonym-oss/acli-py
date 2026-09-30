@@ -141,7 +141,7 @@ def test_confirm_accepted_runs_the_command(site, fake):
         ("DEMO-1", {"status": "To Do"}, {"status": "Done"})
     ]
     (record,) = audit.records
-    assert (record.command, record.keys, record.after) == (
+    assert (record.command, record.keys, record.changes[0].after) == (
         "TransitionIssue",
         ("DEMO-1",),
         {"status": "Done"},
@@ -199,11 +199,11 @@ def test_a_batch_asks_once_and_only_for_what_it_covers(site, fake):
 def test_terminal_asks_only_on_a_terminal(monkeypatch):
     change = Change("Move", ("DEMO-1",), "to Done")
     confirmer = common.TerminalConfirmer()
-    monkeypatch.setattr(common.sys.stdin, "isatty", lambda: False, raising=False)
+    monkeypatch.setattr(common, "interactive", lambda: False)
     with pytest.raises(Declined, match=r"Move DEMO-1 to Done\? Refusing without --yes"):
         asyncio.run(confirmer.confirm(change))
     asked: list[str] = []
-    monkeypatch.setattr(common.sys.stdin, "isatty", lambda: True, raising=False)
+    monkeypatch.setattr(common, "interactive", lambda: True)
     monkeypatch.setattr(
         common.typer, "confirm", lambda question, **_: asked.append(question) or True
     )
@@ -215,12 +215,18 @@ def test_audit_file_appends_private_json_lines(tmp_path):
     log: AuditLog = AuditFile(tmp_path / "logs" / "audit.jsonl")
     at = datetime(2026, 9, 30, 12, tzinfo=UTC)
     for key in ("DEMO-1", "DEMO-2"):
-        log.record(AuditRecord("TransitionIssue", (key,), {"status": "To Do"}, {"when": at}, at))
+        changed = Changed(key, {"status": "To Do"}, {"when": at})
+        log.record(AuditRecord("TransitionIssue", (changed,), at, {"DEMO-9": "gone"}))
     lines = (tmp_path / "logs" / "audit.jsonl").read_text().splitlines()
-    assert [json.loads(line)["keys"] for line in lines] == [["DEMO-1"], ["DEMO-2"]]
+    assert [json.loads(line)["keys"] for line in lines] == [
+        ["DEMO-1", "DEMO-9"],
+        ["DEMO-2", "DEMO-9"],
+    ]
     assert json.loads(lines[0]) == {
-        "at": "2026-09-30T12:00:00+00:00", "command": "TransitionIssue", "keys": ["DEMO-1"],
-        "before": {"status": "To Do"}, "after": {"when": "2026-09-30 12:00:00+00:00"},
+        "at": "2026-09-30T12:00:00+00:00", "command": "TransitionIssue", "keys": ["DEMO-1", "DEMO-9"],
+        "changes": [{"key": "DEMO-1", "before": {"status": "To Do"},
+                     "after": {"when": "2026-09-30 12:00:00+00:00"}}],
+        "failed": {"DEMO-9": "gone"},
     }  # fmt: skip
     if os.name == "posix":
         assert stat.S_IMODE((tmp_path / "logs" / "audit.jsonl").stat().st_mode) == 0o600
@@ -229,4 +235,4 @@ def test_audit_file_appends_private_json_lines(tmp_path):
 def test_audit_file_that_cannot_be_written_is_skipped(tmp_path):
     (tmp_path / "taken").write_text("a file, not a directory")
     at = datetime.now(UTC)
-    AuditFile(tmp_path / "taken" / "audit.jsonl").record(AuditRecord("X", ("K-1",), {}, {}, at))
+    AuditFile(tmp_path / "taken" / "audit.jsonl").record(AuditRecord("X", (Changed("K-1"),), at))

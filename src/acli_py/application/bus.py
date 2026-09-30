@@ -9,6 +9,9 @@ Around the handlers sit four behaviors (see `acli_py.application.behaviors`):
 - `Announce` publishes `IssueChanged` after each command that touched an issue; its
   subscribers empty the cache, keep the audit log and tell the screens.
 
+`bulk` runs one kind of command over many issues, asking once (`acli_py.application.bulk`),
+and `trail` keeps each run in the audit log.
+
 The bus does not know its handlers: the composition root (`acli_py.bootstrap`) registers them
 on the mediator before handing it over.
 """
@@ -19,9 +22,11 @@ from typing import Any
 
 from mediary import Mediator
 
+from acli_py.application.audit import AuditTrail
 from acli_py.application.behaviors import CACHE_SECONDS, Activity, Announce, Confirm, QueryCache
+from acli_py.application.bulk import Bulk
 from acli_py.application.events.issue_changed.subscribers import Screens
-from acli_py.application.ports import Confirmer
+from acli_py.application.ports import AuditLog, Confirmer
 from acli_py.application.site import Site
 
 
@@ -32,6 +37,7 @@ class Bus:
         self,
         mediator: Mediator,
         site: Site,
+        audit: AuditLog,
         *,
         confirmer: Confirmer | None = None,
         assume_yes: bool = False,
@@ -43,6 +49,8 @@ class Bus:
         self.cache = QueryCache(cache_seconds)
         self.confirm = Confirm(confirmer, lambda: site.dry_run, assume_yes=assume_yes)
         self.listeners = Screens()
+        self.trail = AuditTrail(audit)
+        self.bulk = Bulk(self.send, self.confirm, self.trail, lambda: site.dry_run)
         mediator.use(self.activity, order=-100)
         mediator.use(self.cache, kinds={"query"}, order=0)
         mediator.use(self.confirm, kinds={"command"}, order=-50)

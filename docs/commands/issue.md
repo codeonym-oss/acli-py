@@ -128,7 +128,7 @@ acli-py issue edit --jql 'project = DEMO AND labels = old' --remove-label old -y
 | Option | Default | Description |
 |---|---|---|
 | `KEYS` |  | Issue keys (DEMO-1 DEMO-2, or DEMO-1,DEMO-2). |
-| `-q`, `--jql` `TEXT` |  | Act on the issues this JQL finds. |
+| `-q`, `--jql` `TEXT` |  | Act on the issues this JQL or smart query finds. |
 | `--filter` `TEXT` |  | Act on the issues of this saved filter id. |
 | `-f`, `--from-file` `PATH` |  | Read issue keys from a file (commas, spaces or lines; '-' for stdin). |
 | `-s`, `--summary` `TEXT` |  | One-line title. |
@@ -174,7 +174,7 @@ acli-py issue assign --jql 'assignee = "old@example.com"' --to new@example.com -
 | `KEYS` |  | Issue keys (DEMO-1 DEMO-2, or DEMO-1,DEMO-2). |
 | `-a`, `--to` `TEXT` |  | Email, account id, name, @me, or 'default'. |
 | `--unassign` |  | Remove the assignee. |
-| `-q`, `--jql` `TEXT` |  | Act on the issues this JQL finds. |
+| `-q`, `--jql` `TEXT` |  | Act on the issues this JQL or smart query finds. |
 | `--filter` `TEXT` |  | Act on the issues of this saved filter id. |
 | `-f`, `--from-file` `PATH` |  | Read issue keys from a file (commas, spaces or lines; '-' for stdin). |
 | `-y`, `--yes` |  | Don't ask for confirmation. |
@@ -187,8 +187,12 @@ acli-py issue assign --jql 'assignee = "old@example.com"' --to new@example.com -
 
 Move issues to another status (alias: move).
 
-Asks first, naming the issues and the status; --yes skips the question, and
-without a terminal to ask on it refuses unless given. Each move is kept in the audit log.
+Pick the issues by key, --jql (JQL or a smart query), --filter or
+--from-file. Shows each issue's status now and after, then asks once;
+--yes skips the question, and without a terminal to ask on it refuses unless
+given. Runs a few issues at a time and stops at the first failure unless
+--continue-on-error. More than 200 issues needs --force. The run is kept
+in the audit log. Exits 0 when all moved, 1 when some failed, 2 when nothing ran.
 
 ```text
 acli-py issue transition [KEYS] [OPTIONS]
@@ -196,7 +200,7 @@ acli-py issue transition [KEYS] [OPTIONS]
 
 ```sh
 acli-py issue transition DEMO-1 --to Done -m "Shipped in 2.4"
-acli-py issue move --jql 'sprint in openSprints()' --to 'In Review' --yes
+acli-py issue move --jql 's:review sprint:open' --to Done --continue-on-error --yes
 ```
 
 | Option | Default | Description |
@@ -206,11 +210,14 @@ acli-py issue move --jql 'sprint in openSprints()' --to 'In Review' --yes
 | `-m`, `--comment` `TEXT` |  | Add this comment (Markdown). |
 | `-r`, `--resolution` `TEXT` |  | Set the resolution, e.g. Done. |
 | `-F`, `--field` `TEXT` |  | Any field: 'Story Points=5', 'Team=Blue', or raw JSON with 'NAME:=JSON'. |
-| `-q`, `--jql` `TEXT` |  | Act on the issues this JQL finds. |
+| `-q`, `--jql` `TEXT` |  | Act on the issues this JQL or smart query finds. |
 | `--filter` `TEXT` |  | Act on the issues of this saved filter id. |
 | `-f`, `--from-file` `PATH` |  | Read issue keys from a file (commas, spaces or lines; '-' for stdin). |
+| `-l`, `--limit` `INTEGER` |  | Act on at most this many issues. |
+| `-c`, `--concurrency` `INTEGER` | `4` | How many issues to work on at once. |
+| `--ignore-errors`, `--continue-on-error` |  | Keep going when an issue fails (else stop starting new ones); exit 1 at the end. |
+| `--force` |  | Allow acting on more than 200 issues at once. |
 | `-y`, `--yes` |  | Don't ask for confirmation. |
-| `--ignore-errors` |  | Keep going when one item fails; exit 1 at the end. |
 | `-n`, `--dry-run` |  | Show what would change without changing anything. Reads still run. |
 | `--json` |  | Print JSON. |
 
@@ -240,7 +247,7 @@ acli-py issue delete [KEYS] [OPTIONS]
 | Option | Default | Description |
 |---|---|---|
 | `KEYS` |  | Issue keys (DEMO-1 DEMO-2, or DEMO-1,DEMO-2). |
-| `-q`, `--jql` `TEXT` |  | Act on the issues this JQL finds. |
+| `-q`, `--jql` `TEXT` |  | Act on the issues this JQL or smart query finds. |
 | `--filter` `TEXT` |  | Act on the issues of this saved filter id. |
 | `-f`, `--from-file` `PATH` |  | Read issue keys from a file (commas, spaces or lines; '-' for stdin). |
 | `--with-subtasks` |  | Also delete subtasks (else Jira refuses). |
@@ -261,7 +268,7 @@ acli-py issue archive [KEYS] [OPTIONS]
 | Option | Default | Description |
 |---|---|---|
 | `KEYS` |  | Issue keys (DEMO-1 DEMO-2, or DEMO-1,DEMO-2). |
-| `-q`, `--jql` `TEXT` |  | Act on the issues this JQL finds. |
+| `-q`, `--jql` `TEXT` |  | Act on the issues this JQL or smart query finds. |
 | `--filter` `TEXT` |  | Act on the issues of this saved filter id. |
 | `-f`, `--from-file` `PATH` |  | Read issue keys from a file (commas, spaces or lines; '-' for stdin). |
 | `-y`, `--yes` |  | Don't ask for confirmation. |
@@ -312,7 +319,7 @@ acli-py issue clone DEMO-1 --to-site me@other.atlassian.net --to-project NEW
 | `--prefix` `TEXT` |  | Put this before each copied summary. |
 | `--link`, `--no-link` | `True` | Link each copy to its original. |
 | `--to-site` `TEXT` |  | Clone into another saved account's site (email@site or the site); needs --to-project. |
-| `-q`, `--jql` `TEXT` |  | Act on the issues this JQL finds. |
+| `-q`, `--jql` `TEXT` |  | Act on the issues this JQL or smart query finds. |
 | `--filter` `TEXT` |  | Act on the issues of this saved filter id. |
 | `-f`, `--from-file` `PATH` |  | Read issue keys from a file (commas, spaces or lines; '-' for stdin). |
 | `-y`, `--yes` |  | Don't ask for confirmation. |
@@ -378,7 +385,7 @@ echo "Deployed" | acli-py issue comment add --jql 'fixVersion = 2.4' -b - -y
 | `--role` `TEXT` |  | Only this project role can see it. |
 | `--group` `TEXT` |  | Only this group can see it. |
 | `--edit-last` |  | Replace your latest comment instead. |
-| `-q`, `--jql` `TEXT` |  | Act on the issues this JQL finds. |
+| `-q`, `--jql` `TEXT` |  | Act on the issues this JQL or smart query finds. |
 | `--filter` `TEXT` |  | Act on the issues of this saved filter id. |
 | `-f`, `--from-file` `PATH` |  | Read issue keys from a file (commas, spaces or lines; '-' for stdin). |
 | `-y`, `--yes` |  | Don't ask for confirmation. |

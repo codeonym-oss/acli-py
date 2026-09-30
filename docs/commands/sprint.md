@@ -134,7 +134,7 @@ acli-py sprint issues SPRINT [OPTIONS]
 | Option | Default | Description |
 |---|---|---|
 | `SPRINT` | required | Sprint id (see `acli-py sprint list`). |
-| `-q`, `--jql` `TEXT` |  | Act on the issues this JQL finds. |
+| `-q`, `--jql` `TEXT` |  | Act on the issues this JQL or smart query finds. |
 | `--fields` `TEXT` |  | Columns, comma-separated field ids. |
 | `-l`, `--limit` `INTEGER` | `50` | Show at most this many results. |
 | `-A`, `--all` |  | Fetch every page, ignoring --limit. |
@@ -154,7 +154,7 @@ acli-py sprint add SPRINT [KEYS] [OPTIONS]
 |---|---|---|
 | `SPRINT` | required | Sprint id (see `acli-py sprint list`). |
 | `KEYS` |  | Issue keys (DEMO-1 DEMO-2, or DEMO-1,DEMO-2). |
-| `-q`, `--jql` `TEXT` |  | Act on the issues this JQL finds. |
+| `-q`, `--jql` `TEXT` |  | Act on the issues this JQL or smart query finds. |
 | `-n`, `--dry-run` |  | Show what would change without changing anything. Reads still run. |
 
 
@@ -169,5 +169,5 @@ acli-py sprint remove [KEYS] [OPTIONS]
 | Option | Default | Description |
 |---|---|---|
 | `KEYS` |  | Issue keys (DEMO-1 DEMO-2, or DEMO-1,DEMO-2). |
-| `-q`, `--jql` `TEXT` |  | Act on the issues this JQL finds. |
+| `-q`, `--jql` `TEXT` |  | Act on the issues this JQL or smart query finds. |
 | `-n`, `--dry-run` |  | Show what would change without changing anything. Reads still run. |

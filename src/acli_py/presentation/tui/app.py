@@ -21,6 +21,7 @@ from textual.containers import Horizontal, VerticalScroll
 from textual.widgets import DataTable, Footer, Markdown, OptionList, Static
 from textual.widgets.option_list import Option
 
+from acli_py.application.bulk import TooManyError
 from acli_py.application.changes import Change, Declined
 from acli_py.application.commands.transition_issue.command import TransitionIssue
 from acli_py.application.messages import (
@@ -108,7 +109,7 @@ class AskInModal:
 
     async def confirm(self, change: Change) -> bool:
         """Show the change and wait for the answer (commands are sent from workers)."""
-        return bool(await self.app.push_screen_wait(ConfirmScreen(f"{change}?")))
+        return bool(await self.app.push_screen_wait(ConfirmScreen(f"{change}?", change.preview)))
 
 
 class IssueBrowser(App[None]):
@@ -521,29 +522,26 @@ class IssueBrowser(App[None]):
     async def _each(
         self, keys: list[str], make: Any, done: str, change: Change | None = None
     ) -> None:
-        """Send one command per key, then say how it went.
+        """Run one command per key through the bulk engine, then say how it went.
 
-        With a `change` covering them all, ask once first rather than once per issue.
+        The engine asks once about `change` (by default, the one the commands make together),
+        showing each issue's value now and after, and keeps going past failures.
         """
-        failed = []
         try:
-            if change is not None:
-                await self.bus.confirm.approve(change)
-            for key in keys:
-                try:
-                    await self.bus.send(make(key))
-                except ERRORS as error:
-                    failed.append(f"{key}: {error}")
+            report = await self.bus.bulk.run(
+                [make(key) for key in keys], change=change, keep_going=True
+            )
         except Declined:
             return
-        finally:
-            if change is not None:
-                self.bus.confirm.forget(change)
-        if failed:
-            self.notify("\n".join(failed), title="Failed", severity="error", timeout=10)
-        ok = len(keys) - len(failed)
+        except TooManyError as error:
+            self.notify(str(error), severity="error")
+            return
+        if report.failed:
+            failed = "\n".join(f"{o.key}: {o.error}" for o in report.failed)
+            self.notify(failed, title="Failed", severity="error", timeout=10)
+        ok = [o.key for o in report.succeeded]
         if ok and not self.site.dry_run:
-            self.notify(f"{', '.join(keys) if len(keys) <= 3 else f'{ok} issues'} {done}.")
+            self.notify(f"{', '.join(ok) if len(ok) <= 3 else f'{len(ok)} issues'} {done}.")
 
     def action_mark(self) -> None:
         """Mark or unmark the highlighted issue."""
@@ -590,12 +588,7 @@ class IssueBrowser(App[None]):
         target = await self.push_screen_wait(PickScreen(title, choices))
         if not target:
             return
-        await self._each(
-            keys,
-            lambda k: TransitionIssue(k, target),
-            f"moved to {target}",
-            Change("Move", tuple(keys), f"to {target}"),
-        )
+        await self._each(keys, lambda k: TransitionIssue(k, target), f"moved to {target}")
 
     @work(group="action")
     async def action_assign(self) -> None:

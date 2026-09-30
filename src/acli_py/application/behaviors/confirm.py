@@ -33,12 +33,16 @@ class Confirm:
         self.assume_yes = assume_yes
         self.approved: list[Change] = []
 
+    def will_ask(self, *, yes: bool = False) -> bool:
+        """Return whether approving a change now would ask the user."""
+        return not (yes or self.assume_yes or self.dry_run())
+
     async def approve(self, change: Change, *, yes: bool = False) -> None:
         """Ask about `change` unless `yes`; afterwards, commands it covers run without asking.
 
         Raises `Declined` when the user says no, or cannot be asked.
         """
-        if not (yes or self.assume_yes or self.dry_run()):
+        if self.will_ask(yes=yes):
             if self.confirmer is None:
                 raise Declined(f"{change}? Refusing: there is no way to ask.")
             if not await self.confirmer.confirm(change):

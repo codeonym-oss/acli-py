@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, TypeVar
 from mediary import Mediator
 
 from acli_py.application import commands, events, handlers, queries
+from acli_py.application.audit import AuditTrail
 from acli_py.application.behaviors import CACHE_SECONDS, QueryCache
 from acli_py.application.bus import Bus
 from acli_py.application.events.issue_changed.subscribers import Screens
@@ -63,14 +64,20 @@ def build_bus(
     case is adding its folder. `confirmer` is how the front end asks before a change (without
     one, changes need `assume_yes`); `audit` defaults to the audit file next to the config.
     """
-    resolver = SiteResolver(site, audit or AuditFile())
+    audit = audit or AuditFile()
+    resolver = SiteResolver(site, audit)
     mediator = Mediator(resolver=resolver)
     mediator.scan(handlers, commands, queries, events)
     bus = Bus(
-        mediator, site, confirmer=confirmer, assume_yes=assume_yes, cache_seconds=cache_seconds
+        mediator,
+        site,
+        audit,
+        confirmer=confirmer,
+        assume_yes=assume_yes,
+        cache_seconds=cache_seconds,
     )
-    # The subscribers work on this bus's cache and screens.
-    resolver.provided.update({QueryCache: bus.cache, Screens: bus.listeners})
+    # The subscribers work on this bus's cache, audit trail and screens.
+    resolver.provided.update({QueryCache: bus.cache, AuditTrail: bus.trail, Screens: bus.listeners})
     return bus
 
 

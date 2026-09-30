@@ -132,12 +132,22 @@ Confirmation prompts are skipped during a dry run, because nothing will change.
 ## Asking first, and the audit log
 
 `issue transition` says what it is about to do and asks first
-(`Move 2 issues (DEMO-1, DEMO-2) to Done? [y/N]`), once for the whole batch; the other commands
-that change issues follow as they move onto the same bus. `--yes` skips the
-question; without a terminal to ask on (in a script or a pipe), they refuse unless given
-`--yes`. The TUI asks in a dialog. Each change made this way is appended to `audit.jsonl`
-in the config directory: one JSON object per line with the command, the issues, the fields
-before and after, and the time.
+(`Move 2 issues (DEMO-1, DEMO-2) to Done? [y/N]`), once for the whole batch, after a preview
+of each issue's status now and after; the other commands that change issues follow as they
+move onto the same bus. `--yes` skips the question; without a terminal to ask on (in a script
+or a pipe), they refuse unless given `--yes`. The TUI asks in a dialog.
+
+Over many issues it runs a few at a time (`--concurrency`), stops at the first failure unless
+`--continue-on-error`, and refuses more than 200 issues without `--force`. It exits 0 when all
+worked, 1 when some failed and 2 when nothing ran:
+
+```sh
+acli-py issue move --jql 's:review sprint:open' --to Done --continue-on-error
+```
+
+Each run is appended to `audit.jsonl` in the config directory: one JSON object per line with
+the time, the command, the issues, each issue's fields before and after, and the issues it
+failed on.
 
 ## Coming from `acli`
 

@@ -59,3 +59,19 @@ rather than guess, so scripts must pass `--yes`.
 Each issue gets its own ✔ or ✘ line. By default `acli-py` stops at the first failure and reports
 how many issues it did not try. `--ignore-errors` keeps going. Either way the exit code is 1
 if anything failed, and `--json` prints a per-item result list.
+
+## The bulk engine
+
+`issue transition` runs on the bulk engine, and the other commands that change many issues
+are moving onto it. It adds:
+
+- a preview before the question: each issue, its value now and after;
+- `--concurrency N` (`-c`, default 4, at most 16): how many issues to work on at once;
+- `--continue-on-error` (also `--ignore-errors`): keep going past a failure;
+- `--limit N`: act on at most N of the issues found;
+- a safety cap of 200 issues, which only `--force` goes past;
+- `--jql` takes a smart query as well as JQL (`--jql 's:review sprint:open'`);
+- one audit log entry for the whole run, listing every issue it changed and failed on.
+
+It exits 0 when every issue worked, 1 when some failed, and 2 when nothing ran (the question
+was declined, or the run was over the safety cap).

@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Generic, TypeVar
 
+from rich.markup import escape
 from rich.text import Text
 from textual import on, work
 from textual.binding import Binding
@@ -20,6 +21,7 @@ from textual.widgets import (
     Markdown,
     OptionList,
     Select,
+    Static,
     TextArea,
 )
 from textual.widgets.option_list import Option
@@ -28,9 +30,11 @@ from acli_py.domain.jql.catalog import matches
 from acli_py.domain.jql.smart import cheatsheet
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable
+    from collections.abc import Awaitable, Callable, Sequence
 
     from textual.app import ComposeResult
+
+    from acli_py.application.changes import PreviewRow
 
 T = TypeVar("T")
 
@@ -171,8 +175,14 @@ class PromptScreen(ModalScreen[str | None]):
         self.dismiss(None)
 
 
+PREVIEW_ROWS = 12  # issues listed in a confirmation; the rest are counted
+
+
 class ConfirmScreen(ModalScreen[bool]):
-    """Ask before a change: y goes ahead, n or Esc does not."""
+    """Ask before a change: y goes ahead, n or Esc does not.
+
+    Over several issues it lists each one's value now and after (the change's preview).
+    """
 
     SCOPED_CSS = False
 
@@ -183,14 +193,23 @@ class ConfirmScreen(ModalScreen[bool]):
         Binding("escape", "answer(False)", "Cancel"),
     ]
 
-    def __init__(self, question: str) -> None:
+    def __init__(self, question: str, preview: Sequence[PreviewRow] = ()) -> None:
         super().__init__()
         self.question = question
+        self.preview = preview
 
     def compose(self) -> ComposeResult:
-        """Lay out the question."""
+        """Lay out the question, and the preview under it."""
         with Vertical():
             yield Label(self.question, classes="title")
+            if len(self.preview) > 1:
+                lines = [
+                    f"[bold]{escape(r.key)}[/]  {escape(r.now)} [dim]→[/] {escape(r.after)}"
+                    for r in self.preview[:PREVIEW_ROWS]
+                ]
+                if len(self.preview) > PREVIEW_ROWS:
+                    lines.append(f"[dim]… and {len(self.preview) - PREVIEW_ROWS} more[/]")
+                yield Static("\n".join(lines), id="preview")
             yield Label("y goes ahead · n or Esc cancels", classes="hint")
 
     def action_answer(self, yes: bool) -> None:

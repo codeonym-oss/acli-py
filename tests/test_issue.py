@@ -316,7 +316,7 @@ def test_transition_explains_what_is_possible(site):
 
 def test_transition_asks_first_and_refuses_without_a_terminal(site):
     result, out = run_cli("issue", "transition", "DEMO-1", "DEMO-2", "--to", "Done")
-    assert result.exit_code == 1
+    assert result.exit_code == 2  # nothing ran
     assert "Move 2 issues (DEMO-1, DEMO-2) to Done? Refusing without --yes" in out
     assert site.writes() == []
 
@@ -329,7 +329,10 @@ def test_transition_is_audited(site, isolated_home):
     record = json.loads(lines[0])
     assert record["command"] == "TransitionIssue"
     assert record["keys"] == ["DEMO-1"]
-    assert (record["before"], record["after"]) == ({"status": "To Do"}, {"status": "Done"})
+    assert record["changes"] == [
+        {"key": "DEMO-1", "before": {"status": "To Do"}, "after": {"status": "Done"}}
+    ]
+    assert record["failed"] == {}
     assert record["at"].endswith("+00:00")
 
 

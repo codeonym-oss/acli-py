@@ -23,7 +23,10 @@ def default_path() -> Path:
 
 
 class AuditFile:
-    """Appends one JSON object per change: command, keys, before, after and time (UTC, ISO).
+    """Appends one JSON object per run: time (UTC, ISO), command, keys, and each change.
+
+    `changes` holds each issue's fields before and after; `failed` maps the issues the run
+    failed on to why.
 
     The file is readable by its owner only (on POSIX). A log that cannot be written never
     undoes or fails the change it records: the change has happened by then.
@@ -39,8 +42,11 @@ class AuditFile:
                 "at": entry.at.isoformat(),
                 "command": entry.command,
                 "keys": list(entry.keys),
-                "before": dict(entry.before),
-                "after": dict(entry.after),
+                "changes": [
+                    {"key": c.key, "before": dict(c.before), "after": dict(c.after)}
+                    for c in entry.changes
+                ],
+                "failed": dict(entry.failed),
             },
             ensure_ascii=False,
             default=str,
