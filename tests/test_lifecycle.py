@@ -19,6 +19,7 @@ from acli_py.application.commands.create_issue.command import CreateIssue
 from acli_py.application.commands.delete_issue.command import DeleteIssue
 from acli_py.application.ports import Destination, IssueEditor, IssueLinks, IssueReader, IssueStore
 from acli_py.domain.copies import copy_of
+from acli_py.domain.links import IssueLink, LinkType
 from acli_py.infrastructure.audit import default_path
 from acli_py.infrastructure.jira.fields import parse_rows
 from acli_py.infrastructure.jira.resolve import ResolveError
@@ -119,11 +120,11 @@ class StubSite:
     def web_link(self, key: str, url: str, title: str) -> None:
         self.done.append(("web link", key, url, title))
 
-    def link_type(self, name: str) -> str | None:
-        return "Cloners"
+    def link_types(self) -> tuple[LinkType, ...]:
+        return (LinkType("Cloners", "clones", "is cloned by"),)
 
-    def link(self, type_name: str, outward: str, inward: str) -> None:
-        self.done.append(("link", type_name, outward, inward))
+    def link(self, link: IssueLink, comment: Any = None) -> None:
+        self.done.append(("link", link.type.name, link.outward, link.inward))
 
     def browse_url(self, key: str) -> str:
         return f"https://here.example/browse/{key}"

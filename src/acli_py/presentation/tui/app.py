@@ -24,12 +24,12 @@ from textual.widgets.option_list import Option
 from acli_py.application.bulk import TooManyError
 from acli_py.application.changes import Change, Declined
 from acli_py.application.commands.assign_issue.command import AssignIssue
+from acli_py.application.commands.comment_on_issue.command import CommentOnIssue
 from acli_py.application.commands.create_issue.command import CreateIssue
 from acli_py.application.commands.edit_issue.command import EditIssue
 from acli_py.application.commands.transition_issue.command import TransitionIssue
 from acli_py.application.commands.watch_issue.command import WatchIssue
 from acli_py.application.messages import (
-    CommentOnIssue,
     CountIssues,
     FindAssignees,
     GetTransitions,

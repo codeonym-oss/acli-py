@@ -299,27 +299,6 @@ def field_values(
     return result
 
 
-# ── workflow and links ───────────────────────────────────────────────────────
-
-
-def link_type(client: JiraClient, wanted: str) -> tuple[dict, bool]:
-    """Return (link type, outward) for a type name, outward phrase or inward phrase.
-
-    `outward` is False when `wanted` is the inward phrase ("is blocked by"), meaning the
-    two issues must be swapped to say the same thing with the outward phrase.
-    """
-    lowered = wanted.strip().lower()
-    types = client.link_types()
-    for kind in types:
-        if lowered in (kind.get("name", "").lower(), kind.get("outward", "").lower()):
-            return kind, True
-    for kind in types:
-        if lowered == kind.get("inward", "").lower():
-            return kind, False
-    options = "; ".join(f"{t['name']} ({t['outward']} / {t['inward']})" for t in types)
-    raise ResolveError(f"no link type {wanted!r}. Available: {options}")
-
-
 # ── rich text ────────────────────────────────────────────────────────────────
 
 

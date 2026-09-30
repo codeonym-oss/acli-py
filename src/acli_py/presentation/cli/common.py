@@ -229,6 +229,10 @@ class Session:
             self.account.account_id = self.client.myself().get("accountId", "")
         return self.account.account_id
 
+    def account_id(self, who: str) -> str:
+        """Return the account id of the one person `who` names: @me, an email, a name."""
+        return str(resolve.user(self.client, who, self.me)["accountId"])
+
     def browse(self, key: str) -> str:
         """Return an issue's web URL."""
         return f"{self.url}/browse/{key}"
@@ -399,6 +403,11 @@ def confirm(question: str, yes: bool, session: Session | None = None) -> None:
         raise fail(f"{question} Refusing without [bold]--yes[/] (no terminal to ask on).")
     if not terminal.ask(question):
         raise fail("Cancelled.", code=1)
+
+
+def read_text(text: str | None, file: Path | None) -> str | None:
+    """Return text given inline or in a file; either being '-' reads stdin."""
+    return resolve.read_text_arg(text, file)
 
 
 def edit_text(initial: str = "", suffix: str = ".md", config: Config | None = None) -> str:

@@ -29,7 +29,7 @@ def test_comment_add_list_edit_delete(site):
     data = json.loads(ok("issue", "comment", "list", "DEMO-2", "--json", "--newest-first"))
     assert data[0]["id"] == comment["id"]
 
-    ok("issue", "comment", "edit", "DEMO-2", comment["id"], "-b", "Changed")
+    ok("issue", "comment", "edit", "DEMO-2", comment["id"], "-b", "Changed", "-y")
     assert to_text(comment["body"]) == "Changed"
     ok("issue", "comment", "delete", "DEMO-2", comment["id"], "-y")
     assert site.issues["DEMO-2"]["comments"] == []
@@ -46,7 +46,7 @@ def test_comment_from_stdin_on_many_issues(site):
 
 def test_comment_edit_last_replaces_my_latest(site):
     ok("issue", "comment", "add", "DEMO-2", "-b", "first")
-    ok("issue", "comment", "add", "DEMO-2", "-b", "second", "--edit-last")
+    ok("issue", "comment", "add", "DEMO-2", "-b", "second", "--edit-last", "-y")
     comments = site.issues["DEMO-2"]["comments"]
     assert [to_text(c["body"]) for c in comments] == ["second"]
 

@@ -88,11 +88,11 @@ Every command has `--help` with examples. The whole tree:
 | `acli-py issue clone KEYS…` | Copy issues, in place, `--to-project`, or `--to-site` another account's site, linked to the original. |
 | `acli-py issue archive \| unarchive \| delete KEYS…` | Archive, restore, or permanently delete (`--with-subtasks`). |
 | `acli-py issue open KEY` | Open in the browser. |
-| `acli-py issue comment list \| add \| edit \| delete \| visibility` | Markdown comments. Role/group visibility, `--edit-last`, `--editor`, stdin. |
-| `acli-py issue link add A blocks B \| list \| delete \| types` | Links read as a sentence, with inward phrases too (`"is blocked by"`). Bulk from JSON/CSV. |
+| `acli-py issue comment list \| add \| edit \| delete \| visibility` | Markdown comments, on one issue or many (keys, `--jql`, stdin). Role/group visibility, `--edit-last`, `--editor`. |
+| `acli-py issue link add A blocks B \| list \| delete \| types` | Links read as a sentence, with inward phrases too (`"is blocked by"`). Bulk from JSON/CSV, or `--jql Q blocks B` for every issue found. |
 | `acli-py issue attachment list \| upload \| download \| delete` | Files on an issue. |
 | `acli-py issue watcher list \| add \| remove` | Watchers (yourself by default). |
-| `acli-py issue worklog list \| add \| delete` | Log time: `acli-py issue worklog add DEMO-1 "1h 30m" -m "Pairing"`. |
+| `acli-py issue worklog list \| add \| delete` | Log time: `acli-py issue worklog add DEMO-1 "1h 30m" -m "Pairing"`, or on many issues with `--time`. |
 | `acli-py project list \| view \| create \| update \| archive \| restore \| delete` | Projects. `create -T scrum\|kanban\|basic\|tasks\|process\|service`, or `--from-project KEY` to share one's configuration. `components`, `versions`. |
 | `acli-py board list \| view \| create \| delete \| projects \| sprints \| backlog` | Boards. |
 | `acli-py sprint list \| view \| issues \| create \| update \| start \| close \| delete \| add \| remove` | Sprints, and moving issues in and out of them. |
@@ -146,12 +146,14 @@ See [the pipes guide](docs/guide/pipes.md) for more recipes.
 
 ## Asking first, and the audit log
 
-`issue transition`, `edit`, `assign`, `watch`, `unwatch`, `archive`, `unarchive` and `delete`
-say what they are about to do and ask first (`Move 2 issues (DEMO-1, DEMO-2) to Done? [y/N]`,
+`issue transition`, `edit`, `assign`, `watch`, `unwatch`, `archive`, `unarchive` and `delete`,
+and the edits and deletes of comments, links, attachments and worklogs, say what they are about
+to do and ask first (`Move 2 issues (DEMO-1, DEMO-2) to Done? [y/N]`,
 `Edit DEMO-4: priority → High, labels +urgent? [y/N]`), once for the whole batch, after a
 preview of each issue's value now and after. `delete` over several issues asks you to type how
-many (`… This can't be undone. Type 3 to agree`). `create` and `clone` go ahead for one issue,
-since nothing already there changes, and ask once for several. `--yes` skips the question;
+many (`… This can't be undone. Type 3 to agree`). `create`, `clone`, and adding a comment, link,
+attachment or worklog go ahead for one, since nothing already there changes, and ask once for
+several. `--yes` skips the question;
 mid-pipe, they ask on the terminal (`/dev/tty`), and without any terminal to ask on (in a
 script) they refuse unless given `--yes`. The TUI asks in a dialog.
 

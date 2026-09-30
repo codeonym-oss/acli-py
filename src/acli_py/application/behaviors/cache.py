@@ -11,7 +11,10 @@ CACHE_SECONDS = 60.0
 
 
 class QueryCache:
-    """Answers a query from memory if the same one succeeded in the last `seconds`."""
+    """Answers a query from memory if the same one succeeded in the last `seconds`.
+
+    A query whose class sets `cacheable = False` (one that saves a file, say) always runs.
+    """
 
     def __init__(self, seconds: float = CACHE_SECONDS) -> None:
         self.seconds = seconds
@@ -23,6 +26,8 @@ class QueryCache:
 
     async def handle(self, message: object, next: Next[Any], /) -> Any:
         """Return a fresh cached answer, or ask the handler and keep its answer."""
+        if not getattr(message, "cacheable", True):
+            return await next()
         hit = self.answers.get(message)
         if hit and time.monotonic() - hit[0] < self.seconds:
             return hit[1]

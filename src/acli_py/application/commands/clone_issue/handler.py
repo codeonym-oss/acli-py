@@ -8,6 +8,7 @@ from acli_py.application.changes import Changed
 from acli_py.application.commands.clone_issue.command import CloneIssue
 from acli_py.application.ports import Destination, IssueEditor, IssueLinks, IssueReader
 from acli_py.domain.copies import COPIED, copy_of
+from acli_py.domain.links import IssueLink, LinkDirection
 
 # The link type that says one issue is a copy of another ('DEMO-9 clones DEMO-1').
 CLONERS = "Cloners"
@@ -30,8 +31,8 @@ def clone_issue(
     copy = there.create(fields, {})
     if request.link and there.elsewhere:
         there.web_link(copy, reader.browse_url(key), f"Cloned from {key}")
-    elif request.link and (cloners := links.link_type(CLONERS)):
-        links.link(cloners, copy, key)  # the outward ("from") issue is the copy
+    elif request.link and (cloners := LinkDirection(links.link_types()).named(CLONERS)):
+        links.link(IssueLink(cloners, copy, key))  # 'DEMO-9 clones DEMO-1': the copy is outward
     after: dict[str, Any] = {"created": copy, "clone_of": key}
     if there.elsewhere:
         after["site"] = there.url
