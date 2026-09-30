@@ -10,6 +10,7 @@ from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any, Protocol
 
 from acli_py.application.changes import AuditRecord, Change
+from acli_py.domain.history import HistoryEntry
 from acli_py.domain.issue import (
     Attachment,
     Audience,
@@ -40,6 +41,31 @@ class IssueReader(Protocol):
 
     def browse_url(self, key: str) -> str:
         """Return the issue's page on the site."""
+        ...
+
+    def history(self, key: str) -> list[HistoryEntry]:
+        """Return the issue's changelog, oldest first."""
+        ...
+
+
+class IssueSearch(Protocol):
+    """Finds issues with JQL."""
+
+    def search(
+        self, jql: str, fields: tuple[str, ...], *, limit: int | None, token: str | None = None
+    ) -> tuple[list[Issue], str | None]:
+        """Return up to `limit` issues (None: all) with `fields`, from `token` on.
+
+        Also returns the token that goes on from there, or None when there are no more.
+        """
+        ...
+
+    def count(self, jql: str) -> int:
+        """Return how many issues match (Jira's estimate)."""
+        ...
+
+    def filter_jql(self, filter_id: str) -> str:
+        """Return the JQL the saved filter runs."""
         ...
 
 

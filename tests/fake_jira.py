@@ -204,6 +204,8 @@ class FakeJira:
                           "created": "2026-09-23T10:00:00.000+0200"}  # fmt: skip
             self.issues["DEMO-3"]["attachments"].append(attachment)
             self.blobs[attachment["id"]] = b"log"
+            self.changed("DEMO-1", BOB, ("status", "To Do", "In Progress"),
+                         ("labels", "", "web"), at="2026-09-22T11:00:00.000+0200")  # fmt: skip
 
     def new_id(self) -> str:
         """Return a fresh id."""
@@ -257,9 +259,18 @@ class FakeJira:
             "attachments": [],
             "archived": False,
             "sprint": sprint,
+            "history": [],
         }
         self.issues[key] = issue
         return issue
+
+    def changed(self, key: str, author: dict, *changes: tuple[str, str, str], at: str = "") -> None:
+        """Add a changelog entry to an issue: (field, from, to) per field changed."""
+        self.issues[key]["history"].append({
+            "id": self.new_id(), "author": author, "created": at or "2026-09-25T10:00:00.000+0200",
+            "items": [{"field": f, "fieldId": f, "fromString": old or None, "toString": new or None}
+                      for f, old, new in changes],
+        })  # fmt: skip
 
     def comment(self, author: dict, text: str) -> dict:
         """Return a new comment."""
@@ -557,6 +568,11 @@ def _assign(jira, q, body, key):
     return 204, None
 
 
+@route("GET", f"{A}/issue/(?P<key>[^/]+)/changelog")
+def _changelog(jira, q, body, key):
+    return page(jira.issue(key)["history"], q)
+
+
 @route("GET", f"{A}/issue/(?P<key>[^/]+)/transitions")
 def _transitions(jira, q, body, key):
     current = jira.issue(key)["fields"]["status"]["id"]
@@ -572,6 +588,8 @@ def _transition(jira, q, body, key):
     target = next((to for t, _, to in TRANSITIONS if t == tid), None)
     if target is None or target == issue["fields"]["status"]["id"]:
         raise BadRequestError(json.dumps({"errorMessages": ["Transition id is not valid"]}))
+    jira.changed(issue["key"], ALICE,
+                 ("status", issue["fields"]["status"]["name"], STATUSES[target]["name"]))  # fmt: skip
     issue["fields"]["status"] = STATUSES[target]
     for name, value in (body.get("fields") or {}).items():
         issue["fields"][name] = value

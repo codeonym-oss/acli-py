@@ -15,11 +15,11 @@ from textual.widgets.option_list import Option
 
 from acli_py.domain.values import ago as ago
 from acli_py.domain.values import text as field_text
-from acli_py.presentation.output import dig
 
 if TYPE_CHECKING:
     from textual.app import ComposeResult
 
+    from acli_py.domain.issue import IssueType, Status
     from acli_py.domain.jql import Completer, Completion, Suggestion
 
 KIND_STYLE = {
@@ -40,12 +40,11 @@ CATEGORY_STYLE = {"new": "bold white on grey30", "indeterminate": "bold black on
 # ── rendering helpers ────────────────────────────────────────────────────────
 
 
-def status_cell(status: dict | None) -> Text:
+def status_cell(status: Status | None) -> Text:
     """Return a status as a coloured badge."""
     if not status:
         return Text("")
-    category = dig(status, "statusCategory", "key", default="")
-    return Text(f" {status.get('name', '')} ", style=CATEGORY_STYLE.get(category, "bold"))
+    return Text(f" {status.name} ", style=CATEGORY_STYLE.get(status.category.value, "bold"))
 
 
 TYPE_BADGE = {
@@ -58,18 +57,17 @@ TYPE_BADGE = {
 }
 
 
-def type_cell(issue_type: dict | None) -> Text:
+def type_cell(issue_type: IssueType | None) -> Text:
     """Return an issue type as a one-letter coloured badge."""
-    name = str((issue_type or {}).get("name") or "")
+    name = issue_type.name if issue_type else ""
     letter, style = TYPE_BADGE.get(name.lower(), (name[:1].upper(), "bold"))
-    if (issue_type or {}).get("subtask"):
+    if issue_type and issue_type.subtask:
         letter, style = TYPE_BADGE["subtask"]
     return Text(letter, style=style)
 
 
-def priority_cell(priority: dict | None) -> Text:
-    """Return a priority as an arrow, coloured by urgency."""
-    name = str((priority or {}).get("name") or "")
+def priority_cell(name: str) -> Text:
+    """Return a priority (its name) as an arrow, coloured by urgency."""
     glyph: str = PRIORITY_GLYPH.get(name.lower(), name[:1])
     style = {"⇈": "bold red", "↑": "red", "=": "yellow", "↓": "green", "⇊": "dim green"}
     return Text(glyph, style=style.get(glyph, ""))

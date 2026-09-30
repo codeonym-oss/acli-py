@@ -10,38 +10,7 @@ from dataclasses import dataclass
 
 from mediary.cqrs import Query, query
 
-LIST_FIELDS = ("summary", "status", "issuetype", "priority", "assignee", "labels", "updated")
-
-
-@dataclass(frozen=True)
-class Page:
-    """One page of search results."""
-
-    issues: list[dict]
-    next_token: str | None
-    jql: str
-
-
 # ── queries ──────────────────────────────────────────────────────────────────
-
-
-@query
-@dataclass(frozen=True)
-class SearchIssues(Query[Page]):
-    """One page of the issues matching a JQL query."""
-
-    jql: str
-    token: str | None = None
-    size: int = 50
-    fields: tuple[str, ...] = LIST_FIELDS
-
-
-@query
-@dataclass(frozen=True)
-class CountIssues(Query[int]):
-    """How many issues a JQL query matches (Jira's estimate)."""
-
-    jql: str
 
 
 @query

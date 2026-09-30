@@ -22,12 +22,13 @@ from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Any
 
 from acli_py.application.changes import Change, Planned, Previewable, PreviewRow, Write
-from acli_py.application.messages import SearchIssues
+from acli_py.application.queries.search_issues.query import SearchIssues
 from acli_py.domain.values import text
 
 if TYPE_CHECKING:
     from acli_py.application.audit import AuditTrail
     from acli_py.application.behaviors.confirm import Confirm
+    from acli_py.domain.issue import Issue
 
 SAFETY_CAP = 200
 CONCURRENCY = 4
@@ -140,24 +141,18 @@ class Bulk:
         if field_id is None or any(c.previews() != field_id for c in commands):
             return ()
         keys = [key_of(c) for c in commands]
-        found: dict[str, dict] = {}
+        found: dict[str, Issue] = {}
         for start in range(0, len(keys), PREVIEW_PAGE):
             jql = f"key in ({', '.join(keys[start : start + PREVIEW_PAGE])})"
-            token = None
-            while True:
-                page = await self.send(
-                    SearchIssues(jql, token, PREVIEW_PAGE, ("summary", field_id))
-                )
-                found.update({i["key"]: i.get("fields") or {} for i in page.issues})
-                token = page.next_token
-                if not token:
-                    break
+            view = await self.send(SearchIssues(jql, None, ("summary", field_id)))
+            found.update({i.key: i for i in view.issues})
         rows = []
         for command, key in zip(commands, keys, strict=True):
-            fields = found.get(key, {})
-            now = text(fields.get(field_id)) if key in found else "?"
-            later = command.after(fields.get(field_id))
-            rows.append(PreviewRow(key, text(fields.get("summary")), now, later))
+            issue = found.get(key)
+            value = issue.value(field_id) if issue else None
+            now = text(value) if issue else "?"
+            summary = issue.summary if issue else ""
+            rows.append(PreviewRow(key, summary, now, command.after(value)))
         return tuple(rows)
 
     async def run(

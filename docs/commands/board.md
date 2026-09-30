@@ -112,6 +112,8 @@ acli-py board backlog BOARD [OPTIONS]
 | `--json` |  | Print JSON. |
 | `--csv` |  | Print CSV. |
 | `--output` `[table\|json\|csv\|keys\|jsonl]` |  | How to print: table, json, csv, or keys / jsonl (one per line, for pipes). |
+| `--fields` `TEXT` |  | Columns, comma-separated: key,status,assignee,summary… or field ids (customfield_10016). |
+| `--format` `TEXT` |  | One line per issue from a template: '{key}\t{status}\t{summary}'. |
 
 
 ## `acli-py board sprints`

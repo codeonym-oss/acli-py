@@ -38,6 +38,32 @@ Every command that lists things takes `--output`:
 Results go to stdout. Messages, progress and dry-run plans go to stderr, so they never end up
 in the next command's input.
 
+## Shaping issue lists
+
+Issue lists (`issue search`, `sprint issues`, `board backlog`) take `--fields` to pick the
+columns, in every output. Each JSON row has one member per column, `key` always first:
+
+```sh
+acli-py issue search '@me is:open' --fields status,due,customfield_10016 --json
+# [{"key": "DEMO-1", "status": {"name": "To Do", "category": "new"}, "due": "2026-10-01", …}]
+```
+
+Columns are `key`, `summary`, `type`, `status`, `priority`, `assignee`, `reporter`, `labels`,
+`components`, `fixVersions`, `parent`, `due`, `created`, `updated`, `resolution`, `project`
+and `description`. Any other name is a field id, printed as Jira sends it.
+
+`--format` prints one line per issue from a template instead. Each `{name}` is a column and
+takes a Python format spec. `\t` is a tab and `\n` a newline:
+
+```sh
+acli-py issue search '@me is:open' --format '{key:<10} {status:<12} {summary}'
+acli-py sprint issues 7 --format '{key}\t{assignee}' | sort -k2
+```
+
+`acli-py issue count` takes the same query and options as `issue search`, and prints how many
+issues match. `acli-py issue history KEY` lists who changed which field, when, from what to
+what (`--field status` for one field).
+
 ## Asking mid-pipe
 
 A command that reads its issues from stdin can't read your answer from stdin as well.
@@ -98,8 +124,8 @@ acli-py issue edit --from-file legacy.txt --remove-label legacy
 Filter the JSON with `jq` before acting on it:
 
 ```sh
-acli-py issue search 'p:DEMO' --output jsonl \
-  | jq -c 'select(.fields.priority.name == "Lowest")' \
+acli-py issue search 'p:DEMO' --fields priority --output jsonl \
+  | jq -c 'select(.priority == "Lowest")' \
   | acli-py issue transition - --to "Won't Do" --continue-on-error
 ```
 

@@ -30,17 +30,17 @@ from acli_py.application.commands.edit_issue.command import EditIssue
 from acli_py.application.commands.transition_issue.command import TransitionIssue
 from acli_py.application.commands.watch_issue.command import WatchIssue
 from acli_py.application.messages import (
-    CountIssues,
     FindAssignees,
     GetTransitions,
     ListFilters,
     ListIssueTypes,
     ListPriorities,
     ListProjects,
-    SearchIssues,
     ValidateJql,
 )
+from acli_py.application.queries.count_issues.query import CountIssues
 from acli_py.application.queries.get_issue.query import GetIssue
+from acli_py.application.queries.search_issues.query import SearchIssues
 from acli_py.domain import adf
 from acli_py.domain.jql import Completer, compile_query
 from acli_py.domain.jql.catalog import Catalog, spelling
@@ -74,8 +74,11 @@ if TYPE_CHECKING:
 
     from acli_py.application.bus import Bus
     from acli_py.application.events.issue_changed.event import IssueChanged
+    from acli_py.domain.issue import Issue
 
 FALLBACK_WHERE = "updated >= -30d"  # Jira refuses a search with no condition at all
+PAGE = 50
+ROW_FIELDS = ("type", "status", "priority", "assignee", "updated", "summary", "labels")
 SORTS = [
     ("-updated", "Recently updated first"),
     ("-created", "Newest first"),
@@ -179,7 +182,7 @@ class IssueBrowser(App[None]):
         self.views = views or Views()
         self.history = history or History()
         self.first_query = query or self.views.all()[0].query
-        self.rows: list[dict] = []
+        self.rows: list[Issue] = []
         self.marked: list[str] = []
         self.jql = ""
         self.next_token: str | None = None
@@ -226,7 +229,7 @@ class IssueBrowser(App[None]):
         self.call_after_refresh(self._resize_columns)
 
     def _key_width(self) -> int:
-        return max([len("Key"), *(len(r["key"]) for r in self.rows)])
+        return max([len("Key"), *(len(r.key) for r in self.rows)])
 
     def _summary_width(self) -> int:
         fixed = sum(width + 2 for _, _, width in COLUMNS if width) + self._key_width() + 2
@@ -361,14 +364,14 @@ class IssueBrowser(App[None]):
                 self.bar.show_jql("✘ " + " ".join(problems), error=True)
                 return
             self.status(Text("Searching…", style="yellow"))
-            page = await self.bus.send(SearchIssues(jql))
+            page = await self.bus.send(SearchIssues(jql, PAGE, ROW_FIELDS))
         except ERRORS as error:
             self.bar.show_jql(f"✘ {error}", error=True)
             self.status("")
             return
         self.jql, self.next_token, self.total = jql, page.next_token, None
         self.rows = list(page.issues)
-        self.marked = [k for k in self.marked if any(r["key"] == k for r in self.rows)]
+        self.marked = [k for k in self.marked if any(r.key == k for r in self.rows)]
         self._render_rows(keep)
         if text and text not in self.history.load()[-8:]:
             self.history.add(text)
@@ -401,26 +404,25 @@ class IssueBrowser(App[None]):
         table.clear(columns=True)
         self._add_columns()
         for issue in self.rows:
-            table.add_row(*self._cells(issue), key=issue["key"])
-        if current and any(r["key"] == current for r in self.rows):
+            table.add_row(*self._cells(issue), key=issue.key)
+        if current and any(r.key == current for r in self.rows):
             table.move_cursor(row=table.get_row_index(current))
         self._show_count()
 
-    def _cells(self, issue: dict) -> list[Any]:
-        f = issue.get("fields", {})
-        mark = Text("●", style="bold magenta") if issue["key"] in self.marked else Text(" ")
+    def _cells(self, issue: Issue) -> list[Any]:
+        mark = Text("●", style="bold magenta") if issue.key in self.marked else Text(" ")
         return [
             mark,
-            Text(issue["key"], style="bold cyan"),
-            type_cell(f.get("issuetype")),
-            status_cell(f.get("status")),
-            priority_cell(f.get("priority")),
+            Text(issue.key, style="bold cyan"),
+            type_cell(issue.type),
+            status_cell(issue.status),
+            priority_cell(issue.priority),
             Text(
-                dig(f, "assignee", "displayName", default="—"),
-                style="" if f.get("assignee") else "dim",
+                issue.assignee.name if issue.assignee else "—",
+                style="" if issue.assignee else "dim",
             ),
-            Text(ago(f.get("updated")), style="dim"),
-            Text(f.get("summary", ""), no_wrap=True, overflow="ellipsis"),
+            Text(ago(issue.updated), style="dim"),
+            Text(issue.summary, no_wrap=True, overflow="ellipsis"),
         ]
 
     @work(exclusive=True, group="more")
@@ -429,18 +431,20 @@ class IssueBrowser(App[None]):
             return
         self.loading_more = True
         try:
-            page = await self.bus.send(SearchIssues(self.jql, token=self.next_token))
+            page = await self.bus.send(
+                SearchIssues(self.jql, PAGE, ROW_FIELDS, token=self.next_token)
+            )
         except ERRORS as error:
             self.notify(str(error), severity="error")
             return
         finally:
             self.loading_more = False
         self.next_token = page.next_token
-        known = {r["key"] for r in self.rows}
+        known = {r.key for r in self.rows}
         for issue in page.issues:
-            if issue["key"] not in known:
+            if issue.key not in known:
                 self.rows.append(issue)
-                self.table.add_row(*self._cells(issue), key=issue["key"])
+                self.table.add_row(*self._cells(issue), key=issue.key)
         self._show_count()
 
     # ── the detail pane ──────────────────────────────────────────────────────
@@ -452,10 +456,10 @@ class IssueBrowser(App[None]):
             return None
         return str(table.coordinate_to_cell_key(table.cursor_coordinate).row_key.value)
 
-    def current(self) -> dict | None:
-        """Return the highlighted issue's row data."""
+    def current(self) -> Issue | None:
+        """Return the highlighted issue."""
         key = self.current_key()
-        return next((r for r in self.rows if r["key"] == key), None)
+        return next((r for r in self.rows if r.key == key), None)
 
     @on(DataTable.RowHighlighted, "#issues")
     def _highlighted(self, event: DataTable.RowHighlighted) -> None:
@@ -497,17 +501,14 @@ class IssueBrowser(App[None]):
         if change.what == "CreateIssue":
             return
         try:
-            page = await self.bus.send(SearchIssues(f"key in ({change.key})", size=1))
+            page = await self.bus.send(SearchIssues(f"key in ({change.key})", 1, ROW_FIELDS))
         except ERRORS:
             return
-        fresh = next((i for i in page.issues if i["key"] == change.key), None)
+        fresh = next((i for i in page.issues if i.key == change.key), None)
         for index, row in enumerate(self.rows):
-            if fresh and row["key"] == change.key:
-                row["fields"].update(
-                    {k: v for k, v in fresh["fields"].items() if k in row["fields"]}
-                )
-                self.rows[index] = row
-                for column, value in zip(self.table.columns, self._cells(row), strict=True):
+            if fresh and row.key == change.key:
+                self.rows[index] = fresh
+                for column, value in zip(self.table.columns, self._cells(fresh), strict=True):
                     self.table.update_cell(change.key, column, value)
         if change.key == self.current_key():
             self._show_detail(change.key, delay=0)
@@ -552,7 +553,7 @@ class IssueBrowser(App[None]):
             self.marked.remove(key)
         else:
             self.marked.append(key)
-        row = next(r for r in self.rows if r["key"] == key)
+        row = next(r for r in self.rows if r.key == key)
         self.table.update_cell(key, "mark", self._cells(row)[0])
         self.action_cursor(1)
         self._show_count()
@@ -662,11 +663,11 @@ class IssueBrowser(App[None]):
         issue = self.current()
         if not issue:
             return
-        old = dig(issue, "fields", "summary", default="")
-        new = await self.push_screen_wait(PromptScreen(f"Summary of {issue['key']}", old))
+        old = issue.summary
+        new = await self.push_screen_wait(PromptScreen(f"Summary of {issue.key}", old))
         if new and new.strip() and new != old:
             await self._each(
-                [issue["key"]], lambda k: EditIssue.setting(k, "summary", new.strip()), "renamed"
+                [issue.key], lambda k: EditIssue.setting(k, "summary", new.strip()), "renamed"
             )
 
     @work(group="action")
@@ -692,7 +693,8 @@ class IssueBrowser(App[None]):
         keys = self.targets()
         if not keys:
             return
-        current = dig(self.current() or {}, "fields", "labels", default=[]) or []
+        issue = self.current()
+        current = list(issue.labels) if issue else []
         text = await self.push_screen_wait(
             PromptScreen(
                 f"Labels for {keys[0] if len(keys) == 1 else f'{len(keys)} issues'}",
@@ -761,7 +763,8 @@ class IssueBrowser(App[None]):
             except ERRORS:
                 return ["Task"]
 
-        current = dig(self.current() or {}, "key", default="")
+        issue = self.current()
+        current = issue.key if issue else ""
         project = current.split("-")[0] if current else self.default_project
         form = CreateScreen(
             [(p["key"], p.get("name", p["key"])) for p in projects], types_for, project=project

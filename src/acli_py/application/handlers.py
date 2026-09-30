@@ -9,36 +9,18 @@ from __future__ import annotations
 from mediary.cqrs import query_handler
 
 from acli_py.application.messages import (
-    CountIssues,
     FindAssignees,
     GetTransitions,
     ListFilters,
     ListIssueTypes,
     ListPriorities,
     ListProjects,
-    Page,
-    SearchIssues,
     ValidateJql,
 )
 from acli_py.application.site import Site
 from acli_py.infrastructure.jira.client import API
 
 # ── queries ──────────────────────────────────────────────────────────────────
-
-
-@query_handler
-def search_issues(request: SearchIssues, site: Site) -> Page:
-    """Return one page of results."""
-    issues, token = site.client.search_page(
-        request.jql, list(request.fields), size=request.size, token=request.token
-    )
-    return Page(issues, token, request.jql)
-
-
-@query_handler
-def count_issues(request: CountIssues, site: Site) -> int:
-    """Return the approximate count."""
-    return site.client.count(request.jql)
 
 
 @query_handler

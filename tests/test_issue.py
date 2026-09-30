@@ -52,7 +52,7 @@ def test_search_json_csv_count_and_fields(site):
     assert rows[1][0] == "DEMO-1"
     assert json.loads(ok("issue", "search", "-p", "DEMO", "--count", "--json"))["count"] == 3
     out = ok("issue", "search", "-p", "DEMO", "--fields", "summary,labels")
-    assert "labels" in out
+    assert "Labels" in out
     assert "web" in out
 
 
@@ -70,30 +70,6 @@ def test_search_needs_something_to_search_for(site):
     assert "Say what to search" in out
     ok("config", "set", "project", "OPS")
     assert "OPS-1" in ok("issue", "search")
-
-
-def test_build_jql_combines_everything(site):
-    from acli_py.presentation.cli.common import connect
-    from acli_py.presentation.cli.issue import build_jql
-
-    session = connect()
-    jql = build_jql(
-        session,
-        jql="labels = web ORDER BY created",
-        status=["To Do,In Progress"],
-        issue_type=["Bug"],
-        label=['a"b'],
-        text="safari",
-        open_only=True,
-        assignee="none",
-    )
-    assert jql == (
-        '(labels = web) AND assignee is EMPTY AND status in ("To Do", "In Progress") '
-        'AND issuetype = "Bug" AND labels = "a\\"b" AND text ~ "safari" '
-        "AND statusCategory != Done ORDER BY created"
-    )
-    assert build_jql(session, project="X", order="-created").endswith("ORDER BY created DESC")
-    assert f'assignee = "{BOB["accountId"]}"' in build_jql(session, assignee="bob@example.com")
 
 
 def test_transitions_list(site):

@@ -21,12 +21,20 @@ from acli_py.application.commands.delete_issue.command import DeleteIssue
 from acli_py.application.commands.edit_issue.command import EditIssue
 from acli_py.application.commands.transition_issue.command import TransitionIssue
 from acli_py.application.commands.watch_issue.command import WatchIssue
+from acli_py.application.queries.compile_search.query import (
+    ME,
+    NOBODY,
+    CompileSearch,
+    NothingToSearchError,
+)
+from acli_py.application.queries.count_issues.query import CountIssues
+from acli_py.application.queries.get_history.query import GetHistory
 from acli_py.application.queries.get_issue.query import GetIssue
-from acli_py.bootstrap import build_catalog
+from acli_py.application.queries.issue_columns import split
+from acli_py.application.queries.search_issues.query import SearchIssues
 from acli_py.domain import adf
-from acli_py.domain.jql import compile_query, looks_like_jql
-from acli_py.domain.jql.catalog import spelling
 from acli_py.domain.jql.smart import cheatsheet
+from acli_py.domain.values import when
 from acli_py.infrastructure.jira import fields as issue_fields
 from acli_py.infrastructure.jira import resolve
 from acli_py.infrastructure.jira.client import DRY_RUN_ID
@@ -38,8 +46,10 @@ from acli_py.presentation.cli.common import (
     ConcurrencyOpt,
     CsvOpt,
     DryRunOpt,
+    FieldsOpt,
     FilterOpt,
     ForceOpt,
+    FormatOpt,
     FromFileOpt,
     JqlOpt,
     JsonOpt,
@@ -61,12 +71,12 @@ from acli_py.presentation.cli.common import (
     pick_issues,
     plural,
     run_many,
+    show_issues,
+    template_of,
 )
 from acli_py.presentation.output import Column, Format, dig
 
 app = typer.Typer(help="Work with issues (Jira's work items).", no_args_is_help=True)
-
-LIST_FIELDS = ["issuetype", "status", "priority", "assignee", "summary"]
 
 # ── shared field options (create and edit) ───────────────────────────────────
 
@@ -160,77 +170,33 @@ def view(
 # ── search ───────────────────────────────────────────────────────────────────
 
 
-def jql_quote(value: str) -> str:
-    """Quote a value for JQL."""
-    return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
-
-
-def _in(field: str, values: list[str]) -> str:
-    if len(values) == 1:
-        return f"{field} = {jql_quote(values[0])}"
-    return f"{field} in ({', '.join(jql_quote(v) for v in values)})"
-
-
-def build_jql(
-    session: Session,
-    *,
-    jql: str | None = None,
-    project: str | None = None,
-    assignee: str | None = None,
-    status: list[str] | None = None,
-    issue_type: list[str] | None = None,
-    label: list[str] | None = None,
-    text: str | None = None,
-    open_only: bool = False,
-    order: str | None = None,
-) -> str:
-    """Combine a JQL query and the shortcut options into one query."""
-    clauses: list[str] = []
-    ordering = ""
-    if jql:
-        body = jql
-        if tail := _order_tail(jql):
-            ordering, body = tail, jql[: len(jql) - len(tail)]
-        if body.strip():
-            clauses.append(f"({body.strip()})")
-    if project:
-        clauses.append(f"project = {jql_quote(project.upper())}")
-    if assignee:
-        who = assignee.strip().lower()
-        if who in resolve.ME:
-            clauses.append("assignee = currentUser()")
-        elif who in resolve.NOBODY:
-            clauses.append("assignee is EMPTY")
-        else:
-            clauses.append(
-                f"assignee = {jql_quote(resolve.user(session.client, assignee)['accountId'])}"
-            )
-    if status := flat(status):
-        clauses.append(_in("status", status))
-    if issue_type := flat(issue_type):
-        clauses.append(_in("issuetype", issue_type))
-    if label := flat(label):
-        clauses.append(_in("labels", label))
-    if text:
-        clauses.append(f"text ~ {jql_quote(text)}")
-    if open_only:
-        clauses.append("statusCategory != Done")
-    if not clauses:
-        default = session.config.defaults.get("project")
-        if not default:
-            raise fail(
-                "Say what to search: a JQL query, or --project/--assignee/--status/--text…, "
-                "or set a default with [bold]acli-py config set project KEY[/]."
-            )
-        clauses.append(f"project = {jql_quote(default)}")
-    query = " AND ".join(clauses)
-    if order:
-        direction = "DESC" if order.startswith("-") else "ASC"
-        name = order.lstrip("+-").strip()
-        if " " in name:
-            return f"{query} ORDER BY {name}"
-        return f"{query} ORDER BY {name} {direction}"
-    return f"{query} {ordering or 'ORDER BY updated DESC'}"
+AssigneeFilterOpt = Annotated[
+    str | None, typer.Option("--assignee", "-a", help="@me, 'none', email or name.")
+]
+StatusFilterOpt = Annotated[
+    list[str] | None, typer.Option("--status", "-s", help="Status name (repeatable).")
+]
+TypeFilterOpt = Annotated[
+    list[str] | None, typer.Option("--type", "-t", help="Issue type (repeatable).")
+]
+LabelFilterOpt = Annotated[
+    list[str] | None, typer.Option("--label", "-L", help="Label (repeatable).")
+]
+TextOpt = Annotated[str | None, typer.Option("--text", "-T", help="Full-text search.")]
+OpenOpt = Annotated[bool, typer.Option("--open", "-o", help="Only issues not done yet.")]
+SavedFilterOpt = Annotated[
+    str | None, typer.Option("--filter", help="Use a saved filter's JQL (by id).")
+]
+RawOpt = Annotated[
+    bool, typer.Option("--raw", help="Send the query as JQL, never as a smart query.")
+]
+QueryArg = Annotated[
+    str | None,
+    typer.Argument(
+        help="A smart query ('@me #web is:open', see --syntax) or JQL (optional).",
+        show_default=False,
+    ),
+]
 
 
 def show_syntax() -> None:
@@ -248,74 +214,87 @@ def show_syntax() -> None:
     )
 
 
-def _order_tail(jql: str) -> str:
-    match = re.search(r"(?i)\border\s+by\b.*$", jql)
-    return match.group(0) if match else ""
+def _who(session: Session, assignee: str | None) -> str:
+    """Return the assignee as `CompileSearch` takes it: ME, NOBODY or an account id."""
+    who = (assignee or "").strip()
+    if who.lower() in resolve.ME:
+        return ME
+    if who.lower() in resolve.NOBODY:
+        return NOBODY
+    return session.account_id(who) if who else ""
 
 
-def issue_columns(session: Session, extra: list[str]) -> list[Column]:
-    """Return the columns for issue lists: the defaults, or the fields asked for."""
-    if extra:
-        cols = [Column("Key", lambda i: i["key"], style="cyan", no_wrap=True)]
-        for field_id in extra:
-            if field_id == "key":
-                continue
-            cols.append(
-                Column(
-                    field_id,
-                    lambda i, fid=field_id: issue_fields.text(dig(i, "fields", fid)),
-                )
+def compiled_search(
+    session: Session,
+    query: str | None = None,
+    *,
+    raw: bool = False,
+    saved_filter: str | None = None,
+    project: str | None = None,
+    assignee: str | None = None,
+    status: list[str] | None = None,
+    issue_type: list[str] | None = None,
+    label: list[str] | None = None,
+    text: str | None = None,
+    open_only: bool = False,
+    order: str | None = None,
+) -> str:
+    """Return the JQL a search runs, warning about smart query terms that didn't fit."""
+    try:
+        compiled = session.send(
+            CompileSearch(
+                text=query or "",
+                raw=raw,
+                saved_filter=saved_filter or "",
+                project=project or "",
+                assignee=_who(session, assignee),
+                statuses=tuple(flat(status) or ()),
+                types=tuple(flat(issue_type) or ()),
+                labels=tuple(flat(label) or ()),
+                words=text or "",
+                open_only=open_only,
+                order=order or "",
+                default_project=session.config.defaults.get("project") or "",
             )
-        return cols
-    return [
-        Column("Key", lambda i: i["key"], style="cyan", no_wrap=True),
-        Column("Type", lambda i: dig(i, "fields", "issuetype", "name"), no_wrap=True),
-        Column("Status", lambda i: dig(i, "fields", "status", "name"), no_wrap=True),
-        Column("Priority", lambda i: dig(i, "fields", "priority", "name"), no_wrap=True),
-        Column("Assignee", lambda i: dig(i, "fields", "assignee", "displayName"), no_wrap=True),
-        Column("Summary", lambda i: dig(i, "fields", "summary")),
-    ]
+        )
+    except NothingToSearchError:
+        raise fail(
+            "Say what to search: a query, or --project/--assignee/--status/--text…, "
+            "or set a default with [bold]acli-py config set project KEY[/]."
+        ) from None
+    for warning in compiled.warnings:
+        output.warn(escape(warning))
+    return compiled.jql
+
+
+def print_count(session: Session, jql: str, as_json: bool) -> None:
+    """Print how many issues `jql` matches."""
+    number = session.send(CountIssues(jql))
+    if as_json:
+        output.print_json({"jql": jql, "count": number})
+    else:
+        output.console.print(number)
 
 
 @app.command("search")
 @app.command("list", hidden=True)
 @guarded
 def search(
-    jql: Annotated[
-        str | None,
-        typer.Argument(
-            help="A smart query ('@me #web is:open', see --syntax) or JQL (optional).",
-            show_default=False,
-        ),
-    ] = None,
+    jql: QueryArg = None,
     project: ProjectOpt = None,
-    assignee: Annotated[
-        str | None, typer.Option("--assignee", "-a", help="@me, 'none', email or name.")
-    ] = None,
-    status: Annotated[
-        list[str] | None, typer.Option("--status", "-s", help="Status name (repeatable).")
-    ] = None,
-    issue_type: Annotated[
-        list[str] | None, typer.Option("--type", "-t", help="Issue type (repeatable).")
-    ] = None,
-    label: Annotated[
-        list[str] | None, typer.Option("--label", "-L", help="Label (repeatable).")
-    ] = None,
-    text: Annotated[str | None, typer.Option("--text", "-T", help="Full-text search.")] = None,
-    open_only: Annotated[
-        bool, typer.Option("--open", "-o", help="Only issues not done yet.")
-    ] = False,
-    saved_filter: Annotated[
-        str | None, typer.Option("--filter", help="Use a saved filter's JQL (by id).")
-    ] = None,
+    assignee: AssigneeFilterOpt = None,
+    status: StatusFilterOpt = None,
+    issue_type: TypeFilterOpt = None,
+    label: LabelFilterOpt = None,
+    text: TextOpt = None,
+    open_only: OpenOpt = False,
+    saved_filter: SavedFilterOpt = None,
     order: Annotated[
         str | None,
         typer.Option("--order", help="Sort field; prefix '-' for descending, e.g. -created."),
     ] = None,
-    fields: Annotated[
-        str | None,
-        typer.Option("--fields", help="Columns to show, comma-separated field ids."),
-    ] = None,
+    fields: FieldsOpt = None,
+    template: FormatOpt = None,
     limit: LimitOpt = 50,
     all_pages: AllOpt = False,
     count: Annotated[bool, typer.Option("--count", help="Only print how many match.")] = False,
@@ -326,33 +305,27 @@ def search(
     syntax: Annotated[
         bool, typer.Option("--syntax", help="Show the smart query syntax and exit.")
     ] = False,
-    raw: Annotated[
-        bool, typer.Option("--raw", help="Send the query as JQL, never as a smart query.")
-    ] = False,
+    raw: RawOpt = False,
 ) -> None:
-    """Find issues with a smart query, JQL, and/or simple options.
+    r"""Find issues with a smart query, JQL, and/or simple options.
 
     [dim]acli-py issue search '@me is:open #web sort:-priority'
     acli-py issue search 'p:DEMO s:progress updated:7d "login"'
-    acli-py issue search -p DEMO -a @me --open
-    acli-py issue search 'project = DEMO AND sprint in openSprints()' --csv[/]
+    acli-py issue search -p DEMO -a @me --open --fields key,status,due
+    acli-py issue search 'project = DEMO AND sprint in openSprints()' --csv
+    acli-py issue search @me --format '{key}\t{status}\t{summary}'[/]
     """
     if syntax:
         show_syntax()
         return
+    chosen = fmt(as_json, as_csv, out)
+    shape = template_of(template, chosen)
     session = connect()
-    if jql and not raw and not looks_like_jql(jql):
-        compiled = compile_query(
-            jql, resolve=spelling(build_catalog(session.client)), default_order=""
-        )
-        for warning in compiled.warnings:
-            output.warn(escape(warning))
-        jql = compiled.jql
-    base = session.client.filter(saved_filter)["jql"] if saved_filter else None
-    query_text = " AND ".join(f"({q})" for q in (base, jql) if q) if base and jql else base or jql
-    query = build_jql(
+    query = compiled_search(
         session,
-        jql=query_text,
+        jql,
+        raw=raw,
+        saved_filter=saved_filter,
         project=project,
         assignee=assignee,
         status=status,
@@ -366,23 +339,91 @@ def search(
         open_url(f"{session.url}/issues/?jql={quote(query)}")
         return
     if count:
-        number = session.client.count(query)
-        if as_json:
-            output.print_json({"jql": query, "count": number})
-        else:
-            output.console.print(number)
+        print_count(session, query, as_json)
         return
-    extra = [f.strip() for f in (fields or "").split(",") if f.strip()]
+    names = (*split(fields), *(shape.names if shape else ()))
     with output.errors.status("Searching…"):
-        issues = list(
-            session.client.search(query, extra or LIST_FIELDS, limit=limit_of(limit, all_pages))
-        )
-    output.emit(
-        issues, issue_columns(session, extra), fmt(as_json, as_csv, out), empty="No issues match."
+        view = session.send(SearchIssues(query, limit_of(limit, all_pages), names))
+    show_issues(view, chosen, shape, empty="No issues match.")
+    if chosen is Format.table and shape is None and view.issues:
+        more = "" if not view.next_token else " (use --all for every page)"
+        output.info(f"{plural(len(view.issues), 'issue')}{more} · [dim]{escape(query)}[/]")
+
+
+@app.command()
+@guarded
+def count(
+    jql: QueryArg = None,
+    project: ProjectOpt = None,
+    assignee: AssigneeFilterOpt = None,
+    status: StatusFilterOpt = None,
+    issue_type: TypeFilterOpt = None,
+    label: LabelFilterOpt = None,
+    text: TextOpt = None,
+    open_only: OpenOpt = False,
+    saved_filter: SavedFilterOpt = None,
+    as_json: JsonOpt = False,
+    raw: RawOpt = False,
+) -> None:
+    """Count the issues a search finds (Jira's estimate), with the same query and options.
+
+    [dim]acli-py issue count '@me is:open'
+    acli-py issue count -p DEMO -s 'In Progress' --json[/]
+    """
+    session = connect()
+    query = compiled_search(
+        session,
+        jql,
+        raw=raw,
+        saved_filter=saved_filter,
+        project=project,
+        assignee=assignee,
+        status=status,
+        issue_type=issue_type,
+        label=label,
+        text=text,
+        open_only=open_only,
     )
-    if fmt(as_json, as_csv, out) is Format.table and issues:
-        more = "" if all_pages or len(issues) < limit else " (use --all for every page)"
-        output.info(f"{plural(len(issues), 'issue')}{more} · [dim]{escape(query)}[/]")
+    print_count(session, query, as_json)
+
+
+@app.command()
+@guarded
+def history(
+    key: Annotated[str, typer.Argument(help="Issue key.")],
+    field: Annotated[
+        str | None,
+        typer.Option("--field", "-f", help="Only this field's changes (name or id)."),
+    ] = None,
+    newest_first: Annotated[
+        bool, typer.Option("--newest-first", "-r", help="Newest change first.")
+    ] = False,
+    limit: Annotated[
+        int | None, typer.Option("--limit", "-l", min=1, help="Show at most this many changes.")
+    ] = None,
+    as_json: JsonOpt = False,
+    as_csv: CsvOpt = False,
+    out: OutputOpt = None,
+) -> None:
+    """Show who changed what on an issue, and when.
+
+    [dim]acli-py issue history DEMO-12
+    acli-py issue history DEMO-12 --field status --newest-first[/]
+    """
+    session = connect()
+    view = session.send(GetHistory(key, field or "", newest_first, limit))
+    output.emit(
+        view.to_json(),
+        [
+            Column("When", lambda r: when(r["at"]), no_wrap=True),
+            Column("Who", lambda r: dig(r, "author", "name"), style="bold", no_wrap=True),
+            Column("Field", lambda r: r["field"], style="cyan", no_wrap=True),
+            Column("From", lambda r: r["from"]),
+            Column("To", lambda r: r["to"]),
+        ],
+        fmt(as_json, as_csv, out),
+        empty=f"No changes to {view.key}" + (f" in {field}." if field else "."),
+    )
 
 
 # ── create ───────────────────────────────────────────────────────────────────
