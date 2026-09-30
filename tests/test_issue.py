@@ -219,14 +219,14 @@ def test_create_many_stops_at_the_first_error_unless_told_not_to(site, tmp_path)
         "issue", "create", "--from-json", str(path), "-p", "DEMO", "-y", "--ignore-errors", "--json"
     )
     assert result.exit_code == 1
-    assert "1 of 2 created, 1 failed" in out
+    assert [(r["item"], r["ok"]) for r in json.loads(out)] == [("#1", False), ("#2", True)]
 
 
 def test_create_many_asks_first_without_a_terminal(site, tmp_path):
     path = tmp_path / "issues.json"
-    path.write_text(json.dumps([{"summary": "a"}]))
+    path.write_text(json.dumps([{"summary": "a"}, {"summary": "b"}]))
     result, out = run_cli("issue", "create", "--from-json", str(path), "-p", "DEMO")
-    assert result.exit_code == 1
+    assert result.exit_code == 2
     assert "Refusing without --yes" in out
     assert site.writes() == []
 
@@ -339,8 +339,8 @@ def test_transition_is_audited(site, isolated_home):
 
 def test_delete_asks_then_deletes(site):
     result, out = run_cli("issue", "delete", "DEMO-2")
-    assert result.exit_code == 1
-    assert "Permanently delete 1 issue (DEMO-2)?" in out
+    assert result.exit_code == 2
+    assert "Permanently delete DEMO-2? Refusing without --yes" in out
     assert "DEMO-2" in site.issues
     ok("issue", "delete", "DEMO-2", "--yes")
     assert "DEMO-2" not in site.issues
@@ -360,7 +360,7 @@ def test_archive_and_unarchive(site):
     result, out = run_cli("issue", "archive", "DEMO-2", "NOPE-9", "-y")
     assert result.exit_code == 1
     assert "DEMO-2 archived" in out
-    assert "NOPE-9 could not be archived" in out
+    assert "NOPE-9: missing" in out
     assert site.issues["DEMO-2"]["archived"]
     ok("issue", "unarchive", "DEMO-2", "-y")
     assert not site.issues["DEMO-2"]["archived"]

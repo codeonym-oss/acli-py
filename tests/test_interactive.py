@@ -323,12 +323,15 @@ def test_templates_print_json(jira):
         json.loads(out)
 
 
-def test_archive_stops_after_a_failing_batch_unless_told(site, monkeypatch):
-    monkeypatch.setattr("acli_py.presentation.cli.issue.plural", lambda n, w: f"{n} {w}s")
-    for n in range(3):
-        site.add_issue("DEMO", f"x{n}", "Task")
-    result, out = run_cli("issue", "archive", "DEMO-1", "NOPE-9", "-y")
+def test_archive_stops_after_a_failure_unless_told(site):
+    result, out = run_cli("issue", "archive", "NOPE-9", "DEMO-1", "-y", "-c", "1")
     assert result.exit_code == 1
-    assert "NOPE-9 could not be archived" in out
-    result, out = run_cli("issue", "archive", "DEMO-2", "-y", "--ignore-errors")
-    assert result.exit_code == 0, out
+    assert "NOPE-9: missing" in out
+    assert "1 not tried" in out
+    assert not site.issues["DEMO-1"]["archived"]
+    result, out = run_cli(
+        "issue", "archive", "NOPE-9", "DEMO-1", "-y", "-c", "1", "--continue-on-error"
+    )
+    assert result.exit_code == 1
+    assert "1 of 2 archived, 1 failed." in out
+    assert site.issues["DEMO-1"]["archived"]

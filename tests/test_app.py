@@ -11,13 +11,13 @@ if TYPE_CHECKING:
 
 from acli_py.application.behaviors import describe
 from acli_py.application.commands.assign_issue.command import AssignIssue
+from acli_py.application.commands.create_issue.command import CreateIssue
 from acli_py.application.commands.edit_issue.command import EditIssue
 from acli_py.application.commands.transition_issue.command import TransitionIssue
 from acli_py.application.commands.watch_issue.command import WatchIssue
 from acli_py.application.messages import (
     CommentOnIssue,
     CountIssues,
-    CreateIssue,
     FindAssignees,
     GetTransitions,
     ListFilters,
@@ -106,10 +106,13 @@ def test_commands_change_jira_empty_the_cache_and_announce(site, fake):
         await bus.send(WatchIssue("DEMO-2", fake_jira.ALICE["accountId"], True))
         await bus.send(WatchIssue("DEMO-2", fake_jira.ALICE["accountId"], False))
         return await bus.send(
-            CreateIssue("DEMO", "Task", " New thing ", "Some *text*", True, ("x",))
-        )
+            CreateIssue.of(
+                "demo", "Task", " New thing ", "Some *text*",
+                assignee=bus.site.me, labels=("x",),
+            )
+        )  # fmt: skip
 
-    key = run(scenario())
+    key = run(scenario()).key
     issue = site.issues["DEMO-2"]
     assert issue["fields"]["assignee"]["displayName"] == "Carol Jensen"
     assert issue["fields"]["summary"] == "Write the notes"

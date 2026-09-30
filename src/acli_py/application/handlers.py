@@ -6,14 +6,11 @@ Their `Site` parameter is supplied by the mediator's resolver.
 
 from __future__ import annotations
 
-from typing import Any
-
 from mediary.cqrs import command_handler, query_handler
 
 from acli_py.application.messages import (
     CommentOnIssue,
     CountIssues,
-    CreateIssue,
     FindAssignees,
     GetTransitions,
     ListFilters,
@@ -115,21 +112,3 @@ def comment_on_issue(request: CommentOnIssue, site: Site) -> str:
         f"{API}/issue/{request.key}/comment", {"body": adf.to_adf(request.body)}
     )
     return str((created or {}).get("id", ""))
-
-
-@command_handler
-def create_issue(request: CreateIssue, site: Site) -> str:
-    """Create the issue."""
-    fields: dict[str, Any] = {
-        "project": {"key": request.project},
-        "issuetype": {"name": request.issue_type},
-        "summary": request.summary.strip(),
-    }
-    if request.description.strip():
-        fields["description"] = adf.to_adf(request.description)
-    if request.assign_to_me:
-        fields["assignee"] = {"accountId": site.me}
-    if request.labels:
-        fields["labels"] = list(request.labels)
-    created = site.client.post(f"{API}/issue", {"fields": fields})
-    return str(created["key"])

@@ -24,13 +24,13 @@ from textual.widgets.option_list import Option
 from acli_py.application.bulk import TooManyError
 from acli_py.application.changes import Change, Declined
 from acli_py.application.commands.assign_issue.command import AssignIssue
+from acli_py.application.commands.create_issue.command import CreateIssue
 from acli_py.application.commands.edit_issue.command import EditIssue
 from acli_py.application.commands.transition_issue.command import TransitionIssue
 from acli_py.application.commands.watch_issue.command import WatchIssue
 from acli_py.application.messages import (
     CommentOnIssue,
     CountIssues,
-    CreateIssue,
     FindAssignees,
     GetTransitions,
     ListFilters,
@@ -770,14 +770,14 @@ class IssueBrowser(App[None]):
         if not new:
             return
         try:
-            key = await self.bus.send(
-                CreateIssue(
+            created = await self.bus.send(
+                CreateIssue.of(
                     new.project,
                     new.issue_type,
                     new.summary,
                     new.description,
-                    new.assign_to_me,
-                    new.labels,
+                    assignee=self.site.me if new.assign_to_me else None,
+                    labels=new.labels,
                 )
             )
         except ERRORS as error:
@@ -785,8 +785,8 @@ class IssueBrowser(App[None]):
             return
         if self.site.dry_run:
             return
-        self.notify(f"Created {key}.")
-        self.run_query(keep=key)
+        self.notify(f"Created {created.key}.")
+        self.run_query(keep=created.key)
 
     def action_open(self) -> None:
         """Open the highlighted issue in the browser."""

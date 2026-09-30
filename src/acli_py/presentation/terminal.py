@@ -50,11 +50,18 @@ def ask(question: str) -> bool:
     """Ask a yes/no question, no by default: on stdin, else on the terminal; no terminal is no."""
     if sys.stdin.isatty():
         return typer.confirm(question, default=False, err=True)
+    return answer(f"{question} [y/N]").lower() in YES
+
+
+def answer(prompt: str) -> str:
+    """Ask for a line of text: on stdin, else on the terminal; no terminal answers ''."""
+    if sys.stdin.isatty():
+        return str(typer.prompt(prompt, default="", show_default=False, err=True)).strip()
     tty = open_tty()
     if tty is None:
-        return False
+        return ""
     reader, writer = tty
     with reader, writer:
-        writer.write(f"{question} [y/N]: ")
+        writer.write(f"{prompt}: ")
         writer.flush()
-        return reader.readline().strip().lower() in YES
+        return reader.readline().strip()

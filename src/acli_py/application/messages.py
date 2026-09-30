@@ -107,16 +107,3 @@ class CommentOnIssue(Command[str]):
 
     key: str
     body: str
-
-
-@command
-@dataclass(frozen=True)
-class CreateIssue(Command[str]):
-    """Create an issue; returns its key."""
-
-    project: str
-    issue_type: str
-    summary: str
-    description: str = ""
-    assign_to_me: bool = False
-    labels: tuple[str, ...] = ()
