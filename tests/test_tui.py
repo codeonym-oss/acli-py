@@ -20,6 +20,7 @@ from acli_py.infrastructure.storage import History, Views
 from acli_py.presentation.tui.app import IssueBrowser, with_order
 from acli_py.presentation.tui.screens import (
     ActivityScreen,
+    ConfirmScreen,
     CreateScreen,
     HelpScreen,
     PickScreen,
@@ -239,6 +240,9 @@ def test_transition_assign_and_comment(site, fake, tmp_path):
         await type_text(pilot, "fin")
         assert [c.value for c in picker.shown] == ["Done"]
         await pilot.press("enter")
+        question = await screen_of(pilot, app, ConfirmScreen)
+        assert question.question == "Move DEMO-1 to Done?"
+        await pilot.press("y")
         await settle(pilot, app)
         row = app.rows[0]
         assert row["fields"]["status"]["name"] == "Done"
@@ -287,7 +291,13 @@ def test_bulk_actions_on_marked_issues(site, fake, tmp_path):
         await pilot.press("t")
         picker = await screen_of(pilot, app, PickScreen)
         assert {c.value for c in picker.shown} == {"In Progress", "Done"}
-        await pilot.press("escape")
+        await type_text(pilot, "done")
+        await pilot.press("enter")
+        question = await screen_of(pilot, app, ConfirmScreen)
+        assert question.question == "Move 2 issues (DEMO-1, DEMO-2) to Done?"
+        await pilot.press("n")  # asked once for both, and declined: nothing moves
+        await settle(pilot, app)
+        assert not isinstance(app.screen, ConfirmScreen)
         await pilot.press("x")
         assert app.marked == []
 
@@ -298,6 +308,7 @@ def test_bulk_actions_on_marked_issues(site, fake, tmp_path):
         assert "triage" in fields["labels"]
         assert "web" not in fields["labels"]
         assert fields["priority"]["name"] == "High"
+        assert fields["status"]["name"] != "Done"
     assert site.issues["DEMO-3"]["fields"]["assignee"] is None
 
 

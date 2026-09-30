@@ -297,21 +297,40 @@ def test_assign_and_unassign(site):
 
 
 def test_transition_by_status_or_transition_name(site):
-    out = ok("issue", "transition", "DEMO-1", "--to", "in progress", "-m", "Starting")
+    out = ok("issue", "transition", "DEMO-1", "--to", "in progress", "-m", "Starting", "-y")
     assert "moved to In Progress" in out
     assert site.issues["DEMO-1"]["fields"]["status"]["name"] == "In Progress"
     assert to_text(site.issues["DEMO-1"]["comments"][-1]["body"]) == "Starting"
-    ok("issue", "move", "DEMO-1", "--to", "Finish", "--resolution", "Done")
+    ok("issue", "move", "DEMO-1", "--to", "Finish", "--resolution", "Done", "--yes")
     assert site.issues["DEMO-1"]["fields"]["status"]["name"] == "Done"
     assert site.issues["DEMO-1"]["fields"]["resolution"] == {"name": "Done"}
 
 
 def test_transition_explains_what_is_possible(site):
-    result, out = run_cli("issue", "transition", "DEMO-1", "--to", "Nowhere")
+    result, out = run_cli("issue", "transition", "DEMO-1", "--to", "Nowhere", "-y")
     assert result.exit_code == 1
     assert "Available: Start work → In Progress, Finish → Done" in out
     result, out = run_cli("issue", "transition", "DEMO-1")
     assert "Say where to" in out
+
+
+def test_transition_asks_first_and_refuses_without_a_terminal(site):
+    result, out = run_cli("issue", "transition", "DEMO-1", "DEMO-2", "--to", "Done")
+    assert result.exit_code == 1
+    assert "Move 2 issues (DEMO-1, DEMO-2) to Done? Refusing without --yes" in out
+    assert site.writes() == []
+
+
+def test_transition_is_audited(site, isolated_home):
+    ok("issue", "transition", "DEMO-1", "--to", "Done", "-y")
+    ok("issue", "transition", "DEMO-2", "--to", "Done", "-y", "--dry-run")  # not audited
+    lines = (isolated_home / "config" / "audit.jsonl").read_text().splitlines()
+    assert len(lines) == 1
+    record = json.loads(lines[0])
+    assert record["command"] == "TransitionIssue"
+    assert record["keys"] == ["DEMO-1"]
+    assert (record["before"], record["after"]) == ({"status": "To Do"}, {"status": "Done"})
+    assert record["at"].endswith("+00:00")
 
 
 def test_delete_asks_then_deletes(site):

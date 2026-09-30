@@ -23,7 +23,6 @@ from acli_py.application.messages import (
     ListProjects,
     Page,
     SearchIssues,
-    TransitionIssue,
     UpdateIssue,
     ValidateJql,
     WatchIssue,
@@ -110,16 +109,6 @@ def list_issue_types(request: ListIssueTypes, site: Site) -> list:
 
 
 # ── commands ─────────────────────────────────────────────────────────────────
-
-
-@command_handler
-def transition_issue(request: TransitionIssue, site: Site) -> str:
-    """Apply the transition, with an optional comment."""
-    body: dict[str, Any] = {"transition": {"id": request.transition_id}}
-    if request.comment:
-        body["update"] = {"comment": [{"add": {"body": adf.to_adf(request.comment)}}]}
-    site.client.post(f"{API}/issue/{request.key}/transitions", body)
-    return request.status
 
 
 @command_handler

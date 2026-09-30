@@ -1,4 +1,4 @@
-"""Modal screens: pickers, editors, the new-issue form, help and the activity log."""
+"""Modal screens: pickers, editors, confirmations, the new-issue form, help and the log."""
 
 from __future__ import annotations
 
@@ -169,6 +169,33 @@ class PromptScreen(ModalScreen[str | None]):
     def action_cancel(self) -> None:
         """Close without saving."""
         self.dismiss(None)
+
+
+class ConfirmScreen(ModalScreen[bool]):
+    """Ask before a change: y goes ahead, n or Esc does not."""
+
+    SCOPED_CSS = False
+
+    DEFAULT_CSS = MODAL_CSS
+    BINDINGS = [
+        Binding("y", "answer(True)", "Yes"),
+        Binding("n", "answer(False)", "No"),
+        Binding("escape", "answer(False)", "Cancel"),
+    ]
+
+    def __init__(self, question: str) -> None:
+        super().__init__()
+        self.question = question
+
+    def compose(self) -> ComposeResult:
+        """Lay out the question."""
+        with Vertical():
+            yield Label(self.question, classes="title")
+            yield Label("y goes ahead · n or Esc cancels", classes="hint")
+
+    def action_answer(self, yes: bool) -> None:
+        """Close with the answer."""
+        self.dismiss(yes)
 
 
 class TextScreen(ModalScreen[str | None]):

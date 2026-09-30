@@ -21,6 +21,8 @@ from textual.containers import Horizontal, VerticalScroll
 from textual.widgets import DataTable, Footer, Markdown, OptionList, Static
 from textual.widgets.option_list import Option
 
+from acli_py.application.changes import Change, Declined
+from acli_py.application.commands.transition_issue.command import TransitionIssue
 from acli_py.application.messages import (
     AssignIssue,
     CommentOnIssue,
@@ -28,13 +30,11 @@ from acli_py.application.messages import (
     CreateIssue,
     FindAssignees,
     GetTransitions,
-    IssueChanged,
     ListFilters,
     ListIssueTypes,
     ListPriorities,
     ListProjects,
     SearchIssues,
-    TransitionIssue,
     UpdateIssue,
     ValidateJql,
     WatchIssue,
@@ -51,6 +51,7 @@ from acli_py.presentation.output import dig
 from acli_py.presentation.tui.screens import (
     ActivityScreen,
     Choice,
+    ConfirmScreen,
     CreateScreen,
     HelpScreen,
     PickScreen,
@@ -71,6 +72,7 @@ if TYPE_CHECKING:
     from textual.screen import Screen
 
     from acli_py.application.bus import Bus
+    from acli_py.application.events.issue_changed.event import IssueChanged
 
 FALLBACK_WHERE = "updated >= -30d"  # Jira refuses a search with no condition at all
 SORTS = [
@@ -96,6 +98,17 @@ COLUMNS = (
     ("Age", "updated", 4),
     ("Summary", SUMMARY, None),
 )
+
+
+class AskInModal:
+    """The TUI's way to ask before a change: a y/n modal over the screen."""
+
+    def __init__(self, app: App[Any]) -> None:
+        self.app = app
+
+    async def confirm(self, change: Change) -> bool:
+        """Show the change and wait for the answer (commands are sent from workers)."""
+        return bool(await self.app.push_screen_wait(ConfirmScreen(f"{change}?")))
 
 
 class IssueBrowser(App[None]):
@@ -176,6 +189,7 @@ class IssueBrowser(App[None]):
         self.view_queries: list[str | None] = []
         self.site.client.on_plan = self._planned_from_thread
         bus.listeners.append(self._changed)
+        bus.confirm.confirmer = AskInModal(self)
         bus.activity.listeners.append(self._show_busy)
 
     # ── layout ───────────────────────────────────────────────────────────────
@@ -504,14 +518,27 @@ class IssueBrowser(App[None]):
         key = self.current_key()
         return [key] if key else []
 
-    async def _each(self, keys: list[str], make: Any, done: str) -> None:
-        """Send one command per key, then say how it went."""
+    async def _each(
+        self, keys: list[str], make: Any, done: str, change: Change | None = None
+    ) -> None:
+        """Send one command per key, then say how it went.
+
+        With a `change` covering them all, ask once first rather than once per issue.
+        """
         failed = []
-        for key in keys:
-            try:
-                await self.bus.send(make(key))
-            except ERRORS as error:
-                failed.append(f"{key}: {error}")
+        try:
+            if change is not None:
+                await self.bus.confirm.approve(change)
+            for key in keys:
+                try:
+                    await self.bus.send(make(key))
+                except ERRORS as error:
+                    failed.append(f"{key}: {error}")
+        except Declined:
+            return
+        finally:
+            if change is not None:
+                self.bus.confirm.forget(change)
         if failed:
             self.notify("\n".join(failed), title="Failed", severity="error", timeout=10)
         ok = len(keys) - len(failed)
@@ -563,12 +590,11 @@ class IssueBrowser(App[None]):
         target = await self.push_screen_wait(PickScreen(title, choices))
         if not target:
             return
-        by_key = {
-            key: next(t for t in found if dig(t, "to", "name") == target)
-            for key, found in zip(keys, options, strict=True)
-        }
         await self._each(
-            keys, lambda k: TransitionIssue(k, str(by_key[k]["id"]), target), f"moved to {target}"
+            keys,
+            lambda k: TransitionIssue(k, target),
+            f"moved to {target}",
+            Change("Move", tuple(keys), f"to {target}"),
         )
 
     @work(group="action")

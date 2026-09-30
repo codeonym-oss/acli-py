@@ -187,12 +187,16 @@ acli-py issue assign --jql 'assignee = "old@example.com"' --to new@example.com -
 
 Move issues to another status (alias: move).
 
+Asks first, naming the issues and the status; --yes skips the question, and
+without a terminal to ask on it refuses unless given. Each move is kept in the audit log.
+
 ```text
 acli-py issue transition [KEYS] [OPTIONS]
 ```
 
 ```sh
 acli-py issue transition DEMO-1 --to Done -m "Shipped in 2.4"
+acli-py issue move --jql 'sprint in openSprints()' --to 'In Review' --yes
 ```
 
 | Option | Default | Description |

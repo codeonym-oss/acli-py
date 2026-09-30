@@ -1,15 +1,16 @@
 """What the interactive front ends can ask for (queries) and do (commands).
 
 Queries only read, so their answers can be cached; commands change Jira, and each successful
-one announces an `IssueChanged` event, which drops the cache and tells the screens to refresh.
+one announces an `IssueChanged` event (`events/issue_changed/`), which drops the cache and
+tells the screens to refresh.
 Messages are frozen dataclasses: they are the cache keys.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
-from mediary.cqrs import Command, Query, command, event, query
+from mediary.cqrs import Command, Query, command, query
 
 LIST_FIELDS = ("summary", "status", "issuetype", "priority", "assignee", "labels", "updated")
 
@@ -101,17 +102,6 @@ class ListIssueTypes(Query[list]):
 
 @command
 @dataclass(frozen=True)
-class TransitionIssue(Command[str]):
-    """Move an issue through a transition; returns the new status name."""
-
-    key: str
-    transition_id: str
-    status: str = ""
-    comment: str = ""
-
-
-@command
-@dataclass(frozen=True)
 class AssignIssue(Command[None]):
     """Assign an issue (account_id None: unassign)."""
 
@@ -160,17 +150,3 @@ class WatchIssue(Command[None]):
 
     key: str
     watch: bool = True
-
-
-# ── events ───────────────────────────────────────────────────────────────────
-
-
-@event
-@dataclass(frozen=True)
-class IssueChanged:
-    """A command changed an issue (or, in a dry run, would have)."""
-
-    key: str
-    what: str
-    dry_run: bool = False
-    extra: dict = field(default_factory=dict, compare=False, hash=False)
