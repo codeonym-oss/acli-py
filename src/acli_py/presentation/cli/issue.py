@@ -1,4 +1,4 @@
-"""`acli-py issue`: view, search, create, edit, move, assign, clone, archive and delete issues."""
+"""`acli-py issue`: view, search, create, edit, move, assign, watch, clone, archive, delete."""
 
 from __future__ import annotations
 
@@ -13,7 +13,10 @@ from rich.markup import escape
 from rich.table import Table
 
 from acli_py.application.bulk import CONCURRENCY
+from acli_py.application.commands.assign_issue.command import AssignIssue
+from acli_py.application.commands.edit_issue.command import EditIssue
 from acli_py.application.commands.transition_issue.command import TransitionIssue
+from acli_py.application.commands.watch_issue.command import WatchIssue
 from acli_py.application.queries.get_issue.query import GetIssue
 from acli_py.bootstrap import build_catalog
 from acli_py.domain import adf
@@ -621,12 +624,20 @@ def edit(
     template: Annotated[
         bool, typer.Option("--template", help="Print an example --from-json file and exit.")
     ] = False,
+    limit: BulkLimitOpt = None,
+    concurrency: ConcurrencyOpt = CONCURRENCY,
+    keep_going: KeepGoingOpt = False,
+    force: ForceOpt = False,
     yes: YesOpt = False,
-    ignore_errors: IgnoreErrorsOpt = False,
     dry_run: DryRunOpt = False,
     as_json: JsonOpt = False,
 ) -> None:
     """Change fields on one or many issues.
+
+    Pick the issues by key, [bold]-[/] (stdin), [bold]--jql[/], [bold]--filter[/] or
+    [bold]--from-file[/]. Shows what changes (each issue's value now and after, when one field
+    changes), then asks once; [bold]--yes[/] skips the question. The fields' old values are
+    kept in the audit log. Exits 0 when all were edited, 1 when some failed, 2 when nothing ran.
 
     [dim]acli-py issue edit DEMO-4 -s "New title" --add-label urgent
     acli-py issue edit --jql 'project = DEMO AND labels = old' --remove-label old -y[/]
@@ -635,7 +646,10 @@ def edit(
         output.print_json(EDIT_TEMPLATE)
         return
     session = connect(dry_run)
-    picked = resolve.targets(session.client, keys, jql, saved_filter, from_file)
+    picked = pick_issues(session, keys, jql, saved_filter, from_file, limit=limit, force=force)
+    if not picked:
+        output.info("No issues match; nothing to edit.")
+        return
     wanted = IssueInput(
         summary=summary,
         description=description_of(description, description_file),
@@ -656,41 +670,38 @@ def edit(
         wanted.summary, wanted.description = _edit_issue_text(
             session, current.get("summary", ""), adf.to_text(current.get("description"))
         )
-    payload: dict[str, Any] = {"fields": issue_fields.build(session.client, wanted, me=session.me)}
+    fields = issue_fields.build(session.client, wanted, me=session.me)
+    update: dict[str, list] = {}
     if from_json:
         extra = json.loads(from_json.read_text(encoding="utf-8"))
-        payload["fields"].update(extra.get("fields", {}))
-        payload["update"] = extra.get("update", {})
-    updates = payload.setdefault("update", {})
+        fields.update(extra.get("fields", {}))
+        update.update(extra.get("update", {}))
     label_ops = [{"add": v} for v in flat(add_label) or []]
     label_ops += [{"remove": v} for v in flat(remove_label) or []]
     if label_ops:
-        updates["labels"] = [*updates.get("labels", []), *label_ops]
-    if not updates:
-        del payload["update"]
-    assign_to = (
-        resolve.account_id(session.client, assignee, session.me) if assignee is not None else ...
-    )
-    if not payload.get("fields") and "update" not in payload and assign_to is ...:
+        update["labels"] = [*update.get("labels", []), *label_ops]
+    if assignee is not None:
+        fields["assignee"] = _assignee(session, assignee)
+    if not fields and not update:
         raise fail("Nothing to change. See [bold]acli-py issue edit --help[/].")
-    if len(picked) > 1:
-        confirm(f"Edit {plural(len(picked), 'issue')}?", yes, session)
-
-    def one(key: str) -> None:
-        if payload.get("fields") or "update" in payload:
-            session.client.put(
-                f"{API}/issue/{key}", payload, notifyUsers=None if notify else "false"
-            )
-        if assign_to is not ...:
-            session.client.put(f"{API}/issue/{key}/assignee", {"accountId": assign_to})
-
-    run_bulk(
-        picked,
-        one,
+    run_many(
+        session,
+        [EditIssue(key, fields, update, notify) for key in picked],
         done="would be edited" if session.dry_run else "edited",
-        ignore_errors=ignore_errors,
+        yes=yes,
+        concurrency=concurrency,
+        keep_going=keep_going,
+        force=force,
         as_json=as_json,
     )
+
+
+def _assignee(session: Session, who: str) -> dict | None:
+    """Return the assignee field for `who`, with the name questions show (never sent)."""
+    account = resolve.account_id(session.client, who, session.me)
+    if account is None:
+        return None
+    return {"accountId": account, "displayName": who}
 
 
 # ── assign ───────────────────────────────────────────────────────────────────
@@ -708,12 +719,18 @@ def assign(
     jql: JqlOpt = None,
     saved_filter: FilterOpt = None,
     from_file: FromFileOpt = None,
+    limit: BulkLimitOpt = None,
+    concurrency: ConcurrencyOpt = CONCURRENCY,
+    keep_going: KeepGoingOpt = False,
+    force: ForceOpt = False,
     yes: YesOpt = False,
-    ignore_errors: IgnoreErrorsOpt = False,
     dry_run: DryRunOpt = False,
     as_json: JsonOpt = False,
 ) -> None:
     """Assign issues to someone, to the project default, or to nobody.
+
+    Shows each issue's assignee now and after, then asks once; [bold]--yes[/] skips the
+    question. The previous assignees are kept in the audit log.
 
     [dim]acli-py issue assign DEMO-1 DEMO-2 --to @me
     acli-py issue assign --jql 'assignee = "old@example.com"' --to new@example.com -y[/]
@@ -721,18 +738,110 @@ def assign(
     if bool(to) == unassign:
         raise fail("Give exactly one of [bold]--to USER[/] and [bold]--unassign[/].")
     session = connect(dry_run)
-    picked = resolve.targets(session.client, keys, jql, saved_filter, from_file)
+    picked = pick_issues(session, keys, jql, saved_filter, from_file, limit=limit, force=force)
+    if not picked:
+        output.info("No issues match; nothing to assign.")
+        return
     who = None if unassign else resolve.account_id(session.client, to or "", session.me)
-    if len(picked) > 1:
-        confirm(f"Assign {plural(len(picked), 'issue')}?", yes, session)
-    run_bulk(
-        picked,
-        lambda key: session.client.put(f"{API}/issue/{key}/assignee", {"accountId": who}),
-        done=("would be " if session.dry_run else "")
-        + ("unassigned" if unassign else f"assigned to {escape(to or '')}"),
-        ignore_errors=ignore_errors,
+    run_many(
+        session,
+        [AssignIssue(key, who, to or "") for key in picked],
+        done=("would be " if session.dry_run else "") + ("unassigned" if unassign else "assigned"),
+        yes=yes,
+        concurrency=concurrency,
+        keep_going=keep_going,
+        force=force,
         as_json=as_json,
+        describe=None if unassign else lambda changed: f"to {escape(to or '')}",
     )
+
+
+# ── watch ────────────────────────────────────────────────────────────────────
+
+
+def _watch(watch: bool, **kwargs: Any) -> None:
+    """Make someone (you, by default) start or stop watching issues."""
+    session = connect(kwargs["dry_run"])
+    picked = pick_issues(
+        session,
+        kwargs["keys"],
+        kwargs["jql"],
+        kwargs["saved_filter"],
+        kwargs["from_file"],
+        limit=kwargs["limit"],
+        force=kwargs["force"],
+    )
+    if not picked:
+        output.info("No issues match; nothing to watch." if watch else "No issues match.")
+        return
+    user = kwargs["user"]
+    account = resolve.user(session.client, user, session.me)["accountId"]
+    name = "" if account == session.me else user
+    done = ("now watched" if watch else "no longer watched") + (
+        f" by {escape(name)}" if name else ""
+    )
+    run_many(
+        session,
+        [WatchIssue(key, account, watch, name) for key in picked],
+        done=("would be " if session.dry_run else "") + done,
+        yes=kwargs["yes"],
+        concurrency=kwargs["concurrency"],
+        keep_going=kwargs["keep_going"],
+        force=kwargs["force"],
+        as_json=kwargs["as_json"],
+    )
+
+
+UserOpt = Annotated[
+    str, typer.Option("--user", "-u", help="Email, account id, name or @me (default).")
+]
+
+
+@app.command()
+@guarded
+def watch(
+    keys: KeysArg = None,
+    user: UserOpt = "@me",
+    jql: JqlOpt = None,
+    saved_filter: FilterOpt = None,
+    from_file: FromFileOpt = None,
+    limit: BulkLimitOpt = None,
+    concurrency: ConcurrencyOpt = CONCURRENCY,
+    keep_going: KeepGoingOpt = False,
+    force: ForceOpt = False,
+    yes: YesOpt = False,
+    dry_run: DryRunOpt = False,
+    as_json: JsonOpt = False,
+) -> None:
+    """Start watching issues (you, or someone else with [bold]--user[/]).
+
+    [dim]acli-py issue watch DEMO-1 DEMO-2
+    acli-py issue search '#web is:open' --output keys | acli-py issue watch - -u bob@example.com[/]
+    """
+    _watch(True, **locals())
+
+
+@app.command()
+@guarded
+def unwatch(
+    keys: KeysArg = None,
+    user: UserOpt = "@me",
+    jql: JqlOpt = None,
+    saved_filter: FilterOpt = None,
+    from_file: FromFileOpt = None,
+    limit: BulkLimitOpt = None,
+    concurrency: ConcurrencyOpt = CONCURRENCY,
+    keep_going: KeepGoingOpt = False,
+    force: ForceOpt = False,
+    yes: YesOpt = False,
+    dry_run: DryRunOpt = False,
+    as_json: JsonOpt = False,
+) -> None:
+    """Stop watching issues (you, or someone else with [bold]--user[/]).
+
+    [dim]acli-py issue unwatch --jql 'watcher = currentUser() AND statusCategory = Done' -y[/]
+    """
+    _watch(False, **locals())
 
 
 # ── transition ───────────────────────────────────────────────────────────────

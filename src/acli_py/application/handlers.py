@@ -11,7 +11,6 @@ from typing import Any
 from mediary.cqrs import command_handler, query_handler
 
 from acli_py.application.messages import (
-    AssignIssue,
     CommentOnIssue,
     CountIssues,
     CreateIssue,
@@ -23,9 +22,7 @@ from acli_py.application.messages import (
     ListProjects,
     Page,
     SearchIssues,
-    UpdateIssue,
     ValidateJql,
-    WatchIssue,
 )
 from acli_py.application.site import Site
 from acli_py.domain import adf
@@ -112,32 +109,12 @@ def list_issue_types(request: ListIssueTypes, site: Site) -> list:
 
 
 @command_handler
-def assign_issue(request: AssignIssue, site: Site) -> None:
-    """Set or clear the assignee."""
-    site.client.put(f"{API}/issue/{request.key}/assignee", {"accountId": request.account_id})
-
-
-@command_handler
 def comment_on_issue(request: CommentOnIssue, site: Site) -> str:
     """Add the comment."""
     created = site.client.post(
         f"{API}/issue/{request.key}/comment", {"body": adf.to_adf(request.body)}
     )
     return str((created or {}).get("id", ""))
-
-
-@command_handler
-def update_issue(request: UpdateIssue, site: Site) -> None:
-    """Set fields and change labels in one edit."""
-    body: dict[str, Any] = {}
-    if request.fields:
-        body["fields"] = dict(request.fields)
-    labels = [{"add": label} for label in request.add_labels]
-    labels += [{"remove": label} for label in request.remove_labels]
-    if labels:
-        body["update"] = {"labels": labels}
-    if body:
-        site.client.put(f"{API}/issue/{request.key}", body)
 
 
 @command_handler
@@ -156,12 +133,3 @@ def create_issue(request: CreateIssue, site: Site) -> str:
         fields["labels"] = list(request.labels)
     created = site.client.post(f"{API}/issue", {"fields": fields})
     return str(created["key"])
-
-
-@command_handler
-def watch_issue(request: WatchIssue, site: Site) -> None:
-    """Add or remove the user as a watcher."""
-    if request.watch:
-        site.client.post(f"{API}/issue/{request.key}/watchers", site.me)
-    else:
-        site.client.delete(f"{API}/issue/{request.key}/watchers", accountId=site.me)

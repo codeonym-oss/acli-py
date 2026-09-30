@@ -44,6 +44,7 @@ VALUE_SOURCES = {
     "assignee": "assignee",
     "reporter": "assignee",
     "who": "assignee",
+    "user": "assignee",
     "owner": "assignee",
     "lead": "assignee",
 }

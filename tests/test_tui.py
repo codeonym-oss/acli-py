@@ -75,6 +75,15 @@ async def screen_of(pilot, app, kind, seconds: float = 3.0):
     raise AssertionError(f"{kind.__name__} did not open (on {type(app.screen).__name__})")
 
 
+async def agree(pilot, app, question: str | None = None) -> None:
+    """Answer yes to the confirmation the last action asked, checking its question."""
+    asked = await screen_of(pilot, app, ConfirmScreen)
+    if question is not None:
+        assert asked.question == question
+    await pilot.press("y")
+    await settle(pilot, app)
+
+
 async def type_text(pilot, text: str) -> None:
     for char in text:
         await pilot.press({" ": "space", "@": "at", "#": "number_sign", ":": "colon",
@@ -253,7 +262,7 @@ def test_transition_assign_and_comment(site, fake, tmp_path):
         await settle(pilot, app)
         assert [c.label for c in picker.shown] == ["Carol Jensen"]
         await pilot.press("enter")
-        await settle(pilot, app)
+        await agree(pilot, app, "Assign DEMO-1 to Carol Jensen?")
 
         await pilot.press("c")
         editor = await screen_of(pilot, app, TextScreen)
@@ -276,18 +285,24 @@ def test_bulk_actions_on_marked_issues(site, fake, tmp_path):
         assert app.marked == ["DEMO-1", "DEMO-2"]
         assert "2 marked" in str(app.query_one("#status").render())
         await pilot.press("A")
-        await settle(pilot, app)
+        await agree(pilot, app, "Assign 2 issues (DEMO-1, DEMO-2) to me?")
         await pilot.press("l")
         prompt = await screen_of(pilot, app, PromptScreen)
         prompt.query_one(Input).value = "triage -web"
         await pilot.press("enter")
-        await settle(pilot, app)
+        question = await screen_of(pilot, app, ConfirmScreen)
+        assert question.question == "Edit 2 issues (DEMO-1, DEMO-2): labels +triage −web?"
+        assert [(r.key, r.now, r.after) for r in question.preview] == [
+            ("DEMO-1", "web", "triage"),
+            ("DEMO-2", "docs", "docs, triage"),
+        ]
+        await agree(pilot, app)
         await pilot.press("p")
         picker = await screen_of(pilot, app, PickScreen)
         await type_text(pilot, "high")
         assert [c.value for c in picker.shown] == ["High"]
         await pilot.press("enter")
-        await settle(pilot, app)
+        await agree(pilot, app, "Edit 2 issues (DEMO-1, DEMO-2): priority → High?")
         await pilot.press("t")
         picker = await screen_of(pilot, app, PickScreen)
         assert {c.value for c in picker.shown} == {"In Progress", "Done"}
@@ -323,7 +338,7 @@ def test_edit_summary_description_and_watch(site, fake, tmp_path):
         assert prompt.query_one(Input).value == "Login fails on Safari"
         prompt.query_one(Input).value = "Login fails on Safari 18"
         await pilot.press("enter")
-        await settle(pilot, app)
+        await agree(pilot, app, "Edit DEMO-1: summary → Login fails on Safari 18?")
         assert app.rows[0]["fields"]["summary"] == "Login fails on Safari 18"
 
         await pilot.press("d")
@@ -331,16 +346,16 @@ def test_edit_summary_description_and_watch(site, fake, tmp_path):
         assert "Steps to reproduce." in editor.query_one(TextArea).text
         editor.query_one(TextArea).text = "New *steps*."
         await pilot.press("ctrl+s")
-        await settle(pilot, app)
+        await agree(pilot, app, "Edit DEMO-1: description → New *steps*.?")
 
-        await pilot.press("w")
-        await settle(pilot, app)
+        await pilot.press("w")  # Alice watches DEMO-1: this stops it
+        await agree(pilot, app, "Stop watching DEMO-1?")
 
     drive(fake, tmp_path, scenario)
     issue = site.issues["DEMO-1"]
     assert issue["fields"]["summary"] == "Login fails on Safari 18"
     assert issue["fields"]["description"]["content"][0]["content"][1]["text"] == "steps"
-    assert any(path.endswith("/watchers") for _, path, _ in site.writes())
+    assert issue["watchers"] == []
 
 
 def test_new_issue(site, fake, tmp_path):
@@ -390,11 +405,12 @@ def test_failures_are_shown_not_raised(site, fake, tmp_path):
         await pilot.press("A")
         await settle(pilot, app)
         assert site.writes() == []
-        await pilot.press("A")  # now it works, but the assignment fails
-        await settle(pilot, app)
+        await pilot.press("A")  # now it works
+        await agree(pilot, app)
+        await pilot.press("A")  # but this assignment fails
+        await screen_of(pilot, app, ConfirmScreen)
         site.fail_next.append(400)
-        await pilot.press("A")
-        await settle(pilot, app)
+        await agree(pilot, app)
         assert app.bus.activity.entries[-1].error
 
     drive(fake, tmp_path, scenario)

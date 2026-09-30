@@ -14,7 +14,6 @@ from acli_py.application.behaviors import Confirm
 from acli_py.application.bulk import SAFETY_CAP, Bulk, TooManyError, change_of
 from acli_py.application.changes import AuditRecord, Change, Changed, Declined, PreviewRow
 from acli_py.application.commands.transition_issue.command import TransitionIssue
-from acli_py.application.messages import AssignIssue
 from acli_py.application.site import Site
 from acli_py.bootstrap import build_bus
 from acli_py.infrastructure.jira.client import JiraClient
@@ -123,6 +122,13 @@ class Touch:
         return Change("Touch", (self.key,))
 
 
+@dataclass(frozen=True)
+class Untold:
+    """A command that doesn't say what it changes."""
+
+    key: str
+
+
 def stub_bulk(send: Any, *, audit: Kept | None = None) -> Bulk:
     confirm = Confirm(None, lambda: False, assume_yes=True)
     return Bulk(send, confirm, AuditTrail(audit or Kept()), lambda: False)
@@ -161,7 +167,7 @@ def test_change_of_merges_or_gives_up():
     assert change_of(same) == Change("Move", ("DEMO-1", "DEMO-2"), "to Done")
     mixed = [TransitionIssue("DEMO-1", "Done"), TransitionIssue("DEMO-2", "To Do")]
     assert change_of(mixed) == Change("Move", ("DEMO-1", "DEMO-2"))
-    assert change_of([AssignIssue("DEMO-1", None, "nobody")]) is None
+    assert change_of([Untold("DEMO-1")]) is None
     assert change_of([]) is None
 
 
@@ -171,7 +177,7 @@ def test_commands_that_do_not_say_run_without_a_batch():
     async def send(command: Any) -> None:
         sent.append(command)
 
-    commands = [AssignIssue("DEMO-1", None, "nobody"), AssignIssue("DEMO-2", None, "nobody")]
+    commands = [Untold("DEMO-1"), Untold("DEMO-2")]
     report = asyncio.run(stub_bulk(send).run(commands))
     assert (report.exit_code, sent) == (0, commands)
 

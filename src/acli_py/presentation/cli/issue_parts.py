@@ -12,6 +12,7 @@ import typer
 from rich.markdown import Markdown
 from rich.markup import escape
 
+from acli_py.application.commands.watch_issue.command import WatchIssue
 from acli_py.domain import adf
 from acli_py.infrastructure.jira import resolve
 from acli_py.infrastructure.jira.client import API
@@ -37,6 +38,7 @@ from acli_py.presentation.cli.common import (
     guarded,
     limit_of,
     run_bulk,
+    run_many,
 )
 from acli_py.presentation.output import Column, dig
 
@@ -551,14 +553,14 @@ def watcher_list(key: KeyArg, as_json: JsonOpt = False, out: OutputOpt = None) -
 def watcher_add(
     key: KeyArg,
     who: Annotated[str, typer.Argument(help="Email, account id, name or @me.")] = "@me",
+    yes: YesOpt = False,
     dry_run: DryRunOpt = False,
 ) -> None:
-    """Start watching an issue (you, by default, or someone else)."""
-    session = connect(dry_run)
-    account = resolve.user(session.client, who, session.me)["accountId"]
-    session.client.post(f"{API}/issue/{key.upper()}/watchers", account)
-    if not session.dry_run:
-        output.success(f"{escape(who)} now watches {key.upper()}")
+    """Start watching an issue (you, by default, or someone else).
+
+    For many issues at once, see [bold]acli-py issue watch[/].
+    """
+    _watch(key, who, True, yes, dry_run)
 
 
 @watcher_app.command("remove")
@@ -566,14 +568,29 @@ def watcher_add(
 def watcher_remove(
     key: KeyArg,
     who: Annotated[str, typer.Argument(help="Email, account id, name or @me.")] = "@me",
+    yes: YesOpt = False,
     dry_run: DryRunOpt = False,
 ) -> None:
-    """Stop someone (you, by default) watching an issue."""
+    """Stop someone (you, by default) watching an issue.
+
+    For many issues at once, see [bold]acli-py issue unwatch[/].
+    """
+    _watch(key, who, False, yes, dry_run)
+
+
+def _watch(key: str, who: str, watch: bool, yes: bool, dry_run: bool) -> None:
     session = connect(dry_run)
     account = resolve.user(session.client, who, session.me)["accountId"]
-    session.client.delete(f"{API}/issue/{key.upper()}/watchers", accountId=account)
-    if not session.dry_run:
-        output.success(f"{escape(who)} no longer watches {key.upper()}")
+    name = "" if account == session.me else who
+    done = "now watched" if watch else "no longer watched"
+    run_many(
+        session,
+        [WatchIssue(key, account, watch, name)],
+        done=("would be " if session.dry_run else "")
+        + done
+        + (f" by {escape(name)}" if name else ""),
+        yes=yes,
+    )
 
 
 # ── worklogs ─────────────────────────────────────────────────────────────────

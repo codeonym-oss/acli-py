@@ -145,10 +145,11 @@ def test_attachment_upload_dry_run_names_the_file(site, tmp_path):
 
 
 def test_watchers(site):
-    ok("issue", "watcher", "add", "DEMO-1", "bob@example.com")
+    out = ok("issue", "watcher", "add", "DEMO-1", "bob@example.com", "-y")
+    assert "DEMO-1 now watched by bob@example.com" in out
     assert fake_jira.BOB in site.issues["DEMO-1"]["watchers"]
     assert "Bob Jensen" in ok("issue", "watcher", "list", "DEMO-1")
-    ok("issue", "watcher", "remove", "DEMO-1")
+    assert "DEMO-1 no longer watched" in ok("issue", "watcher", "remove", "DEMO-1", "-y")
     assert site.issues["DEMO-1"]["watchers"] == [fake_jira.BOB]
 
 

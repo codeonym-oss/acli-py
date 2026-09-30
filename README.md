@@ -83,6 +83,7 @@ Every command has `--help` with examples. The whole tree:
 | `acli-py issue create` | One issue from options, `--editor` or `--from-file`, or many from `--from-json` / `--from-csv` (`--template` prints an example). |
 | `acli-py issue edit KEYS…` | Summary, description, type, priority, labels (`--add-label`, `--remove-label`), components, versions, parent, due date, any `-F` field. |
 | `acli-py issue assign KEYS… --to USER` | Assign to `@me`, a person, `default`, or `--unassign`. |
+| `acli-py issue watch \| unwatch KEYS…` | Start or stop watching issues, yourself or `--user` someone else. |
 | `acli-py issue transition KEYS… --to STATUS` | Move by status or transition name, with `-m` comment, `--resolution` and fields. Alias `move`. `transitions KEY` lists options. |
 | `acli-py issue clone KEYS…` | Copy issues, in place, `--to-project`, or `--to-site` another account's site, linked to the original. |
 | `acli-py issue archive \| unarchive \| delete KEYS…` | Archive, restore, or permanently delete (`--with-subtasks`). |
@@ -145,10 +146,11 @@ See [the pipes guide](docs/guide/pipes.md) for more recipes.
 
 ## Asking first, and the audit log
 
-`issue transition` says what it is about to do and asks first
-(`Move 2 issues (DEMO-1, DEMO-2) to Done? [y/N]`), once for the whole batch, after a preview
-of each issue's status now and after; the other commands that change issues follow as they
-move onto the same bus. `--yes` skips the question; mid-pipe, they ask on the terminal
+`issue transition`, `edit`, `assign`, `watch` and `unwatch` say what they are about to do and
+ask first (`Move 2 issues (DEMO-1, DEMO-2) to Done? [y/N]`,
+`Edit DEMO-4: priority → High, labels +urgent? [y/N]`), once for the whole batch, after a
+preview of each issue's value now and after; the other commands that change issues follow as
+they move onto the same bus. `--yes` skips the question; mid-pipe, they ask on the terminal
 (`/dev/tty`), and without any terminal to ask on (in a script) they refuse unless given `--yes`. The TUI asks in a dialog.
 
 Over many issues it runs a few at a time (`--concurrency`), stops at the first failure unless
