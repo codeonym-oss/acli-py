@@ -1,7 +1,7 @@
 """Turn what people type into what Jira's API wants.
 
 People type `@me`, an email, part of a name, "Story Points=5", "In Progress" or "blocks";
-Jira wants account ids, `customfield_10016: 5.0`, transition id 31 and a link type with a
+Jira wants account ids, `customfield_10016: 5.0` and a link type with a
 direction. Everything here raises `ResolveError` with a message that says what would work.
 """
 
@@ -246,24 +246,6 @@ def field_values(
 
 
 # ── workflow and links ───────────────────────────────────────────────────────
-
-
-def transition(client: JiraClient, key: str, wanted: str) -> dict:
-    """Return the transition on `key` whose name or target status matches `wanted`."""
-    available = client.transitions(key)
-    lowered = wanted.strip().lower()
-    for pick in (
-        lambda t: t.get("id") == wanted.strip(),
-        lambda t: t.get("to", {}).get("name", "").lower() == lowered,
-        lambda t: t.get("name", "").lower() == lowered,
-    ):
-        matches = [t for t in available if pick(t)]
-        if len(matches) >= 1:
-            return matches[0]
-    names = ", ".join(f"{t.get('name')} → {t.get('to', {}).get('name', '?')}" for t in available)
-    raise ResolveError(
-        f"{key} cannot move to {wanted!r} from its current status. Available: {names or 'none'}"
-    )
 
 
 def link_type(client: JiraClient, wanted: str) -> tuple[dict, bool]:

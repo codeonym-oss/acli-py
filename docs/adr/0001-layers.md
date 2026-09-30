@@ -90,12 +90,40 @@ nothing above them digs through raw dicts.
    `view.to_rich()` or `view.to_json()`; the TUI's detail pane shows `view.to_markdown()`.
 6. `tests/test_get_issue.py` tests each layer; `tests/test_issue.py` runs the command.
 
+`application/commands/transition_issue/` is the one to copy for a command:
+
+1. `domain/workflow.py`: `Transition`, and `pick`, which finds the transition a user means
+   by id, target status or name.
+2. `application/ports.py`: `Workflow` (status, transitions, transition).
+3. `infrastructure/jira/workflow.py`: `JiraWorkflow`, the adapter.
+4. `application/commands/transition_issue/`: `TransitionIssue` declares its `Change`
+   ("Move DEMO-1 to Done"); its handler returns what `Changed` (the status before and after).
+5. `application/events/issue_changed/`: `IssueChanged` carries the before and after; its
+   subscribers drop the query cache, append to the audit log and tell the TUI.
+6. Front ends provide the `Confirmer` port: a y/N question on the CLI and in the shell, a
+   modal in the TUI.
+
+### Asking before a change
+
+Every command that changes Jira has a `change()` method returning a `Change` (the `Write`
+protocol in `application/changes.py`). The `Confirm` behavior shows it and runs the command
+only if the user agrees. It never asks in a dry run or with `--yes`. With no terminal to ask
+on, the CLI refuses unless given `--yes`. A front end running one change over many issues
+approves the whole change first (`bus.confirm.approve` or `batch`), so the user is asked once,
+not once per issue.
+
+### The audit log
+
+Each `IssueChanged` that was not a dry run is appended to `audit.jsonl` in the config
+directory, one JSON object per line: `at`, `command`, `keys`, `before`, `after`. Undo (#19)
+reads it back. A log that cannot be written never fails the change it records.
+
 ### mediary is the only way to reach Jira
 
 Every front end, the command line included, sends messages through the same bus
 (`acli_py.application.bus.Bus`, built by `acli_py.bootstrap.build_bus`). Behaviors wrap every
-message, so cross-cutting rules live in one place: activity tracking, caching, events after a
-change, and soon confirmation, bulk runs and the audit log. A new command gets them all by
+message, so cross-cutting rules live in one place: activity tracking, caching, confirmation,
+events after a change and the audit log (and soon bulk runs). A new command gets them all by
 being a command.
 
 ## Where the existing modules went
@@ -112,6 +140,9 @@ being a command.
 | `application/ports.py` | application | What use cases need from outside, as protocols |
 | `domain/issue.py`, `domain/values.py` | domain | An issue as typed objects; how Jira's values read |
 | `infrastructure/jira/issues.py` | infrastructure | `JiraIssues`, the `IssueReader` port over the client |
+| `domain/workflow.py`, `infrastructure/jira/workflow.py` | domain, infrastructure | Transitions, and `JiraWorkflow`, the `Workflow` port |
+| `application/changes.py` | application | `Change`, `Changed`, `Declined`: what commands change |
+| `infrastructure/audit.py` | infrastructure | `AuditFile`, the `AuditLog` port as JSON lines |
 | `application/messages.py`, `handlers.py`, `site.py` | application | The use cases written before this layout |
 | `presentation/cli/`, `shell.py`, `tui/`, `output.py` | presentation | The front ends |
 

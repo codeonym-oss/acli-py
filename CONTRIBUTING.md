@@ -137,48 +137,57 @@ there. Never add new ones.
 
 ### Adding a command
 
-A command changes Jira. Give it its own folder, named after what it does:
+A command changes Jira. Give it its own folder, named after what it does.
+`application/commands/transition_issue/` is the worked example to copy:
 
 ```text
-application/commands/watch_issue/
+application/commands/transition_issue/
   __init__.py
-  command.py    # the message
-  handler.py    # what it does
+  command.py    # TransitionIssue(key, to, comment, fields), and the Change it declares
+  handler.py    # moves the issue through the Workflow port, returns what Changed
 ```
 
 ```python
 # command.py
-from dataclasses import dataclass
-
-from mediary.cqrs import Command, command
-
-
 @command
 @dataclass(frozen=True)
-class WatchIssue(Command[None]):
-    """Start or stop watching an issue."""
+class TransitionIssue(Command[Changed]):
+    """Move an issue to another status."""
 
     key: str
-    watch: bool = True
+    to: str
+
+    def change(self) -> Change:
+        """Return what this command changes."""
+        return Change("Move", (self.key.strip().upper(),), f"to {self.to.strip()}")
 ```
 
 ```python
 # handler.py
-from mediary.cqrs import command_handler
-
-from acli_py.application.commands.watch_issue.command import WatchIssue
-
-
 @command_handler
-def watch_issue(command: WatchIssue, site: Site) -> None:
-    """Add or remove the user as a watcher."""
+def transition_issue(request: TransitionIssue, workflow: Workflow) -> Changed:
+    """Pick the transition leading where asked, apply it, and say what the status was."""
+    key = request.key.strip().upper()
+    before = workflow.status(key)
+    chosen = pick(workflow.transitions(key), request.to, key)
+    workflow.transition(key, chosen.id, request.fields, request.comment)
+    return Changed(key, {"status": before.name if before else None}, {"status": chosen.target})
 ```
+
+- **`change()`** says what the command will do. The `Confirm` behavior shows it and asks
+  before the handler runs (not in a dry run, not with `--yes`). A front end applying one change
+  to many issues calls `session.approve(change, yes)` (CLI) or `bus.confirm.batch(change)`
+  first, so the user is asked once.
+- **`Changed`** says what the handler did: the fields it touched, before and after. It is
+  published as `IssueChanged`, and the audit log keeps it.
+- The handler depends on **ports**, never on the Jira client; see "Adding a query".
 
 The bus finds the handler by itself: `bootstrap.build_bus` scans `commands/`, `queries/` and
 `events/`. Handlers are plain synchronous functions. mediary runs them on a worker thread,
 and passes their other parameters (the dependencies) from the composition root's resolver.
-Front ends then `await bus.send(WatchIssue("DEMO-1"))`. Test the handler against the fake Jira
-site in `tests/fake_jira.py`.
+Front ends then `await bus.send(TransitionIssue("DEMO-1", "Done"))`. Tests (see
+`tests/test_transition_issue.py`): the handler with a stub port, confirmation accepted,
+declined, `--yes`, dry run and no terminal, and the command end to end.
 
 ### Adding a query
 
@@ -228,9 +237,11 @@ from mediary.cqrs import event_handler
 
 
 @event_handler
-def write_audit_record(event: IssueChanged, log: AuditLog) -> None:
-    """Remember the change, so it can be undone."""
+def record_in_audit_log(change: IssueChanged, audit: AuditLog) -> None:
+    """Keep the change, with what it replaced."""
 ```
+
+Subscribers of one event run one after another, in the order of their names.
 
 Subscribers never call back into commands; if a reaction needs to change Jira, it belongs in
 the command's handler.

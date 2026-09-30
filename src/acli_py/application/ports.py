@@ -6,9 +6,12 @@ adapter infrastructure provides. Handler tests can pass any object with the same
 
 from __future__ import annotations
 
-from typing import Protocol
+from collections.abc import Mapping
+from typing import Any, Protocol
 
-from acli_py.domain.issue import Issue
+from acli_py.application.changes import AuditRecord, Change
+from acli_py.domain.issue import Issue, Status
+from acli_py.domain.workflow import Transition
 
 
 class IssueReader(Protocol):
@@ -23,4 +26,41 @@ class IssueReader(Protocol):
 
     def browse_url(self, key: str) -> str:
         """Return the issue's page on the site."""
+        ...
+
+
+class Workflow(Protocol):
+    """Moves issues through their workflow."""
+
+    def status(self, key: str) -> Status | None:
+        """Return the issue's status now."""
+        ...
+
+    def transitions(self, key: str) -> list[Transition]:
+        """Return the transitions available on the issue now."""
+        ...
+
+    def transition(
+        self, key: str, transition_id: str, fields: Mapping[str, Any], comment: str
+    ) -> None:
+        """Apply a transition, setting `fields` (as Jira takes them) and adding `comment`."""
+        ...
+
+
+class Confirmer(Protocol):
+    """Asks the user whether to go ahead with a change; each front end brings its own."""
+
+    async def confirm(self, change: Change) -> bool:
+        """Return whether the user agrees to `change`.
+
+        May raise `Declined` with a reason instead, when there is no way to ask.
+        """
+        ...
+
+
+class AuditLog(Protocol):
+    """Keeps a record of every change made."""
+
+    def record(self, entry: AuditRecord) -> None:
+        """Add `entry` to the log."""
         ...

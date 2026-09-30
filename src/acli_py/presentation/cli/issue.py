@@ -12,6 +12,8 @@ import typer
 from rich.markup import escape
 from rich.table import Table
 
+from acli_py.application.changes import Change
+from acli_py.application.commands.transition_issue.command import TransitionIssue
 from acli_py.application.queries.get_issue.query import GetIssue
 from acli_py.bootstrap import build_catalog
 from acli_py.domain import adf
@@ -754,7 +756,11 @@ def transition(
 ) -> None:
     """Move issues to another status (alias: move).
 
-    [dim]acli-py issue transition DEMO-1 --to Done -m "Shipped in 2.4"[/]
+    Asks first, naming the issues and the status; [bold]--yes[/] skips the question, and
+    without a terminal to ask on it refuses unless given. Each move is kept in the audit log.
+
+    [dim]acli-py issue transition DEMO-1 --to Done -m "Shipped in 2.4"
+    acli-py issue move --jql 'sprint in openSprints()' --to 'In Review' --yes[/]
     """
     if not to:
         raise fail(
@@ -766,18 +772,11 @@ def transition(
     extra = resolve.field_values(session.client, list(field or []), session.me)
     if resolution:
         extra["resolution"] = {"name": resolution}
-    if len(picked) > 1:
-        confirm(f"Move {plural(len(picked), 'issue')} to {to}?", yes, session)
+    session.approve(Change("Move", tuple(picked), f"to {to.strip()}"), yes)
 
     def one(key: str) -> str:
-        chosen = resolve.transition(session.client, key, to)
-        body: dict[str, Any] = {"transition": {"id": chosen["id"]}}
-        if extra:
-            body["fields"] = extra
-        if comment:
-            body["update"] = {"comment": [{"add": {"body": adf.to_adf(comment)}}]}
-        session.client.post(f"{API}/issue/{key}/transitions", body)
-        return dig(chosen, "to", "name", default=chosen.get("name", to))
+        changed = session.send(TransitionIssue(key, to, comment or "", extra))
+        return str(changed.after["status"])
 
     run_bulk(
         picked,

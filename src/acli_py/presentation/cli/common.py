@@ -21,6 +21,7 @@ import typer
 from rich.markup import escape
 
 from acli_py.application.bus import Bus
+from acli_py.application.changes import Change, Declined
 from acli_py.application.site import Site
 from acli_py.bootstrap import build_bus
 from acli_py.infrastructure import credentials
@@ -130,6 +131,8 @@ def guarded(command: Callable) -> Callable:
             return command(*args, **kwargs)
         except (JiraError, ResolveError, credentials.CredentialError, ValueError) as error:
             raise fail(escape(str(error))) from None
+        except Declined as declined:
+            raise fail(escape(str(declined))) from None
         except OSError as error:
             raise fail(escape(f"{error.strerror or error}: {error.filename or ''}")) from None
 
@@ -173,11 +176,23 @@ class Session:
         """Return the site the application layer works on."""
         return Site(self.client, self.url, self.account.account_id, self.account.display_name)
 
+    @property
+    def bus(self) -> Bus:
+        """Return the bus, built on first use; it asks at the terminal before changes."""
+        if self._bus is None:
+            self._bus = build_bus(self.site(), confirmer=TerminalConfirmer())
+        return self._bus
+
     def send(self, message: Any) -> Any:
         """Send a query or command on the bus, and wait for its answer."""
-        if self._bus is None:
-            self._bus = build_bus(self.site())
-        return asyncio.run(self._bus.send(message))
+        return asyncio.run(self.bus.send(message))
+
+    def approve(self, change: Change, yes: bool = False) -> None:
+        """Ask once about a change over many issues; the commands it covers then just run.
+
+        --yes and dry runs skip the question. Raises `Declined` when the answer is no.
+        """
+        asyncio.run(self.bus.confirm.approve(change, yes=yes))
 
     def project(self, key: str | None) -> str:
         """Return the given project key, or the configured default, or fail."""
@@ -273,6 +288,17 @@ def close_clients() -> None:
 
 
 # ── interaction ──────────────────────────────────────────────────────────────
+
+
+class TerminalConfirmer:
+    """The CLI's and the shell's way to ask before a change: a y/N question on stderr."""
+
+    async def confirm(self, change: Change) -> bool:
+        """Ask; with no terminal to ask on, refuse and point at --yes."""
+        question = f"{change}?"
+        if not sys.stdin.isatty():
+            raise Declined(f"{question} Refusing without --yes (no terminal to ask on).")
+        return typer.confirm(question, default=False, err=True)
 
 
 def confirm(question: str, yes: bool, session: Session | None = None) -> None:

@@ -7,8 +7,10 @@ import pytest
 
 if TYPE_CHECKING:
     from acli_py.application.bus import Bus
+    from acli_py.application.events.issue_changed.event import IssueChanged
 
 from acli_py.application.behaviors import describe
+from acli_py.application.commands.transition_issue.command import TransitionIssue
 from acli_py.application.messages import (
     AssignIssue,
     CommentOnIssue,
@@ -16,13 +18,11 @@ from acli_py.application.messages import (
     CreateIssue,
     FindAssignees,
     GetTransitions,
-    IssueChanged,
     ListFilters,
     ListIssueTypes,
     ListPriorities,
     ListProjects,
     SearchIssues,
-    TransitionIssue,
     UpdateIssue,
     ValidateJql,
     WatchIssue,
@@ -37,7 +37,7 @@ from tests import fake_jira
 
 def make_bus(url: str, *, dry_run: bool = False) -> Bus:
     client = JiraClient(url, fake_jira.EMAIL, fake_jira.TOKEN, dry_run=dry_run, retries=0)
-    return build_bus(Site(client, url))
+    return build_bus(Site(client, url), assume_yes=True)
 
 
 def run(coro):
@@ -91,7 +91,7 @@ def test_commands_change_jira_empty_the_cache_and_announce(site, fake):
 
     async def scenario():
         await bus.send(GetIssue("DEMO-2"))
-        await bus.send(TransitionIssue("DEMO-2", "21", "In Progress", comment="Starting"))
+        await bus.send(TransitionIssue("DEMO-2", "In Progress", comment="Starting"))
         assert (await bus.send(GetIssue("DEMO-2"))).issue.status.name == "In Progress"
         await bus.send(AssignIssue("DEMO-2", fake_jira.CAROL["accountId"], "Carol"))
         await bus.send(CommentOnIssue("DEMO-2", "Looks **good**"))
