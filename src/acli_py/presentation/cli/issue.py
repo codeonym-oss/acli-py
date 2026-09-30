@@ -40,6 +40,7 @@ from acli_py.presentation.cli.common import (
     KeepGoingOpt,
     KeysArg,
     LimitOpt,
+    OutputOpt,
     ProjectOpt,
     Session,
     WebOpt,
@@ -317,6 +318,7 @@ def search(
     web: WebOpt = False,
     as_json: JsonOpt = False,
     as_csv: CsvOpt = False,
+    out: OutputOpt = None,
     syntax: Annotated[
         bool, typer.Option("--syntax", help="Show the smart query syntax and exit.")
     ] = False,
@@ -372,9 +374,9 @@ def search(
             session.client.search(query, extra or LIST_FIELDS, limit=limit_of(limit, all_pages))
         )
     output.emit(
-        issues, issue_columns(session, extra), fmt(as_json, as_csv), empty="No issues match."
+        issues, issue_columns(session, extra), fmt(as_json, as_csv, out), empty="No issues match."
     )
-    if fmt(as_json, as_csv) is Format.table and issues:
+    if fmt(as_json, as_csv, out) is Format.table and issues:
         more = "" if all_pages or len(issues) < limit else " (use --all for every page)"
         output.info(f"{plural(len(issues), 'issue')}{more} · [dim]{escape(query)}[/]")
 
@@ -806,6 +808,7 @@ def transition(
 def transitions(
     key: Annotated[str, typer.Argument(help="Issue key.")],
     as_json: JsonOpt = False,
+    out: OutputOpt = None,
 ) -> None:
     """List the statuses an issue can move to right now."""
     session = connect()
@@ -817,7 +820,7 @@ def transitions(
             Column("To status", lambda t: dig(t, "to", "name")),
             Column("Category", lambda t: dig(t, "to", "statusCategory", "name"), style="dim"),
         ],
-        fmt(as_json),
+        fmt(as_json, chosen=out),
         empty="No transitions available.",
     )
 

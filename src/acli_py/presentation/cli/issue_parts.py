@@ -27,6 +27,7 @@ from acli_py.presentation.cli.common import (
     JsonOpt,
     KeysArg,
     LimitOpt,
+    OutputOpt,
     YesOpt,
     confirm,
     connect,
@@ -234,6 +235,7 @@ def comment_visibility(
         str | None, typer.Option("--project", "-p", help="Show this project's roles.")
     ] = None,
     as_json: JsonOpt = False,
+    out: OutputOpt = None,
 ) -> None:
     """List the roles (with --project) or groups a comment can be restricted to."""
     session = connect()
@@ -247,7 +249,7 @@ def comment_visibility(
         Column("Type", lambda r: r["type"], style="dim"),
         Column("Name", lambda r: r["name"]),
     ]
-    output.emit(rows, columns, fmt(as_json))
+    output.emit(rows, columns, fmt(as_json, chosen=out))
 
 
 # ── links ────────────────────────────────────────────────────────────────────
@@ -348,7 +350,7 @@ def link_add(
 
 @link_app.command("list")
 @guarded
-def link_list(key: KeyArg, as_json: JsonOpt = False) -> None:
+def link_list(key: KeyArg, as_json: JsonOpt = False, out: OutputOpt = None) -> None:
     """Show an issue's links."""
     session = connect()
     links = session.client.issue(key.upper(), ["issuelinks"])["fields"].get("issuelinks", [])
@@ -369,7 +371,7 @@ def link_list(key: KeyArg, as_json: JsonOpt = False) -> None:
             Column("Status", lambda r: dig(other(r), "fields", "status", "name")),
             Column("Summary", lambda r: dig(other(r), "fields", "summary")),
         ],
-        fmt(as_json),
+        fmt(as_json, chosen=out),
         empty=f"{key.upper()} has no links.",
     )
 
@@ -413,7 +415,7 @@ def link_delete(
 
 @link_app.command("types")
 @guarded
-def link_types(as_json: JsonOpt = False) -> None:
+def link_types(as_json: JsonOpt = False, out: OutputOpt = None) -> None:
     """List the kinds of link the site offers."""
     session = connect()
     output.emit(
@@ -424,7 +426,7 @@ def link_types(as_json: JsonOpt = False) -> None:
             Column("Outward (A … B)", lambda t: t.get("outward")),
             Column("Inward (B … A)", lambda t: t.get("inward")),
         ],
-        fmt(as_json),
+        fmt(as_json, chosen=out),
     )
 
 
@@ -437,7 +439,7 @@ attachment_app = typer.Typer(
 
 @attachment_app.command("list")
 @guarded
-def attachment_list(key: KeyArg, as_json: JsonOpt = False) -> None:
+def attachment_list(key: KeyArg, as_json: JsonOpt = False, out: OutputOpt = None) -> None:
     """Show an issue's attachments."""
     session = connect()
     files = session.client.issue(key.upper(), ["attachment"])["fields"].get("attachment", [])
@@ -451,7 +453,7 @@ def attachment_list(key: KeyArg, as_json: JsonOpt = False) -> None:
             Column("By", lambda a: dig(a, "author", "displayName")),
             Column("Added", lambda a: when(a.get("created"))),
         ],
-        fmt(as_json),
+        fmt(as_json, chosen=out),
         empty=f"{key.upper()} has no attachments.",
     )
 
@@ -528,7 +530,7 @@ UserArg = Annotated[str, typer.Argument(help="Email, account id, name or @me.")]
 
 @watcher_app.command("list")
 @guarded
-def watcher_list(key: KeyArg, as_json: JsonOpt = False) -> None:
+def watcher_list(key: KeyArg, as_json: JsonOpt = False, out: OutputOpt = None) -> None:
     """Show who watches an issue."""
     session = connect()
     data = session.client.get(f"{API}/issue/{key.upper()}/watchers")
@@ -539,7 +541,7 @@ def watcher_list(key: KeyArg, as_json: JsonOpt = False) -> None:
             Column("Account id", lambda u: u.get("accountId"), style="dim"),
             Column("Active", lambda u: "yes" if u.get("active", True) else "no"),
         ],
-        fmt(as_json),
+        fmt(as_json, chosen=out),
         empty=f"Nobody watches {key.upper()}.",
     )
 
@@ -583,7 +585,7 @@ DURATION = re.compile(r"^\s*(\d+(?:\.\d+)?\s*[wdhm]\s*)+$", re.IGNORECASE)
 
 @worklog_app.command("list")
 @guarded
-def worklog_list(key: KeyArg, as_json: JsonOpt = False) -> None:
+def worklog_list(key: KeyArg, as_json: JsonOpt = False, out: OutputOpt = None) -> None:
     """Show the work logged on an issue."""
     session = connect()
     logs = list(session.client.paged(f"{API}/issue/{key.upper()}/worklog", key="worklogs"))
@@ -596,7 +598,7 @@ def worklog_list(key: KeyArg, as_json: JsonOpt = False) -> None:
             Column("Time", lambda w: w.get("timeSpent"), justify="right"),
             Column("Comment", lambda w: " ".join(adf.to_text(w.get("comment")).split())),
         ],
-        fmt(as_json),
+        fmt(as_json, chosen=out),
         empty=f"No work logged on {key.upper()}.",
     )
 

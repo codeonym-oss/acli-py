@@ -20,6 +20,7 @@ acli-py field list [OPTIONS]
 | `--trashed` |  | Custom fields in the trash. |
 | `--json` |  | Print JSON. |
 | `--csv` |  | Print CSV. |
+| `--output` `[table\|json\|csv\|keys\|jsonl]` |  | How to print: table, json, csv, or keys / jsonl (one per line, for pipes). |
 
 
 ## `acli-py field create`

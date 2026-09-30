@@ -23,6 +23,7 @@ if TYPE_CHECKING:
 KEY_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]*-\d+$")
 ACCOUNT_ID_RE = re.compile(r"^(?:\d+:[0-9a-f-]{36}|[0-9a-f]{24}|qm:[\w:-]+)$", re.IGNORECASE)
 TARGET_SPLIT = re.compile(r"[\s,;]+")
+STDIN = "-"  # in place of keys or a file: read them from standard input
 CUSTOM = "com.atlassian.jira.plugin.system.customfieldtypes:"
 
 # Sentinels for assignee-like options.
@@ -48,12 +49,59 @@ def split_keys(values: list[str] | None) -> list[str]:
     return keys
 
 
+def keys_in(text: str) -> list[str]:
+    """Return the issue keys or ids in `text`, whichever way it lists them.
+
+    Plain keys separated by commas, spaces or new lines ('#' starts a comment), JSON lines
+    (`--output jsonl`), or a JSON array (`--json`); a JSON item gives its `key`, else its `id`.
+    """
+    if text.lstrip().startswith("["):
+        try:
+            items = json.loads(text)
+        except ValueError:
+            raise ResolveError("the input starts like a JSON array but isn't valid JSON") from None
+        return split_keys([_key_of(item) for item in items])
+    found: list[str] = []
+    for number, line in enumerate(text.splitlines(), 1):
+        line = line.strip()
+        if line.startswith("{"):
+            try:
+                item = json.loads(line)
+            except ValueError:
+                raise ResolveError(f"line {number} starts like JSON but isn't valid JSON") from None
+            found.append(_key_of(item))
+        else:
+            found.append(line.split("#", 1)[0])
+    return split_keys(found)
+
+
+def _key_of(item: Any) -> str:
+    """Return the key a JSON item names: its `key`, else its `id`, or the item itself."""
+    if not isinstance(item, dict):
+        return str(item)
+    value = item.get("key") or item.get("id")
+    if value is None:
+        raise ResolveError(f"a JSON item has no key or id: {json.dumps(item)[:60]}")
+    return str(value)
+
+
 def read_keys_file(path: Path) -> list[str]:
-    """Read issue keys or ids separated by commas, spaces or new lines ('-' is stdin)."""
+    """Read issue keys or ids from a file, or from stdin when it is '-' (see `keys_in`)."""
     import sys
 
-    text = sys.stdin.read() if str(path) == "-" else path.read_text(encoding="utf-8")
-    return split_keys([line.split("#", 1)[0] for line in text.splitlines()])
+    text = sys.stdin.read() if str(path) == STDIN else path.read_text(encoding="utf-8")
+    return keys_in(text)
+
+
+def given(values: list[str] | None) -> list[str]:
+    """Return the keys typed on the command line; a lone '-' reads more from stdin."""
+    import sys
+
+    typed = [v for v in values or [] if v.strip() != STDIN]
+    found = split_keys(typed)
+    if len(typed) != len(values or []):
+        found += [k for k in keys_in(sys.stdin.read()) if k not in found]
+    return found
 
 
 def targets(
@@ -64,8 +112,11 @@ def targets(
     from_file: Path | None = None,
     limit: int | None = None,
 ) -> list[str]:
-    """Return the issue keys picked by keys, --jql, --filter and/or --from-file."""
-    found = split_keys(keys)
+    """Return the issue keys picked by keys ('-' reads stdin), --jql, --filter, --from-file.
+
+    Keys read from stdin may be none at all (an empty search upstream): that picks nothing.
+    """
+    found = given(keys)
     if from_file:
         found += [k for k in read_keys_file(from_file) if k not in found]
     queries = []
@@ -77,8 +128,11 @@ def targets(
         for issue in client.search(query, ["key"], limit=limit):
             if issue["key"] not in found:
                 found.append(issue["key"])
-    if not found and not (jql or filter_id):
-        raise ResolveError("say which issues: give keys, --jql, --filter or --from-file")
+    piped = STDIN in (keys or []) or (from_file is not None and str(from_file) == STDIN)
+    if not found and not (jql or filter_id or piped):
+        raise ResolveError(
+            "say which issues: give keys, '-' for stdin, --jql, --filter or --from-file"
+        )
     for key in found:
         if not KEY_RE.match(key) and not key.isdigit():
             raise ResolveError(f"{key!r} is not an issue key (like DEMO-12) or id")

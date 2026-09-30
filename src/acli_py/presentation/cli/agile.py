@@ -21,6 +21,7 @@ from acli_py.presentation.cli.common import (
     JsonOpt,
     KeysArg,
     LimitOpt,
+    OutputOpt,
     Session,
     WebOpt,
     YesOpt,
@@ -112,6 +113,7 @@ def board_list(
     all_pages: AllOpt = False,
     as_json: JsonOpt = False,
     as_csv: CsvOpt = False,
+    out: OutputOpt = None,
 ) -> None:
     """List boards."""
     session = connect()
@@ -133,7 +135,7 @@ def board_list(
             Column("Type", lambda b: b.get("type")),
             Column("Project", lambda b: dig(b, "location", "projectKey")),
         ],
-        fmt(as_json, as_csv),
+        fmt(as_json, as_csv, out),
         empty="No boards found.",
     )
 
@@ -220,6 +222,7 @@ def board_projects(
     all_pages: AllOpt = False,
     as_json: JsonOpt = False,
     as_csv: CsvOpt = False,
+    out: OutputOpt = None,
 ) -> None:
     """List the projects a board shows."""
     session = connect()
@@ -230,7 +233,7 @@ def board_projects(
             Column("Name", lambda p: p.get("name"), style="bold"),
             Column("Id", lambda p: p.get("id"), style="dim"),
         ],
-        fmt(as_json, as_csv),
+        fmt(as_json, as_csv, out),
     )
 
 
@@ -243,6 +246,7 @@ def board_backlog(
     all_pages: AllOpt = False,
     as_json: JsonOpt = False,
     as_csv: CsvOpt = False,
+    out: OutputOpt = None,
 ) -> None:
     """List the issues in a board's backlog."""
     session = connect()
@@ -254,7 +258,7 @@ def board_backlog(
         fields=",".join(LIST_FIELDS),
     )
     output.emit(
-        issues, issue_columns(session, []), fmt(as_json, as_csv), empty="The backlog is empty."
+        issues, issue_columns(session, []), fmt(as_json, as_csv, out), empty="The backlog is empty."
     )
 
 
@@ -271,6 +275,7 @@ def sprint_list(
     all_pages: AllOpt = False,
     as_json: JsonOpt = False,
     as_csv: CsvOpt = False,
+    out: OutputOpt = None,
 ) -> None:
     """List a board's sprints."""
     session = connect()
@@ -280,7 +285,7 @@ def sprint_list(
         limit=limit_of(limit, all_pages),
         state=states or None,
     )
-    output.emit(sprints, SPRINT_COLUMNS, fmt(as_json, as_csv), empty="No sprints.")
+    output.emit(sprints, SPRINT_COLUMNS, fmt(as_json, as_csv, out), empty="No sprints.")
 
 
 @sprint_app.command("view")
@@ -442,6 +447,7 @@ def sprint_issues(
     all_pages: AllOpt = False,
     as_json: JsonOpt = False,
     as_csv: CsvOpt = False,
+    out: OutputOpt = None,
 ) -> None:
     """List the issues in a sprint."""
     session = connect()
@@ -453,7 +459,9 @@ def sprint_issues(
         jql=jql,
         fields=",".join(extra or LIST_FIELDS),
     )
-    output.emit(issues, issue_columns(session, extra), fmt(as_json, as_csv), empty="No issues.")
+    output.emit(
+        issues, issue_columns(session, extra), fmt(as_json, as_csv, out), empty="No issues."
+    )
 
 
 @sprint_app.command("add")

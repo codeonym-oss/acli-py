@@ -25,6 +25,7 @@ acli-py board list [OPTIONS]
 | `-A`, `--all` |  | Fetch every page, ignoring --limit. |
 | `--json` |  | Print JSON. |
 | `--csv` |  | Print CSV. |
+| `--output` `[table\|json\|csv\|keys\|jsonl]` |  | How to print: table, json, csv, or keys / jsonl (one per line, for pipes). |
 
 
 ## `acli-py board view`
@@ -91,6 +92,7 @@ acli-py board projects BOARD [OPTIONS]
 | `-A`, `--all` |  | Fetch every page, ignoring --limit. |
 | `--json` |  | Print JSON. |
 | `--csv` |  | Print CSV. |
+| `--output` `[table\|json\|csv\|keys\|jsonl]` |  | How to print: table, json, csv, or keys / jsonl (one per line, for pipes). |
 
 
 ## `acli-py board backlog`
@@ -109,6 +111,7 @@ acli-py board backlog BOARD [OPTIONS]
 | `-A`, `--all` |  | Fetch every page, ignoring --limit. |
 | `--json` |  | Print JSON. |
 | `--csv` |  | Print CSV. |
+| `--output` `[table\|json\|csv\|keys\|jsonl]` |  | How to print: table, json, csv, or keys / jsonl (one per line, for pipes). |
 
 
 ## `acli-py board sprints`
@@ -127,3 +130,4 @@ acli-py board sprints [BOARD] [OPTIONS]
 | `-A`, `--all` |  | Fetch every page, ignoring --limit. |
 | `--json` |  | Print JSON. |
 | `--csv` |  | Print CSV. |
+| `--output` `[table\|json\|csv\|keys\|jsonl]` |  | How to print: table, json, csv, or keys / jsonl (one per line, for pipes). |

@@ -20,6 +20,7 @@ from acli_py.presentation.cli.common import (
     IgnoreErrorsOpt,
     JsonOpt,
     LimitOpt,
+    OutputOpt,
     WebOpt,
     YesOpt,
     confirm,
@@ -70,6 +71,7 @@ def filter_list(
     ] = False,
     as_json: JsonOpt = False,
     as_csv: CsvOpt = False,
+    out: OutputOpt = None,
 ) -> None:
     """List your own filters (or your favourites)."""
     session = connect()
@@ -77,7 +79,7 @@ def filter_list(
     found = session.client.get(path, expand="favourite" if not favourites else None)
     if favourites:
         found = [{**f, "favourite": True} for f in found]
-    output.emit(found, FILTER_COLUMNS, fmt(as_json, as_csv), empty="No filters.")
+    output.emit(found, FILTER_COLUMNS, fmt(as_json, as_csv, out), empty="No filters.")
 
 
 @filter_app.command("search")
@@ -92,6 +94,7 @@ def filter_search(
     all_pages: AllOpt = False,
     as_json: JsonOpt = False,
     as_csv: CsvOpt = False,
+    out: OutputOpt = None,
 ) -> None:
     """Search every filter you can see."""
     session = connect()
@@ -106,7 +109,7 @@ def filter_search(
         expand="owner,jql,favourite",
         orderBy="name",
     )
-    output.emit(found, FILTER_COLUMNS, fmt(as_json, as_csv), empty="No filters match.")
+    output.emit(found, FILTER_COLUMNS, fmt(as_json, as_csv, out), empty="No filters match.")
 
 
 @filter_app.command("view")
@@ -245,7 +248,8 @@ def filter_star(
 def filter_owner(
     to: Annotated[str, typer.Option("--to", help="New owner: email, name or account id.")],
     filter_ids: Annotated[
-        list[str] | None, typer.Argument(help="Filter ids.", show_default=False)
+        list[str] | None,
+        typer.Argument(help="Filter ids ('-' reads them from stdin).", show_default=False),
     ] = None,
     from_file: Annotated[
         Path | None,
@@ -258,7 +262,7 @@ def filter_owner(
     dry_run: DryRunOpt = False,
 ) -> None:
     """Hand filters over to someone else."""
-    filter_ids = resolve.split_keys(filter_ids) + (
+    filter_ids = resolve.given(filter_ids) + (
         resolve.read_keys_file(from_file) if from_file else []
     )
     if not filter_ids:
@@ -286,6 +290,7 @@ def filter_columns(
     reset: Annotated[bool, typer.Option("--reset", help="Go back to the default columns.")] = False,
     dry_run: DryRunOpt = False,
     as_json: JsonOpt = False,
+    out: OutputOpt = None,
 ) -> None:
     """Show, set or reset the columns a filter shows in the issue navigator."""
     session = connect(dry_run)
@@ -309,7 +314,7 @@ def filter_columns(
             Column("Field", lambda c: c.get("value"), style="dim"),
             Column("Label", lambda c: c.get("label")),
         ],
-        fmt(as_json),
+        fmt(as_json, chosen=out),
     )
 
 
@@ -342,6 +347,7 @@ def field_list(
     trashed: Annotated[bool, typer.Option("--trashed", help="Custom fields in the trash.")] = False,
     as_json: JsonOpt = False,
     as_csv: CsvOpt = False,
+    out: OutputOpt = None,
 ) -> None:
     """List fields, with the ids to use in --field, --fields and JQL."""
     session = connect()
@@ -364,7 +370,7 @@ def field_list(
             Column("Custom", lambda f: "yes" if f.get("custom") else ""),
             Column("JQL", lambda f: ", ".join((f.get("clauseNames") or [])[:2]), style="dim"),
         ],
-        fmt(as_json, as_csv),
+        fmt(as_json, as_csv, out),
         empty="No fields match.",
     )
 

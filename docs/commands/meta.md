@@ -17,6 +17,7 @@ acli-py meta statuses [OPTIONS]
 |---|---|---|
 | `--json` |  | Print JSON. |
 | `--csv` |  | Print CSV. |
+| `--output` `[table\|json\|csv\|keys\|jsonl]` |  | How to print: table, json, csv, or keys / jsonl (one per line, for pipes). |
 
 
 ## `acli-py meta priorities`
@@ -31,6 +32,7 @@ acli-py meta priorities [OPTIONS]
 |---|---|---|
 | `--json` |  | Print JSON. |
 | `--csv` |  | Print CSV. |
+| `--output` `[table\|json\|csv\|keys\|jsonl]` |  | How to print: table, json, csv, or keys / jsonl (one per line, for pipes). |
 
 
 ## `acli-py meta resolutions`
@@ -45,6 +47,7 @@ acli-py meta resolutions [OPTIONS]
 |---|---|---|
 | `--json` |  | Print JSON. |
 | `--csv` |  | Print CSV. |
+| `--output` `[table\|json\|csv\|keys\|jsonl]` |  | How to print: table, json, csv, or keys / jsonl (one per line, for pipes). |
 
 
 ## `acli-py meta issue-types`
@@ -60,3 +63,4 @@ acli-py meta issue-types [OPTIONS]
 | `-p`, `--project` `TEXT` |  | Only this project's types. |
 | `--json` |  | Print JSON. |
 | `--csv` |  | Print CSV. |
+| `--output` `[table\|json\|csv\|keys\|jsonl]` |  | How to print: table, json, csv, or keys / jsonl (one per line, for pipes). |

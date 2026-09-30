@@ -67,6 +67,7 @@ def unset(name: SettingArg) -> None:
 
 
 @app.command()
+@guarded
 def path() -> None:
     """Print where the config file lives."""
     output.console.print(str(Config.load().path), soft_wrap=True, highlight=False)

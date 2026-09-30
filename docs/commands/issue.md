@@ -65,6 +65,7 @@ acli-py issue search 'project = DEMO AND sprint in openSprints()' --csv
 | `-w`, `--web` |  | Open it in the browser instead. |
 | `--json` |  | Print JSON. |
 | `--csv` |  | Print CSV. |
+| `--output` `[table\|json\|csv\|keys\|jsonl]` |  | How to print: table, json, csv, or keys / jsonl (one per line, for pipes). |
 | `--syntax` |  | Show the smart query syntax and exit. |
 | `--raw` |  | Send the query as JQL, never as a smart query. |
 
@@ -127,7 +128,7 @@ acli-py issue edit --jql 'project = DEMO AND labels = old' --remove-label old -y
 
 | Option | Default | Description |
 |---|---|---|
-| `KEYS` |  | Issue keys (DEMO-1 DEMO-2, or DEMO-1,DEMO-2). |
+| `KEYS` |  | Issue keys (DEMO-1 DEMO-2, or DEMO-1,DEMO-2); '-' reads keys or JSON lines from stdin. |
 | `-q`, `--jql` `TEXT` |  | Act on the issues this JQL or smart query finds. |
 | `--filter` `TEXT` |  | Act on the issues of this saved filter id. |
 | `-f`, `--from-file` `PATH` |  | Read issue keys from a file (commas, spaces or lines; '-' for stdin). |
@@ -171,7 +172,7 @@ acli-py issue assign --jql 'assignee = "old@example.com"' --to new@example.com -
 
 | Option | Default | Description |
 |---|---|---|
-| `KEYS` |  | Issue keys (DEMO-1 DEMO-2, or DEMO-1,DEMO-2). |
+| `KEYS` |  | Issue keys (DEMO-1 DEMO-2, or DEMO-1,DEMO-2); '-' reads keys or JSON lines from stdin. |
 | `-a`, `--to` `TEXT` |  | Email, account id, name, @me, or 'default'. |
 | `--unassign` |  | Remove the assignee. |
 | `-q`, `--jql` `TEXT` |  | Act on the issues this JQL or smart query finds. |
@@ -205,7 +206,7 @@ acli-py issue move --jql 's:review sprint:open' --to Done --continue-on-error --
 
 | Option | Default | Description |
 |---|---|---|
-| `KEYS` |  | Issue keys (DEMO-1 DEMO-2, or DEMO-1,DEMO-2). |
+| `KEYS` |  | Issue keys (DEMO-1 DEMO-2, or DEMO-1,DEMO-2); '-' reads keys or JSON lines from stdin. |
 | `-s`, `--to` `TEXT` |  | Target status or transition name, e.g. 'In Progress'. |
 | `-m`, `--comment` `TEXT` |  | Add this comment (Markdown). |
 | `-r`, `--resolution` `TEXT` |  | Set the resolution, e.g. Done. |
@@ -234,6 +235,7 @@ acli-py issue transitions KEY [OPTIONS]
 |---|---|---|
 | `KEY` | required | Issue key. |
 | `--json` |  | Print JSON. |
+| `--output` `[table\|json\|csv\|keys\|jsonl]` |  | How to print: table, json, csv, or keys / jsonl (one per line, for pipes). |
 
 
 ## `acli-py issue delete`
@@ -246,7 +248,7 @@ acli-py issue delete [KEYS] [OPTIONS]
 
 | Option | Default | Description |
 |---|---|---|
-| `KEYS` |  | Issue keys (DEMO-1 DEMO-2, or DEMO-1,DEMO-2). |
+| `KEYS` |  | Issue keys (DEMO-1 DEMO-2, or DEMO-1,DEMO-2); '-' reads keys or JSON lines from stdin. |
 | `-q`, `--jql` `TEXT` |  | Act on the issues this JQL or smart query finds. |
 | `--filter` `TEXT` |  | Act on the issues of this saved filter id. |
 | `-f`, `--from-file` `PATH` |  | Read issue keys from a file (commas, spaces or lines; '-' for stdin). |
@@ -267,7 +269,7 @@ acli-py issue archive [KEYS] [OPTIONS]
 
 | Option | Default | Description |
 |---|---|---|
-| `KEYS` |  | Issue keys (DEMO-1 DEMO-2, or DEMO-1,DEMO-2). |
+| `KEYS` |  | Issue keys (DEMO-1 DEMO-2, or DEMO-1,DEMO-2); '-' reads keys or JSON lines from stdin. |
 | `-q`, `--jql` `TEXT` |  | Act on the issues this JQL or smart query finds. |
 | `--filter` `TEXT` |  | Act on the issues of this saved filter id. |
 | `-f`, `--from-file` `PATH` |  | Read issue keys from a file (commas, spaces or lines; '-' for stdin). |
@@ -287,7 +289,7 @@ acli-py issue unarchive [KEYS] [OPTIONS]
 
 | Option | Default | Description |
 |---|---|---|
-| `KEYS` |  | Issue keys (DEMO-1 DEMO-2, or DEMO-1,DEMO-2). |
+| `KEYS` |  | Issue keys (DEMO-1 DEMO-2, or DEMO-1,DEMO-2); '-' reads keys or JSON lines from stdin. |
 | `-f`, `--from-file` `PATH` |  | Read issue keys from a file (commas, spaces or lines; '-' for stdin). |
 | `-y`, `--yes` |  | Don't ask for confirmation. |
 | `--ignore-errors` |  | Keep going when one item fails; exit 1 at the end. |
@@ -314,7 +316,7 @@ acli-py issue clone DEMO-1 --to-site me@other.atlassian.net --to-project NEW
 
 | Option | Default | Description |
 |---|---|---|
-| `KEYS` |  | Issue keys (DEMO-1 DEMO-2, or DEMO-1,DEMO-2). |
+| `KEYS` |  | Issue keys (DEMO-1 DEMO-2, or DEMO-1,DEMO-2); '-' reads keys or JSON lines from stdin. |
 | `-p`, `--to-project` `TEXT` |  | Clone into this project (default: same one). |
 | `--prefix` `TEXT` |  | Put this before each copied summary. |
 | `--link`, `--no-link` | `True` | Link each copy to its original. |
@@ -378,7 +380,7 @@ echo "Deployed" | acli-py issue comment add --jql 'fixVersion = 2.4' -b - -y
 
 | Option | Default | Description |
 |---|---|---|
-| `KEYS` |  | Issue keys (DEMO-1 DEMO-2, or DEMO-1,DEMO-2). |
+| `KEYS` |  | Issue keys (DEMO-1 DEMO-2, or DEMO-1,DEMO-2); '-' reads keys or JSON lines from stdin. |
 | `-b`, `--body` `TEXT` |  | Markdown (or ADF JSON); '-' reads stdin. |
 | `-B`, `--body-adf`, `--body-file` `PATH` |  | Read the body from a file: Markdown, or ADF JSON ('-' for stdin). |
 | `-e`, `--editor` |  | Write the body in $EDITOR. |
@@ -443,6 +445,7 @@ acli-py issue comment visibility [OPTIONS]
 |---|---|---|
 | `-p`, `--project` `TEXT` |  | Show this project's roles. |
 | `--json` |  | Print JSON. |
+| `--output` `[table\|json\|csv\|keys\|jsonl]` |  | How to print: table, json, csv, or keys / jsonl (one per line, for pipes). |
 
 
 ## `acli-py issue link`
@@ -489,6 +492,7 @@ acli-py issue link list KEY [OPTIONS]
 |---|---|---|
 | `KEY` | required | Issue key, e.g. DEMO-12. |
 | `--json` |  | Print JSON. |
+| `--output` `[table\|json\|csv\|keys\|jsonl]` |  | How to print: table, json, csv, or keys / jsonl (one per line, for pipes). |
 
 
 ### `acli-py issue link delete`
@@ -520,6 +524,7 @@ acli-py issue link types [OPTIONS]
 | Option | Default | Description |
 |---|---|---|
 | `--json` |  | Print JSON. |
+| `--output` `[table\|json\|csv\|keys\|jsonl]` |  | How to print: table, json, csv, or keys / jsonl (one per line, for pipes). |
 
 
 ## `acli-py issue attachment`
@@ -539,6 +544,7 @@ acli-py issue attachment list KEY [OPTIONS]
 |---|---|---|
 | `KEY` | required | Issue key, e.g. DEMO-12. |
 | `--json` |  | Print JSON. |
+| `--output` `[table\|json\|csv\|keys\|jsonl]` |  | How to print: table, json, csv, or keys / jsonl (one per line, for pipes). |
 
 
 ### `acli-py issue attachment upload`
@@ -603,6 +609,7 @@ acli-py issue watcher list KEY [OPTIONS]
 |---|---|---|
 | `KEY` | required | Issue key, e.g. DEMO-12. |
 | `--json` |  | Print JSON. |
+| `--output` `[table\|json\|csv\|keys\|jsonl]` |  | How to print: table, json, csv, or keys / jsonl (one per line, for pipes). |
 
 
 ### `acli-py issue watcher add`
@@ -652,6 +659,7 @@ acli-py issue worklog list KEY [OPTIONS]
 |---|---|---|
 | `KEY` | required | Issue key, e.g. DEMO-12. |
 | `--json` |  | Print JSON. |
+| `--output` `[table\|json\|csv\|keys\|jsonl]` |  | How to print: table, json, csv, or keys / jsonl (one per line, for pipes). |
 
 
 ### `acli-py issue worklog add`
