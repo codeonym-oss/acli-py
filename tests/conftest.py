@@ -4,6 +4,7 @@ import pytest
 import typer.testing
 from typer.testing import CliRunner
 
+from acli_py.presentation import terminal
 from acli_py.presentation.cli import app
 from tests import fake_jira
 
@@ -44,6 +45,8 @@ def isolated_home(tmp_path, monkeypatch):
     for name in ("ACLI_PY_API_TOKEN", "ACLI_PY_SITE", "ACLI_PY_EMAIL", "ACLI_PY_DRY_RUN"):
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setenv("COLUMNS", "200")
+    # Never ask on the real terminal behind the test run: tests are the "no terminal" case.
+    monkeypatch.setattr(terminal, "open_tty", lambda: None)
     return tmp_path
 
 

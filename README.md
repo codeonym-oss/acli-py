@@ -129,13 +129,27 @@ DRY RUN 1 change planned, nothing was sent to Jira.
 Rich text in a plan is shown as the Markdown you typed (`"ADF: …"`), not as raw ADF JSON.
 Confirmation prompts are skipped during a dry run, because nothing will change.
 
+## Pipes
+
+Commands chain with shell pipes. Every list command can print `--output keys` or
+`--output jsonl`, and every command that takes issues reads them from stdin when given `-`:
+
+```sh
+acli-py issue search '@me is:open #web' --output keys | acli-py issue transition - --to Done
+acli-py issue search 'is:overdue' --output jsonl | acli-py issue edit - --priority High
+```
+
+Mid-pipe, the confirmation is asked on the terminal (`/dev/tty`). With no terminal at all, the
+command refuses without `--yes`. A reader that stops early (`| head`) ends the command quietly.
+See [the pipes guide](docs/guide/pipes.md) for more recipes.
+
 ## Asking first, and the audit log
 
 `issue transition` says what it is about to do and asks first
 (`Move 2 issues (DEMO-1, DEMO-2) to Done? [y/N]`), once for the whole batch, after a preview
 of each issue's status now and after; the other commands that change issues follow as they
-move onto the same bus. `--yes` skips the question; without a terminal to ask on (in a script
-or a pipe), they refuse unless given `--yes`. The TUI asks in a dialog.
+move onto the same bus. `--yes` skips the question; mid-pipe, they ask on the terminal
+(`/dev/tty`), and without any terminal to ask on (in a script) they refuse unless given `--yes`. The TUI asks in a dialog.
 
 Over many issues it runs a few at a time (`--concurrency`), stops at the first failure unless
 `--continue-on-error`, and refuses more than 200 issues without `--force`. It exits 0 when all

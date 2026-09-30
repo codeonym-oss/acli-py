@@ -18,6 +18,7 @@ from acli_py.presentation.cli.common import (
     DryRunOpt,
     JsonOpt,
     LimitOpt,
+    OutputOpt,
     WebOpt,
     connect,
     fail,
@@ -46,6 +47,7 @@ def dashboard_list(
     all_pages: AllOpt = False,
     as_json: JsonOpt = False,
     as_csv: CsvOpt = False,
+    out: OutputOpt = None,
 ) -> None:
     """Search dashboards."""
     session = connect()
@@ -67,7 +69,7 @@ def dashboard_list(
             Column("★", lambda d: "★" if d.get("isFavourite") else "", style="yellow"),
             Column("URL", lambda d: d.get("view"), style="dim"),
         ],
-        fmt(as_json, as_csv),
+        fmt(as_json, as_csv, out),
         empty="No dashboards match.",
     )
 
@@ -116,11 +118,12 @@ def user_search(
     limit: LimitOpt = 50,
     as_json: JsonOpt = False,
     as_csv: CsvOpt = False,
+    out: OutputOpt = None,
 ) -> None:
     """Find people by name or email."""
     session = connect()
     found = session.client.get(f"{API}/user/search", query=query, maxResults=limit)
-    output.emit(found, USER_COLUMNS, fmt(as_json, as_csv), empty="Nobody matches.")
+    output.emit(found, USER_COLUMNS, fmt(as_json, as_csv, out), empty="Nobody matches.")
 
 
 @user_app.command("view")
@@ -163,7 +166,7 @@ NAME_COLUMNS = [
 
 @meta_app.command()
 @guarded
-def statuses(as_json: JsonOpt = False, as_csv: CsvOpt = False) -> None:
+def statuses(as_json: JsonOpt = False, as_csv: CsvOpt = False, out: OutputOpt = None) -> None:
     """List every status and its category."""
     session = connect()
     output.emit(
@@ -174,25 +177,27 @@ def statuses(as_json: JsonOpt = False, as_csv: CsvOpt = False) -> None:
             Column("Category", lambda s: dig(s, "statusCategory", "name")),
             Column("Project", lambda s: dig(s, "scope", "project", "id"), style="dim"),
         ],
-        fmt(as_json, as_csv),
+        fmt(as_json, as_csv, out),
     )
 
 
 @meta_app.command()
 @guarded
-def priorities(as_json: JsonOpt = False, as_csv: CsvOpt = False) -> None:
+def priorities(as_json: JsonOpt = False, as_csv: CsvOpt = False, out: OutputOpt = None) -> None:
     """List priorities."""
     session = connect()
-    output.emit(session.client.paged(f"{API}/priority/search"), NAME_COLUMNS, fmt(as_json, as_csv))
+    output.emit(
+        session.client.paged(f"{API}/priority/search"), NAME_COLUMNS, fmt(as_json, as_csv, out)
+    )
 
 
 @meta_app.command()
 @guarded
-def resolutions(as_json: JsonOpt = False, as_csv: CsvOpt = False) -> None:
+def resolutions(as_json: JsonOpt = False, as_csv: CsvOpt = False, out: OutputOpt = None) -> None:
     """List resolutions."""
     session = connect()
     output.emit(
-        session.client.paged(f"{API}/resolution/search"), NAME_COLUMNS, fmt(as_json, as_csv)
+        session.client.paged(f"{API}/resolution/search"), NAME_COLUMNS, fmt(as_json, as_csv, out)
     )
 
 
@@ -204,6 +209,7 @@ def issue_types(
     ] = None,
     as_json: JsonOpt = False,
     as_csv: CsvOpt = False,
+    out: OutputOpt = None,
 ) -> None:
     """List issue types."""
     session = connect()
@@ -220,7 +226,7 @@ def issue_types(
             Column("Level", lambda t: t.get("hierarchyLevel"), justify="right"),
             NAME_COLUMNS[2],
         ],
-        fmt(as_json, as_csv),
+        fmt(as_json, as_csv, out),
     )
 
 

@@ -18,6 +18,7 @@ from acli_py.presentation.cli.common import (
     DryRunOpt,
     JsonOpt,
     LimitOpt,
+    OutputOpt,
     WebOpt,
     YesOpt,
     confirm,
@@ -79,6 +80,7 @@ def list_(
     all_pages: AllOpt = False,
     as_json: JsonOpt = False,
     as_csv: CsvOpt = False,
+    out: OutputOpt = None,
 ) -> None:
     """List the projects you can see."""
     session = connect()
@@ -96,7 +98,7 @@ def list_(
                 status=",".join(action),
             )
         )
-    output.emit(projects, PROJECT_COLUMNS, fmt(as_json, as_csv), empty="No projects found.")
+    output.emit(projects, PROJECT_COLUMNS, fmt(as_json, as_csv, out), empty="No projects found.")
 
 
 @app.command()
@@ -360,7 +362,9 @@ def restore(key: KeyArg, dry_run: DryRunOpt = False) -> None:
 
 @app.command()
 @guarded
-def components(key: KeyArg, as_json: JsonOpt = False, as_csv: CsvOpt = False) -> None:
+def components(
+    key: KeyArg, as_json: JsonOpt = False, as_csv: CsvOpt = False, out: OutputOpt = None
+) -> None:
     """List a project's components."""
     session = connect()
     output.emit(
@@ -371,7 +375,7 @@ def components(key: KeyArg, as_json: JsonOpt = False, as_csv: CsvOpt = False) ->
             Column("Lead", lambda c: dig(c, "lead", "displayName")),
             Column("Description", lambda c: c.get("description")),
         ],
-        fmt(as_json, as_csv),
+        fmt(as_json, as_csv, out),
         empty=f"{key.upper()} has no components.",
     )
 
@@ -385,6 +389,7 @@ def versions(
     ] = False,
     as_json: JsonOpt = False,
     as_csv: CsvOpt = False,
+    out: OutputOpt = None,
 ) -> None:
     """List a project's versions (releases)."""
     session = connect()
@@ -402,6 +407,6 @@ def versions(
             Column("Release", lambda v: v.get("releaseDate")),
             Column("Description", lambda v: v.get("description")),
         ],
-        fmt(as_json, as_csv),
+        fmt(as_json, as_csv, out),
         empty=f"{key.upper()} has no versions.",
     )

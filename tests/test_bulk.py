@@ -18,6 +18,7 @@ from acli_py.application.messages import AssignIssue
 from acli_py.application.site import Site
 from acli_py.bootstrap import build_bus
 from acli_py.infrastructure.jira.client import JiraClient
+from acli_py.presentation import terminal
 from acli_py.presentation.cli import common
 from tests import fake_jira
 from tests.conftest import run_cli
@@ -234,7 +235,7 @@ def test_cli_over_the_cap_needs_force(site, monkeypatch):
 def test_cli_shows_the_preview_then_asks(site, monkeypatch):
     monkeypatch.setattr(common, "interactive", lambda: True)
     asked: list[str] = []
-    monkeypatch.setattr(common.typer, "confirm", lambda q, **_: asked.append(q) or False)
+    monkeypatch.setattr(terminal, "ask", lambda q: asked.append(q) or False)
     result, out = run_cli("issue", "transition", "DEMO-1", "DEMO-3", "--to", "To Do")
     assert result.exit_code == 2  # declined: nothing ran
     assert asked == ["Move 2 issues (DEMO-1, DEMO-3) to To Do?"]

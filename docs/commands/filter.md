@@ -18,6 +18,7 @@ acli-py filter list [OPTIONS]
 | `--favorites`, `--favourites` |  | Your starred filters instead. |
 | `--json` |  | Print JSON. |
 | `--csv` |  | Print CSV. |
+| `--output` `[table\|json\|csv\|keys\|jsonl]` |  | How to print: table, json, csv, or keys / jsonl (one per line, for pipes). |
 
 
 ## `acli-py filter search`
@@ -37,6 +38,7 @@ acli-py filter search [OPTIONS]
 | `-A`, `--all` |  | Fetch every page, ignoring --limit. |
 | `--json` |  | Print JSON. |
 | `--csv` |  | Print CSV. |
+| `--output` `[table\|json\|csv\|keys\|jsonl]` |  | How to print: table, json, csv, or keys / jsonl (one per line, for pipes). |
 
 
 ## `acli-py filter view`
@@ -135,7 +137,7 @@ acli-py filter owner [FILTER_IDS] [OPTIONS]
 | Option | Default | Description |
 |---|---|---|
 | `--to` `TEXT` | required | New owner: email, name or account id. |
-| `FILTER_IDS` |  | Filter ids. |
+| `FILTER_IDS` |  | Filter ids ('-' reads them from stdin). |
 | `-f`, `--from-file` `PATH` |  | Read filter ids from a file (commas, spaces or lines). |
 | `-y`, `--yes` |  | Don't ask for confirmation. |
 | `--ignore-errors` |  | Keep going when one item fails; exit 1 at the end. |
@@ -157,3 +159,4 @@ acli-py filter columns FILTER_ID [OPTIONS]
 | `--reset` |  | Go back to the default columns. |
 | `-n`, `--dry-run` |  | Show what would change without changing anything. Reads still run. |
 | `--json` |  | Print JSON. |
+| `--output` `[table\|json\|csv\|keys\|jsonl]` |  | How to print: table, json, csv, or keys / jsonl (one per line, for pipes). |

@@ -21,6 +21,7 @@ acli-py sprint list [BOARD] [OPTIONS]
 | `-A`, `--all` |  | Fetch every page, ignoring --limit. |
 | `--json` |  | Print JSON. |
 | `--csv` |  | Print CSV. |
+| `--output` `[table\|json\|csv\|keys\|jsonl]` |  | How to print: table, json, csv, or keys / jsonl (one per line, for pipes). |
 
 
 ## `acli-py sprint view`
@@ -140,6 +141,7 @@ acli-py sprint issues SPRINT [OPTIONS]
 | `-A`, `--all` |  | Fetch every page, ignoring --limit. |
 | `--json` |  | Print JSON. |
 | `--csv` |  | Print CSV. |
+| `--output` `[table\|json\|csv\|keys\|jsonl]` |  | How to print: table, json, csv, or keys / jsonl (one per line, for pipes). |
 
 
 ## `acli-py sprint add`
@@ -153,7 +155,7 @@ acli-py sprint add SPRINT [KEYS] [OPTIONS]
 | Option | Default | Description |
 |---|---|---|
 | `SPRINT` | required | Sprint id (see `acli-py sprint list`). |
-| `KEYS` |  | Issue keys (DEMO-1 DEMO-2, or DEMO-1,DEMO-2). |
+| `KEYS` |  | Issue keys (DEMO-1 DEMO-2, or DEMO-1,DEMO-2); '-' reads keys or JSON lines from stdin. |
 | `-q`, `--jql` `TEXT` |  | Act on the issues this JQL or smart query finds. |
 | `-n`, `--dry-run` |  | Show what would change without changing anything. Reads still run. |
 
@@ -168,6 +170,6 @@ acli-py sprint remove [KEYS] [OPTIONS]
 
 | Option | Default | Description |
 |---|---|---|
-| `KEYS` |  | Issue keys (DEMO-1 DEMO-2, or DEMO-1,DEMO-2). |
+| `KEYS` |  | Issue keys (DEMO-1 DEMO-2, or DEMO-1,DEMO-2); '-' reads keys or JSON lines from stdin. |
 | `-q`, `--jql` `TEXT` |  | Act on the issues this JQL or smart query finds. |
 | `-n`, `--dry-run` |  | Show what would change without changing anything. Reads still run. |

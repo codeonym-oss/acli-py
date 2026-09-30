@@ -15,7 +15,8 @@ acli-py tui
 
 Start with [Getting started](guide/getting-started.md), then try the
 [TUI and the shell](guide/interactive.md). [Dry runs and bulk changes](guide/dry-run.md)
-explains how changes are previewed and applied to many issues. Every command is listed under
+explains how changes are previewed and applied to many issues, and [Pipes](guide/pipes.md)
+how to chain commands. Every command is listed under
 [Commands](commands/index.md), generated from the CLI's own help.
 
 ```{toctree}
@@ -25,6 +26,7 @@ explains how changes are previewed and applied to many issues. Every command is 
 guide/getting-started
 guide/interactive
 guide/dry-run
+guide/pipes
 guide/fields
 guide/from-acli
 ```

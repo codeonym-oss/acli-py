@@ -23,6 +23,7 @@ from acli_py.domain.issue import Status, StatusCategory
 from acli_py.domain.workflow import NoSuchTransitionError, Transition, pick
 from acli_py.infrastructure.audit import AuditFile
 from acli_py.infrastructure.jira.client import JiraClient
+from acli_py.presentation import terminal
 from acli_py.presentation.cli import common
 from tests import fake_jira
 
@@ -204,9 +205,7 @@ def test_terminal_asks_only_on_a_terminal(monkeypatch):
         asyncio.run(confirmer.confirm(change))
     asked: list[str] = []
     monkeypatch.setattr(common, "interactive", lambda: True)
-    monkeypatch.setattr(
-        common.typer, "confirm", lambda question, **_: asked.append(question) or True
-    )
+    monkeypatch.setattr(terminal, "ask", lambda question: asked.append(question) or True)
     assert asyncio.run(confirmer.confirm(change))
     assert asked == ["Move DEMO-1 to Done?"]
 

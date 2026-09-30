@@ -8,7 +8,6 @@ import functools
 import os
 import shlex
 import subprocess
-import sys
 import tempfile
 import webbrowser
 from collections.abc import Callable
@@ -34,7 +33,7 @@ from acli_py.infrastructure.config import Account, Config
 from acli_py.infrastructure.jira import resolve
 from acli_py.infrastructure.jira.client import JiraClient, JiraError, normalize_url, site_host
 from acli_py.infrastructure.jira.resolve import ResolveError
-from acli_py.presentation import output
+from acli_py.presentation import output, terminal
 from acli_py.presentation.output import Format, pick_format
 
 TRUTHY = ("1", "true", "yes", "on")
@@ -42,6 +41,9 @@ TRUTHY = ("1", "true", "yes", "on")
 # Commands over many issues exit 1 when some failed, and this when nothing ran: the change
 # was declined, or went over the safety cap.
 EXIT_ABORTED = 2
+# The reader of our output went away (`| head`): stop quietly, as a shell tool killed by
+# SIGPIPE would (128 + 13).
+EXIT_BROKEN_PIPE = 141
 
 
 # ── process-wide state set by the root callback ──────────────────────────────
@@ -78,6 +80,14 @@ DryRunOpt = Annotated[
 YesOpt = Annotated[bool, typer.Option("--yes", "-y", help="Don't ask for confirmation.")]
 JsonOpt = Annotated[bool, typer.Option("--json", help="Print JSON.")]
 CsvOpt = Annotated[bool, typer.Option("--csv", help="Print CSV.")]
+OutputOpt = Annotated[
+    Format | None,
+    typer.Option(
+        "--output",
+        help="How to print: table, json, csv, or keys / jsonl (one per line, for pipes).",
+        show_default=False,
+    ),
+]
 LimitOpt = Annotated[
     int, typer.Option("--limit", "-l", min=1, help="Show at most this many results.")
 ]
@@ -91,7 +101,11 @@ IgnoreErrorsOpt = Annotated[
 # Picking issues for bulk commands.
 KeysArg = Annotated[
     list[str] | None,
-    typer.Argument(help="Issue keys (DEMO-1 DEMO-2, or DEMO-1,DEMO-2).", show_default=False),
+    typer.Argument(
+        help="Issue keys (DEMO-1 DEMO-2, or DEMO-1,DEMO-2); '-' reads keys or JSON lines "
+        "from stdin.",
+        show_default=False,
+    ),
 ]
 JqlOpt = Annotated[
     str | None,
@@ -148,9 +162,9 @@ def limit_of(limit: int, all_pages: bool) -> int | None:
     return None if all_pages else limit
 
 
-def fmt(as_json: bool = False, as_csv: bool = False) -> Format:
-    """Return the chosen output format."""
-    return pick_format(as_json, as_csv)
+def fmt(as_json: bool = False, as_csv: bool = False, chosen: Format | None = None) -> Format:
+    """Return the chosen output format (--json, --csv or --output)."""
+    return pick_format(as_json, as_csv, chosen)
 
 
 # ── errors ───────────────────────────────────────────────────────────────────
@@ -177,6 +191,9 @@ def guarded(command: Callable) -> Callable:
             raise fail(escape(str(error))) from None
         except Declined as declined:
             raise fail(escape(str(declined)), EXIT_ABORTED) from None
+        except BrokenPipeError:
+            output.silence_stdout()
+            raise typer.Exit(EXIT_BROKEN_PIPE) from None
         except OSError as error:
             raise fail(escape(f"{error.strerror or error}: {error.filename or ''}")) from None
 
@@ -328,8 +345,8 @@ def close_clients() -> None:
 
 
 def interactive() -> bool:
-    """Return whether there is a terminal to ask questions on."""
-    return sys.stdin.isatty()
+    """Return whether there is a terminal to ask questions on (mid-pipe, the one behind it)."""
+    return terminal.available()
 
 
 class TerminalConfirmer:
@@ -345,7 +362,7 @@ class TerminalConfirmer:
             raise Declined(f"{question} Refusing without --yes (no terminal to ask on).")
         if len(change.preview) > 1:
             output.errors.print(preview_table(change))
-        return typer.confirm(question, default=False, err=True)
+        return terminal.ask(question)
 
 
 def preview_table(change: Change) -> Table:
@@ -368,7 +385,7 @@ def confirm(question: str, yes: bool, session: Session | None = None) -> None:
         return
     if not interactive():
         raise fail(f"{question} Refusing without [bold]--yes[/] (no terminal to ask on).")
-    if not typer.confirm(question, default=False, err=True):
+    if not terminal.ask(question):
         raise fail("Cancelled.", code=1)
 
 
