@@ -52,8 +52,10 @@ Commands that change issues (`edit`, `assign`, `transition`, `delete`, `archive`
 
 ## Confirmation and errors
 
-Before changing more than one issue, and before any deletion, `acli-py` asks for confirmation.
-`--yes` (`-y`) answers for you. Without a terminal (in a script or a pipe), `acli-py` refuses
+Before changing an issue, `acli-py` asks for confirmation. Creating or cloning one issue goes
+ahead without asking, since nothing already there changes; creating or cloning several asks
+once. Deleting several issues asks you to type how many, not just `y`. `--yes` (`-y`) answers
+for you. Without a terminal (in a script or a pipe), `acli-py` refuses
 rather than guess, so scripts must pass `--yes`.
 
 Each issue gets its own ✔ or ✘ line. By default `acli-py` stops at the first failure and reports
@@ -62,13 +64,14 @@ if anything failed, and `--json` prints a per-item result list.
 
 ## The bulk engine
 
-`issue transition`, `edit`, `assign`, `watch` and `unwatch` run on the bulk engine, and the
-other commands that change many issues are moving onto it. They ask before changing even one
-issue. The engine adds:
+`issue transition`, `edit`, `assign`, `watch`, `unwatch`, `create`, `clone`, `delete`,
+`archive` and `unarchive` run on the bulk engine, and the other commands that change many
+issues are moving onto it. The engine adds:
 
 - a preview before the question: each issue, its value now and after (for an edit, when it
   changes one field);
-- `--concurrency N` (`-c`, default 4, at most 16): how many issues to work on at once;
+- `--concurrency N` (`-c`, default 4, at most 16): how many issues to work on at once
+  (`create` defaults to 1, so the new keys follow the file's order);
 - `--continue-on-error` (also `--ignore-errors`): keep going past a failure;
 - `--limit N`: act on at most N of the issues found;
 - a safety cap of 200 issues, which only `--force` goes past;

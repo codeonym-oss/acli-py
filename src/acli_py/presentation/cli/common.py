@@ -244,6 +244,12 @@ class Session:
             self._bus = build_bus(self.site(), confirmer=TerminalConfirmer())
         return self._bus
 
+    def bus_to(self, other: Session) -> Bus:
+        """Return a bus for this site whose copies (clones) go to `other`'s site."""
+        if other.url == self.url:
+            return self.bus
+        return build_bus(self.site(), confirmer=TerminalConfirmer(), destination=other.site())
+
     def send(self, message: Any) -> Any:
         """Send a query or command on the bus, and wait for its answer."""
         return asyncio.run(self.bus.send(message))
@@ -353,6 +359,7 @@ class TerminalConfirmer:
     """The CLI's and the shell's way to ask before a change: a y/N question on stderr.
 
     A change over several issues shows its preview first: each issue, its value now and after.
+    A destructive one over several issues asks the user to type how many, not just y.
     """
 
     async def confirm(self, change: Change) -> bool:
@@ -362,6 +369,11 @@ class TerminalConfirmer:
             raise Declined(f"{question} Refusing without --yes (no terminal to ask on).")
         if len(change.preview) > 1:
             output.errors.print(preview_table(change))
+        if change.destructive and len(change.keys) > 1:
+            count = str(len(change.keys))
+            return (
+                terminal.answer(f"{question} This can't be undone. Type {count} to agree") == count
+            )
         return terminal.ask(question)
 
 
@@ -517,21 +529,27 @@ def run_many(
     force: bool = False,
     as_json: bool = False,
     describe: Callable[[Any], str] | None = None,
+    line: Callable[[Any], str] | None = None,
+    bus: Bus | None = None,
 ) -> Report:
     """Run one command per issue through the bulk engine: preview, ask once, run, sum up.
 
-    Prints a line per issue as it finishes and a summary at the end; exits 1 if any failed.
+    Prints a line per issue as it finishes ('DEMO-1 {done} {describe(result)}', or all of
+    `line(result)`) and a summary at the end; exits 1 if any failed.
     """
 
     def show(outcome: Any) -> None:
         if not outcome.ok:
             output.error(f"{escape(outcome.key)}: {escape(outcome.error)}")
             return
+        if line is not None:
+            output.success(line(outcome.result))
+            return
         detail = describe(outcome.result) if describe else ""
         output.success(f"{escape(outcome.key)} {done}" + (f" {detail}" if detail else ""))
 
     report: Report = asyncio.run(
-        session.bus.bulk.run(
+        (bus or session.bus).bulk.run(
             commands,
             yes=yes,
             concurrency=concurrency,

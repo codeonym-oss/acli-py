@@ -72,9 +72,12 @@ acli-py issue search 'project = DEMO AND sprint in openSprints()' --csv
 
 ## `acli-py issue create`
 
-Create an issue, or many from a JSON/CSV file.
+Create an issue, or many from JSON (a file, or JSON lines on stdin) or a CSV file.
 
-Options given on the command line fill in what each file row leaves out.
+Options given on the command line fill in what each row leaves out. One issue is created
+straight away; many are listed first and asked about once (--yes skips it). Each
+new key is kept in the audit log. Exits 0 when all were created, 1 when some failed, 2 when
+nothing ran.
 
 ```text
 acli-py issue create [OPTIONS]
@@ -83,6 +86,7 @@ acli-py issue create [OPTIONS]
 ```sh
 acli-py issue create -p DEMO -t Bug -s "Login fails on Safari" -a @me -L web
 acli-py issue create --from-csv backlog.csv -p DEMO --dry-run
+cat new.jsonl | acli-py issue create --from-json - -p DEMO -y
 ```
 
 | Option | Default | Description |
@@ -102,12 +106,14 @@ acli-py issue create --from-csv backlog.csv -p DEMO --dry-run
 | `--due` `TEXT` |  | Due date, YYYY-MM-DD ('' clears). |
 | `-F`, `--field` `TEXT` |  | Any field: 'Story Points=5', 'Team=Blue', or raw JSON with 'NAME:=JSON'. |
 | `-e`, `--editor` |  | Write the summary and description in $EDITOR. |
-| `--from-json` `PATH` |  | Create from a JSON file: one issue or a list. |
+| `--from-json` `PATH` |  | Create from JSON: one issue, a list, or JSON lines; '-' reads stdin. |
 | `--from-csv` `PATH` |  | Create one issue per row of a CSV file with a header. |
 | `-f`, `--from-file` `PATH` |  | Read the summary (first line) and description (the rest) from a text file. |
 | `--template` |  | Print an example --from-json file and exit. |
 | `--open` |  | Open the new issue in the browser. |
-| `--ignore-errors` |  | Keep going when one item fails; exit 1 at the end. |
+| `-c`, `--concurrency` `INTEGER` | `1` | How many issues to create at once (1 keeps the new keys in file order). |
+| `--ignore-errors`, `--continue-on-error` |  | Keep going when an issue fails (else stop starting new ones); exit 1 at the end. |
+| `--force` |  | Allow acting on more than 200 issues at once. |
 | `-y`, `--yes` |  | Don't ask for confirmation. |
 | `-n`, `--dry-run` |  | Show what would change without changing anything. Reads still run. |
 | `--json` |  | Print JSON. |
@@ -311,10 +317,20 @@ acli-py issue transitions KEY [OPTIONS]
 
 ## `acli-py issue delete`
 
-Delete issues for good. Asks first; try --dry-run to see which.
+Delete issues for good.
+
+Lists the issues first, then asks: for several, type how many to agree. --yes
+skips the question; try --dry-run to see which. What each issue was (summary,
+type, status) is kept in the audit log. Exits 0 when all were deleted, 1 when some failed,
+2 when nothing ran.
 
 ```text
 acli-py issue delete [KEYS] [OPTIONS]
+```
+
+```sh
+acli-py issue delete DEMO-9
+acli-py issue search 'labels = spam' --output keys | acli-py issue delete - --yes
 ```
 
 | Option | Default | Description |
@@ -324,8 +340,11 @@ acli-py issue delete [KEYS] [OPTIONS]
 | `--filter` `TEXT` |  | Act on the issues of this saved filter id. |
 | `-f`, `--from-file` `PATH` |  | Read issue keys from a file (commas, spaces or lines; '-' for stdin). |
 | `--with-subtasks` |  | Also delete subtasks (else Jira refuses). |
+| `-l`, `--limit` `INTEGER` |  | Act on at most this many issues. |
+| `-c`, `--concurrency` `INTEGER` | `4` | How many issues to work on at once. |
+| `--ignore-errors`, `--continue-on-error` |  | Keep going when an issue fails (else stop starting new ones); exit 1 at the end. |
+| `--force` |  | Allow acting on more than 200 issues at once. |
 | `-y`, `--yes` |  | Don't ask for confirmation. |
-| `--ignore-errors` |  | Keep going when one item fails; exit 1 at the end. |
 | `-n`, `--dry-run` |  | Show what would change without changing anything. Reads still run. |
 | `--json` |  | Print JSON. |
 
@@ -334,8 +353,14 @@ acli-py issue delete [KEYS] [OPTIONS]
 
 Archive issues: hidden from boards and search, restorable later (Premium).
 
+Shows each issue's status, then asks once; --yes skips the question.
+
 ```text
 acli-py issue archive [KEYS] [OPTIONS]
+```
+
+```sh
+acli-py issue archive --jql 'project = DEMO AND resolved < -365d' --yes
 ```
 
 | Option | Default | Description |
@@ -344,15 +369,18 @@ acli-py issue archive [KEYS] [OPTIONS]
 | `-q`, `--jql` `TEXT` |  | Act on the issues this JQL or smart query finds. |
 | `--filter` `TEXT` |  | Act on the issues of this saved filter id. |
 | `-f`, `--from-file` `PATH` |  | Read issue keys from a file (commas, spaces or lines; '-' for stdin). |
+| `-l`, `--limit` `INTEGER` |  | Act on at most this many issues. |
+| `-c`, `--concurrency` `INTEGER` | `4` | How many issues to work on at once. |
+| `--ignore-errors`, `--continue-on-error` |  | Keep going when an issue fails (else stop starting new ones); exit 1 at the end. |
+| `--force` |  | Allow acting on more than 200 issues at once. |
 | `-y`, `--yes` |  | Don't ask for confirmation. |
-| `--ignore-errors` |  | Keep going when one item fails; exit 1 at the end. |
 | `-n`, `--dry-run` |  | Show what would change without changing anything. Reads still run. |
 | `--json` |  | Print JSON. |
 
 
 ## `acli-py issue unarchive`
 
-Restore archived issues.
+Restore archived issues (by key: search doesn't find archived issues).
 
 ```text
 acli-py issue unarchive [KEYS] [OPTIONS]
@@ -362,8 +390,11 @@ acli-py issue unarchive [KEYS] [OPTIONS]
 |---|---|---|
 | `KEYS` |  | Issue keys (DEMO-1 DEMO-2, or DEMO-1,DEMO-2); '-' reads keys or JSON lines from stdin. |
 | `-f`, `--from-file` `PATH` |  | Read issue keys from a file (commas, spaces or lines; '-' for stdin). |
+| `-l`, `--limit` `INTEGER` |  | Act on at most this many issues. |
+| `-c`, `--concurrency` `INTEGER` | `4` | How many issues to work on at once. |
+| `--ignore-errors`, `--continue-on-error` |  | Keep going when an issue fails (else stop starting new ones); exit 1 at the end. |
+| `--force` |  | Allow acting on more than 200 issues at once. |
 | `-y`, `--yes` |  | Don't ask for confirmation. |
-| `--ignore-errors` |  | Keep going when one item fails; exit 1 at the end. |
 | `-n`, `--dry-run` |  | Show what would change without changing anything. Reads still run. |
 | `--json` |  | Print JSON. |
 
@@ -372,8 +403,9 @@ acli-py issue unarchive [KEYS] [OPTIONS]
 
 Copy issues (summary, description, type, priority, labels…), in place or to a project.
 
-With --to-site, copies go to another site you are logged in to, each with a web
-link back to its original.
+One issue is copied straight away; several are asked about once (--yes skips
+it). With --to-site, copies go to another site you are logged in to, each with a
+web link back to its original. Each copy's key is kept in the audit log.
 
 ```text
 acli-py issue clone [KEYS] [OPTIONS]
@@ -395,8 +427,11 @@ acli-py issue clone DEMO-1 --to-site me@other.atlassian.net --to-project NEW
 | `-q`, `--jql` `TEXT` |  | Act on the issues this JQL or smart query finds. |
 | `--filter` `TEXT` |  | Act on the issues of this saved filter id. |
 | `-f`, `--from-file` `PATH` |  | Read issue keys from a file (commas, spaces or lines; '-' for stdin). |
+| `-l`, `--limit` `INTEGER` |  | Act on at most this many issues. |
+| `-c`, `--concurrency` `INTEGER` | `4` | How many issues to work on at once. |
+| `--ignore-errors`, `--continue-on-error` |  | Keep going when an issue fails (else stop starting new ones); exit 1 at the end. |
+| `--force` |  | Allow acting on more than 200 issues at once. |
 | `-y`, `--yes` |  | Don't ask for confirmation. |
-| `--ignore-errors` |  | Keep going when one item fails; exit 1 at the end. |
 | `-n`, `--dry-run` |  | Show what would change without changing anything. Reads still run. |
 | `--json` |  | Print JSON. |
 

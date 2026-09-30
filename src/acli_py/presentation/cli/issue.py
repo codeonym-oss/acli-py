@@ -12,8 +12,12 @@ import typer
 from rich.markup import escape
 from rich.table import Table
 
-from acli_py.application.bulk import CONCURRENCY
+from acli_py.application.bulk import CONCURRENCY, MAX_CONCURRENCY
+from acli_py.application.commands.archive_issue.command import ArchiveIssue
 from acli_py.application.commands.assign_issue.command import AssignIssue
+from acli_py.application.commands.clone_issue.command import CloneIssue
+from acli_py.application.commands.create_issue.command import CreateIssue
+from acli_py.application.commands.delete_issue.command import DeleteIssue
 from acli_py.application.commands.edit_issue.command import EditIssue
 from acli_py.application.commands.transition_issue.command import TransitionIssue
 from acli_py.application.commands.watch_issue.command import WatchIssue
@@ -25,7 +29,7 @@ from acli_py.domain.jql.catalog import spelling
 from acli_py.domain.jql.smart import cheatsheet
 from acli_py.infrastructure.jira import fields as issue_fields
 from acli_py.infrastructure.jira import resolve
-from acli_py.infrastructure.jira.client import API, DRY_RUN_ID
+from acli_py.infrastructure.jira.client import DRY_RUN_ID
 from acli_py.infrastructure.jira.fields import IssueInput, flat
 from acli_py.presentation import output
 from acli_py.presentation.cli.common import (
@@ -37,7 +41,6 @@ from acli_py.presentation.cli.common import (
     FilterOpt,
     ForceOpt,
     FromFileOpt,
-    IgnoreErrorsOpt,
     JqlOpt,
     JsonOpt,
     KeepGoingOpt,
@@ -48,7 +51,6 @@ from acli_py.presentation.cli.common import (
     Session,
     WebOpt,
     YesOpt,
-    confirm,
     connect,
     edit_text,
     fail,
@@ -58,7 +60,6 @@ from acli_py.presentation.cli.common import (
     open_url,
     pick_issues,
     plural,
-    run_bulk,
     run_many,
 )
 from acli_py.presentation.output import Column, Format, dig
@@ -409,7 +410,10 @@ def create(
     ] = False,
     from_json: Annotated[
         Path | None,
-        typer.Option("--from-json", help="Create from a JSON file: one issue or a list."),
+        typer.Option(
+            "--from-json",
+            help="Create from JSON: one issue, a list, or JSON lines; '-' reads stdin.",
+        ),
     ] = None,
     from_csv: Annotated[
         Path | None,
@@ -427,17 +431,32 @@ def create(
         bool, typer.Option("--template", help="Print an example --from-json file and exit.")
     ] = False,
     web: Annotated[bool, typer.Option("--open", help="Open the new issue in the browser.")] = False,
-    ignore_errors: IgnoreErrorsOpt = False,
+    concurrency: Annotated[
+        int,
+        typer.Option(
+            "--concurrency",
+            "-c",
+            min=1,
+            max=MAX_CONCURRENCY,
+            help="How many issues to create at once (1 keeps the new keys in file order).",
+        ),
+    ] = 1,
+    keep_going: KeepGoingOpt = False,
+    force: ForceOpt = False,
     yes: YesOpt = False,
     dry_run: DryRunOpt = False,
     as_json: JsonOpt = False,
 ) -> None:
-    """Create an issue, or many from a JSON/CSV file.
+    """Create an issue, or many from JSON (a file, or JSON lines on stdin) or a CSV file.
 
-    Options given on the command line fill in what each file row leaves out.
+    Options given on the command line fill in what each row leaves out. One issue is created
+    straight away; many are listed first and asked about once ([bold]--yes[/] skips it). Each
+    new key is kept in the audit log. Exits 0 when all were created, 1 when some failed, 2 when
+    nothing ran.
 
     [dim]acli-py issue create -p DEMO -t Bug -s "Login fails on Safari" -a @me -L web
-    acli-py issue create --from-csv backlog.csv -p DEMO --dry-run[/]
+    acli-py issue create --from-csv backlog.csv -p DEMO --dry-run
+    cat new.jsonl | acli-py issue create --from-json - -p DEMO -y[/]
     """
     if template:
         output.print_json([issue_fields.TEMPLATE])
@@ -462,7 +481,23 @@ def create(
         if from_json and from_csv:
             raise fail("Give one of --from-json and --from-csv.")
         rows = issue_fields.read_rows(from_json or from_csv)  # type: ignore[arg-type]
-        _create_many(session, rows, common, yes, ignore_errors, as_json)
+        if not rows:
+            raise fail("No issues to create.")
+        wanted = [_merge(IssueInput.from_mapping(row), common) for row in rows]
+        for n, item in enumerate(wanted, 1):
+            if not item.raw and not item.summary:
+                raise fail(f"Row {n} has no summary.")
+        run_many(
+            session,
+            _creations(session, wanted),
+            done="would be created" if session.dry_run else "created",
+            yes=yes,
+            concurrency=concurrency,
+            keep_going=keep_going,
+            force=force,
+            as_json=as_json,
+            describe=lambda changed: _created_as(session, changed),
+        )
         return
     if from_file:
         text = resolve.read_text_arg(None, from_file) or ""
@@ -475,16 +510,39 @@ def create(
         )
     if not common.summary:
         raise fail('A summary is required: pass [bold]-s "…"[/] or use [bold]--editor[/].')
-    created = _create_one(session, common)
-    if as_json:
-        output.print_json(created)
-    key = created.get("key", "?")
-    if session.dry_run:
-        output.info("Would create the issue above.")
-        return
-    output.success(f"Created [bold cyan]{escape(key)}[/]  {escape(session.browse(key))}")
-    if web:
-        open_url(session.browse(key))
+    report = run_many(
+        session,
+        _creations(session, [common]),
+        done="would be created" if session.dry_run else "created",
+        yes=yes,
+        as_json=as_json,
+        line=lambda changed: (
+            "Would create the issue above."
+            if session.dry_run
+            else f"Created [bold cyan]{escape(changed.key)}[/]  "
+            f"{escape(session.browse(changed.key))}"
+        ),
+    )
+    if web and not session.dry_run:
+        open_url(session.browse(report.succeeded[0].result.key))
+
+
+def _creations(session: Session, wanted: list[IssueInput]) -> list[CreateIssue]:
+    """Return one `CreateIssue` per issue, its fields resolved (names to ids) on the site."""
+    catalog = resolve.FieldCatalog.load(session.client) if any(w.extra for w in wanted) else None
+    commands = []
+    for n, item in enumerate(wanted, 1):
+        item = _defaults(session, item)
+        fields = issue_fields.build(
+            session.client, item, me=session.me, creating=True, catalog=catalog
+        )
+        commands.append(CreateIssue(fields, item.raw.get("update") or {}, f"#{n}"))
+    return commands
+
+
+def _created_as(session: Session, changed: Any) -> str:
+    """Return how a created issue reads in a report: 'as DEMO-9' (nothing in a dry run)."""
+    return "" if changed.key == DRY_RUN_ID else f"as [bold cyan]{escape(changed.key)}[/]"
 
 
 def _defaults(session: Session, wanted: IssueInput) -> IssueInput:
@@ -492,18 +550,6 @@ def _defaults(session: Session, wanted: IssueInput) -> IssueInput:
         wanted.project = session.project(wanted.project)
         wanted.type = wanted.type or session.config.defaults.get("issue-type") or "Task"
     return wanted
-
-
-def _create_one(session: Session, wanted: IssueInput, catalog: Any = None) -> dict:
-    wanted = _defaults(session, wanted)
-    body: dict[str, Any] = {
-        "fields": issue_fields.build(
-            session.client, wanted, me=session.me, creating=True, catalog=catalog
-        )
-    }
-    if wanted.raw.get("update"):
-        body["update"] = wanted.raw["update"]
-    return session.client.post(f"{API}/issue", body)
 
 
 def _merge(row: IssueInput, common: IssueInput) -> IssueInput:
@@ -519,41 +565,6 @@ def _merge(row: IssueInput, common: IssueInput) -> IssueInput:
         row.description = common.description
     row.extra = [*common.extra, *row.extra]
     return row
-
-
-def _create_many(
-    session: Session,
-    rows: list[dict],
-    common: IssueInput,
-    yes: bool,
-    ignore_errors: bool,
-    as_json: bool,
-) -> None:
-    if not rows:
-        raise fail("The file holds no issues.")
-    wanted = [_merge(IssueInput.from_mapping(row), common) for row in rows]
-    for n, item in enumerate(wanted, 1):
-        if not item.raw and not item.summary:
-            raise fail(f"Row {n} has no summary.")
-    confirm(f"Create {plural(len(wanted), 'issue')}?", yes, session)
-    catalog = resolve.FieldCatalog.load(session.client) if any(w.extra for w in wanted) else None
-    labels = {f"#{n}": w for n, w in enumerate(wanted, 1)}
-
-    def one(label: str) -> dict:
-        return _create_one(session, labels[label], catalog)
-
-    run_bulk(
-        list(labels),
-        one,
-        done="would be created" if session.dry_run else "created",
-        ignore_errors=ignore_errors,
-        as_json=as_json,
-        describe=lambda label, r: (
-            escape(labels[label].summary or dig(labels[label].raw, "fields", "summary", default=""))
-            if r.get("key") == DRY_RUN_ID
-            else f"as [bold cyan]{escape(r.get('key', '?'))}[/]"
-        ),
-    )
 
 
 # What `issue edit --from-json` takes: Jira's own edit payload.
@@ -947,65 +958,67 @@ def delete(
     subtasks: Annotated[
         bool, typer.Option("--with-subtasks", help="Also delete subtasks (else Jira refuses).")
     ] = False,
+    limit: BulkLimitOpt = None,
+    concurrency: ConcurrencyOpt = CONCURRENCY,
+    keep_going: KeepGoingOpt = False,
+    force: ForceOpt = False,
     yes: YesOpt = False,
-    ignore_errors: IgnoreErrorsOpt = False,
     dry_run: DryRunOpt = False,
     as_json: JsonOpt = False,
 ) -> None:
-    """Delete issues for good. Asks first; try --dry-run to see which."""
+    """Delete issues for good.
+
+    Lists the issues first, then asks: for several, type how many to agree. [bold]--yes[/]
+    skips the question; try [bold]--dry-run[/] to see which. What each issue was (summary,
+    type, status) is kept in the audit log. Exits 0 when all were deleted, 1 when some failed,
+    2 when nothing ran.
+
+    [dim]acli-py issue delete DEMO-9
+    acli-py issue search 'labels = spam' --output keys | acli-py issue delete - --yes[/]
+    """
     session = connect(dry_run)
-    picked = resolve.targets(session.client, keys, jql, saved_filter, from_file)
-    confirm(
-        f"Permanently delete {plural(len(picked), 'issue')} ({', '.join(picked[:5])}"
-        f"{'…' if len(picked) > 5 else ''})?",
-        yes,
+    picked = pick_issues(session, keys, jql, saved_filter, from_file, limit=limit, force=force)
+    if not picked:
+        output.info("No issues match; nothing to delete.")
+        return
+    run_many(
         session,
-    )
-    run_bulk(
-        picked,
-        lambda key: session.client.delete(
-            f"{API}/issue/{key}", deleteSubtasks="true" if subtasks else None
-        ),
+        [DeleteIssue(key, subtasks) for key in picked],
         done="would be deleted" if session.dry_run else "deleted",
-        ignore_errors=ignore_errors,
+        yes=yes,
+        concurrency=concurrency,
+        keep_going=keep_going,
+        force=force,
         as_json=as_json,
     )
 
 
-def _archive(unarchive: bool, **kwargs: Any) -> None:
+def _archive(archive: bool, **kwargs: Any) -> None:
+    """Archive or restore issues."""
     session = connect(kwargs["dry_run"])
-    picked = resolve.targets(
-        session.client, kwargs["keys"], kwargs.get("jql"), kwargs.get("saved_filter"),
+    picked = pick_issues(
+        session,
+        kwargs["keys"],
+        kwargs.get("jql"),
+        kwargs.get("saved_filter"),
         kwargs["from_file"],
-    )  # fmt: skip
-    verb = "Unarchive" if unarchive else "Archive"
-    confirm(f"{verb} {plural(len(picked), 'issue')}?", kwargs["yes"], session)
-    path = f"{API}/issue/{'unarchive' if unarchive else 'archive'}"
-    done = f"{verb.lower()}d"
-    results: list[dict] = []
-    # The archive endpoints take up to 1000 issues per call. Without --ignore-errors, a batch
-    # with failures stops the batches after it.
-    for start in range(0, len(picked), 1000):
-        if results and results[-1].get("errors") and not kwargs["ignore_errors"]:
-            output.info(f"{plural(len(picked) - start, 'issue')} not tried.")
-            break
-        batch = picked[start : start + 1000]
-        result = session.client.put(path, {"issueIdsOrKeys": batch}) or {}
-        results.append(result)
-        failed = {
-            key
-            for error in (result.get("errors") or {}).values()
-            for key in error.get("issueIdsOrKeys", [])
-        }
-        for key in batch:
-            if key in failed:
-                output.error(f"{key} could not be {done}")
-            else:
-                output.success(f"{key} {'would be ' if session.dry_run else ''}{done}")
-    if kwargs["as_json"]:
-        output.print_json(results)
-    if any(r.get("errors") for r in results):
-        raise typer.Exit(1)
+        limit=kwargs["limit"],
+        force=kwargs["force"],
+    )
+    if not picked:
+        output.info("No issues match; nothing to archive." if archive else "No issues given.")
+        return
+    done = "archived" if archive else "unarchived"
+    run_many(
+        session,
+        [ArchiveIssue(key, archive) for key in picked],
+        done=("would be " if session.dry_run else "") + done,
+        yes=kwargs["yes"],
+        concurrency=kwargs["concurrency"],
+        keep_going=kwargs["keep_going"],
+        force=kwargs["force"],
+        as_json=kwargs["as_json"],
+    )
 
 
 @app.command()
@@ -1015,13 +1028,21 @@ def archive(
     jql: JqlOpt = None,
     saved_filter: FilterOpt = None,
     from_file: FromFileOpt = None,
+    limit: BulkLimitOpt = None,
+    concurrency: ConcurrencyOpt = CONCURRENCY,
+    keep_going: KeepGoingOpt = False,
+    force: ForceOpt = False,
     yes: YesOpt = False,
-    ignore_errors: IgnoreErrorsOpt = False,
     dry_run: DryRunOpt = False,
     as_json: JsonOpt = False,
 ) -> None:
-    """Archive issues: hidden from boards and search, restorable later (Premium)."""
-    _archive(False, **locals())
+    """Archive issues: hidden from boards and search, restorable later (Premium).
+
+    Shows each issue's status, then asks once; [bold]--yes[/] skips the question.
+
+    [dim]acli-py issue archive --jql 'project = DEMO AND resolved < -365d' --yes[/]
+    """
+    _archive(True, **locals())
 
 
 @app.command()
@@ -1029,19 +1050,16 @@ def archive(
 def unarchive(
     keys: KeysArg = None,
     from_file: FromFileOpt = None,
+    limit: BulkLimitOpt = None,
+    concurrency: ConcurrencyOpt = CONCURRENCY,
+    keep_going: KeepGoingOpt = False,
+    force: ForceOpt = False,
     yes: YesOpt = False,
-    ignore_errors: IgnoreErrorsOpt = False,
     dry_run: DryRunOpt = False,
     as_json: JsonOpt = False,
 ) -> None:
-    """Restore archived issues."""
-    _archive(True, **locals())
-
-
-CLONE_FIELDS = [
-    "summary", "description", "issuetype", "priority", "labels", "components", "duedate",
-    "environment", "parent", "project", "fixVersions",
-]  # fmt: skip
+    """Restore archived issues (by key: search doesn't find archived issues)."""
+    _archive(False, **locals())
 
 
 @app.command()
@@ -1069,15 +1087,19 @@ def clone(
     jql: JqlOpt = None,
     saved_filter: FilterOpt = None,
     from_file: FromFileOpt = None,
+    limit: BulkLimitOpt = None,
+    concurrency: ConcurrencyOpt = CONCURRENCY,
+    keep_going: KeepGoingOpt = False,
+    force: ForceOpt = False,
     yes: YesOpt = False,
-    ignore_errors: IgnoreErrorsOpt = False,
     dry_run: DryRunOpt = False,
     as_json: JsonOpt = False,
 ) -> None:
     """Copy issues (summary, description, type, priority, labels…), in place or to a project.
 
-    With [bold]--to-site[/], copies go to another site you are logged in to, each with a web
-    link back to its original.
+    One issue is copied straight away; several are asked about once ([bold]--yes[/] skips
+    it). With [bold]--to-site[/], copies go to another site you are logged in to, each with a
+    web link back to its original. Each copy's key is kept in the audit log.
 
     [dim]acli-py issue clone DEMO-1 DEMO-2 --prefix "[copy] "
     acli-py issue clone --jql 'sprint = 7' --to-project OPS
@@ -1087,65 +1109,21 @@ def clone(
     if to_site and not to_project:
         raise fail("--to-site needs --to-project: the other site has its own projects.")
     target = connect(dry_run, account_name=to_site) if to_site else session
-    cross_site = target.url != session.url
-    picked = resolve.targets(session.client, keys, jql, saved_filter, from_file)
-    if len(picked) > 1:
-        confirm(f"Clone {plural(len(picked), 'issue')}?", yes, session)
-    cloners = None
-    if link and not cross_site:
-        cloners = next(
-            (t for t in session.client.link_types() if t.get("name", "").lower() == "cloners"),
-            None,
-        )
-
-    def one(key: str) -> dict:
-        original = session.client.issue(key, CLONE_FIELDS)
-        f = original["fields"]
-        same_project = not cross_site and (
-            not to_project or to_project.upper() == f["project"]["key"]
-        )
-        new: dict[str, Any] = {
-            "project": {"key": (to_project or f["project"]["key"]).upper()},
-            "summary": prefix + f.get("summary", ""),
-            "issuetype": {"name": f["issuetype"]["name"]},
-        }
-        for name in ("description", "labels", "duedate", "environment"):
-            if f.get(name):
-                new[name] = f[name]
-        if f.get("priority"):
-            new["priority"] = {"name": f["priority"]["name"]}
-        if same_project:
-            if f.get("components"):
-                new["components"] = [{"id": c["id"]} for c in f["components"]]
-            if f.get("fixVersions"):
-                new["fixVersions"] = [{"id": v["id"]} for v in f["fixVersions"]]
-            if f.get("parent"):
-                new["parent"] = {"key": f["parent"]["key"]}
-        created = target.client.post(f"{API}/issue", {"fields": new})
-        if cross_site and link:
-            target.client.post(
-                f"{API}/issue/{created['key']}/remotelink",
-                {"object": {"url": session.browse(key), "title": f"Cloned from {key}"}},
-            )
-        elif cloners:
-            # The outward ("from") issue is the copy: "DEMO-9 clones DEMO-1".
-            session.client.post(
-                f"{API}/issueLink",
-                {
-                    "type": {"name": cloners["name"]},
-                    "outwardIssue": {"key": created["key"]},
-                    "inwardIssue": {"key": key},
-                },
-            )
-        return created
-
-    run_bulk(
-        picked,
-        one,
+    picked = pick_issues(session, keys, jql, saved_filter, from_file, limit=limit, force=force)
+    if not picked:
+        output.info("No issues match; nothing to clone.")
+        return
+    run_many(
+        session,
+        [CloneIssue(key, to_project or "", prefix, link) for key in picked],
         done="would be cloned" if session.dry_run else "cloned",
-        ignore_errors=ignore_errors,
+        yes=yes,
+        concurrency=concurrency,
+        keep_going=keep_going,
+        force=force,
         as_json=as_json,
-        describe=lambda _k, r: "" if r.get("dryRun") else f"as [bold cyan]{escape(r['key'])}[/]",
+        describe=lambda changed: _created_as(session, changed),
+        bus=session.bus_to(target),
     )
 
 

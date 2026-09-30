@@ -21,7 +21,7 @@ from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Any
 
-from acli_py.application.changes import Change, Previewable, PreviewRow, Write
+from acli_py.application.changes import Change, Planned, Previewable, PreviewRow, Write
 from acli_py.application.messages import SearchIssues
 from acli_py.domain.values import text
 
@@ -91,15 +91,24 @@ def change_of(commands: Sequence[Any]) -> Change | None:
     """Return the one change the commands make together, or None when they don't say.
 
     Commands whose changes differ only by issue merge into one ("Move 3 issues … to Done").
+    Named subjects ("a Bug in DEMO") that differ become a count ("3 issues").
     """
     if not commands or not all(isinstance(c, Write) for c in commands):
         return None
     changes = [c.change() for c in commands]
     first = changes[0]
     keys = tuple(dict.fromkeys(k for c in changes for k in c.keys))
-    if all((c.verb, c.detail) == (first.verb, first.detail) for c in changes):
-        return Change(first.verb, keys, first.detail)
-    return Change(first.verb, keys, "")
+    subject = first.subject
+    if len(changes) > 1 and any(c.subject for c in changes):
+        subject = subject if all(c.subject == subject for c in changes) else f"{len(keys)} issues"
+    return Change(
+        first.verb,
+        keys,
+        first.detail if all(c.detail == first.detail for c in changes) else "",
+        subject=subject,
+        adds=all(c.adds for c in changes),
+        destructive=any(c.destructive for c in changes),
+    )
 
 
 class Bulk:
@@ -119,6 +128,8 @@ class Bulk:
 
     async def preview(self, commands: Sequence[Any]) -> tuple[PreviewRow, ...]:
         """Return each issue's value now and after, when the commands can say (else nothing)."""
+        if commands and all(isinstance(c, Planned) for c in commands):
+            return tuple(c.preview_row() for c in commands)
         if not commands or not all(isinstance(c, Previewable) for c in commands):
             return ()
         field_id = commands[0].previews()
@@ -164,7 +175,7 @@ class Bulk:
         if len(commands) > SAFETY_CAP and not force:
             raise TooManyError(len(commands), SAFETY_CAP)
         change = change or change_of(commands)
-        if change is not None and self.confirm.will_ask(yes=yes) and not change.preview:
+        if change is not None and self.confirm.will_ask(change, yes=yes) and not change.preview:
             # A preview helps; when it can't be had, the question goes on without one.
             with contextlib.suppress(Exception):
                 change = replace(change, preview=await self.preview(commands))

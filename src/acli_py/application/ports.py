@@ -82,6 +82,56 @@ class Watchers(Protocol):
         ...
 
 
+class IssueStore(Protocol):
+    """Creates, deletes and archives whole issues."""
+
+    def create(self, fields: Mapping[str, Any], update: Mapping[str, Any]) -> str:
+        """Create an issue from `fields` and `update` (as Jira takes them); return its key."""
+        ...
+
+    def delete(self, key: str, *, subtasks: bool = False) -> None:
+        """Delete the issue for good (with its subtasks, when `subtasks`; else Jira refuses)."""
+        ...
+
+    def archive(self, key: str, *, archive: bool = True) -> None:
+        """Archive the issue, or (not `archive`) restore it; raise `ValueError` when refused."""
+        ...
+
+
+class IssueLinks(Protocol):
+    """Links between issues on the site."""
+
+    def link_type(self, name: str) -> str | None:
+        """Return the link type called `name` (any case) as the site spells it, or None."""
+        ...
+
+    def link(self, type_name: str, outward: str, inward: str) -> None:
+        """Link `outward` to `inward`: 'outward <type's outward phrase> inward'."""
+        ...
+
+
+class Destination(Protocol):
+    """Where copies of issues go: this site, or (`elsewhere`) another one the user is on."""
+
+    @property
+    def elsewhere(self) -> bool:
+        """Return whether copies go to another site."""
+        ...
+
+    @property
+    def url(self) -> str:
+        """Return the site's address."""
+        ...
+
+    def create(self, fields: Mapping[str, Any], update: Mapping[str, Any]) -> str:
+        """Create an issue there; return its key."""
+        ...
+
+    def web_link(self, key: str, url: str, title: str) -> None:
+        """Add a web link to an issue there."""
+        ...
+
+
 class Confirmer(Protocol):
     """Asks the user whether to go ahead with a change; each front end brings its own."""
 

@@ -8,6 +8,11 @@
   behavior publishes it as `IssueChanged`, and the audit log keeps it (for undo, later).
 - `AuditRecord`: one run of a command, over one issue or many, as the audit log keeps it.
 - `Declined`: the user said no, or there was no way to ask them.
+
+Two kinds of change are asked about differently. One that only `adds` (creating or cloning an
+issue) goes ahead without asking when it is a single issue, since nothing already there
+changes; a `destructive` one (deleting) can't be undone, so over several issues the user types
+the count to agree.
 """
 
 from __future__ import annotations
@@ -24,13 +29,18 @@ SHOWN_KEYS = 5
 class Change:
     """What a command is about to change: `verb` the `keys`, then `detail`.
 
-    `Change("Move", ("DEMO-1",), "to Done")` reads "Move DEMO-1 to Done".
+    `Change("Move", ("DEMO-1",), "to Done")` reads "Move DEMO-1 to Done". A `subject` names
+    what is changed instead of the keys, for issues that don't exist yet:
+    `Change("Create", ("#1",), subject="a Bug in DEMO")` reads "Create a Bug in DEMO".
     """
 
     verb: str
     keys: tuple[str, ...]
     detail: str = ""
     preview: tuple[PreviewRow, ...] = field(default=(), compare=False)
+    subject: str = field(default="", compare=False)
+    adds: bool = field(default=False, compare=False)
+    destructive: bool = field(default=False, compare=False)
 
     def covers(self, other: Change) -> bool:
         """Return whether agreeing to this change also agrees to `other`."""
@@ -40,7 +50,9 @@ class Change:
 
     def __str__(self) -> str:
         """Return the change as a sentence, naming at most a few keys."""
-        if len(self.keys) == 1:
+        if self.subject:
+            what = self.subject
+        elif len(self.keys) == 1:
             what = self.keys[0]
         else:
             shown = ", ".join(self.keys[:SHOWN_KEYS]) + ("…" if len(self.keys) > SHOWN_KEYS else "")
@@ -80,6 +92,15 @@ class Previewable(Protocol):
 
     def after(self, now: Any) -> str:
         """Return the field's value after the command, as text, given its value `now`."""
+        ...
+
+
+@runtime_checkable
+class Planned(Protocol):
+    """A `Write` command that knows its own preview row, without reading Jira (a creation)."""
+
+    def preview_row(self) -> PreviewRow:
+        """Return the row this command shows in a preview."""
         ...
 
 

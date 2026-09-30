@@ -19,8 +19,11 @@ from acli_py.application.events.issue_changed.subscribers import Screens
 from acli_py.application.ports import (
     AuditLog,
     Confirmer,
+    Destination,
     IssueEditor,
+    IssueLinks,
     IssueReader,
+    IssueStore,
     Watchers,
     Workflow,
 )
@@ -30,6 +33,7 @@ from acli_py.infrastructure.jira.catalog import JiraCatalog
 from acli_py.infrastructure.jira.client import JiraClient
 from acli_py.infrastructure.jira.editor import JiraEditor, JiraWatchers
 from acli_py.infrastructure.jira.issues import JiraIssues
+from acli_py.infrastructure.jira.lifecycle import JiraLinks, JiraStore
 from acli_py.infrastructure.jira.workflow import JiraWorkflow
 
 if TYPE_CHECKING:
@@ -39,10 +43,15 @@ T = TypeVar("T")
 
 
 class SiteResolver:
-    """Hands the handlers their dependencies: the ports' adapters, the `Site`, else `cls()`."""
+    """Hands the handlers their dependencies: the ports' adapters, the `Site`, else `cls()`.
 
-    def __init__(self, site: Site, audit: AuditLog) -> None:
+    Copies go to `destination`'s site, or to `site` itself.
+    """
+
+    def __init__(self, site: Site, audit: AuditLog, destination: Site | None = None) -> None:
         self.site = site
+        there = destination or site
+        store = JiraStore(site.client, site.url)
         self.provided: dict[type, object] = {
             Site: site,
             JiraClient: site.client,
@@ -50,6 +59,11 @@ class SiteResolver:
             Workflow: JiraWorkflow(site.client),
             IssueEditor: JiraEditor(site.client),
             Watchers: JiraWatchers(site.client),
+            IssueStore: store,
+            IssueLinks: JiraLinks(site.client),
+            Destination: store
+            if there is site
+            else JiraStore(there.client, there.url, elsewhere=there.url != site.url),
             AuditLog: audit,
         }
 
@@ -67,15 +81,17 @@ def build_bus(
     assume_yes: bool = False,
     audit: AuditLog | None = None,
     cache_seconds: float = CACHE_SECONDS,
+    destination: Site | None = None,
 ) -> Bus:
     """Return a bus for `site` with every handler and subscriber registered.
 
     Scanning the use-case packages finds each `handler.py` and `subscribers.py`, so adding a use
     case is adding its folder. `confirmer` is how the front end asks before a change (without
     one, changes need `assume_yes`); `audit` defaults to the audit file next to the config.
+    `destination` is the site clones go to, when not `site` itself.
     """
     audit = audit or AuditFile()
-    resolver = SiteResolver(site, audit)
+    resolver = SiteResolver(site, audit, destination)
     mediator = Mediator(resolver=resolver)
     mediator.scan(handlers, commands, queries, events)
     bus = Bus(

@@ -18,7 +18,8 @@ class Confirm:
     Dry runs never ask: nothing is sent. `assume_yes` (--yes) never asks either. Front ends
     running one change over many issues call `approve` (or `batch`) with the whole change first,
     so the user is asked once, not once per issue. Without a `confirmer` there is no way to ask,
-    so changes are declined unless already agreed to.
+    so changes are declined unless already agreed to. A change that only adds one issue goes
+    ahead without asking (see `Change.adds`).
     """
 
     def __init__(
@@ -33,8 +34,10 @@ class Confirm:
         self.assume_yes = assume_yes
         self.approved: list[Change] = []
 
-    def will_ask(self, *, yes: bool = False) -> bool:
-        """Return whether approving a change now would ask the user."""
+    def will_ask(self, change: Change | None = None, *, yes: bool = False) -> bool:
+        """Return whether approving `change` (or any change) now would ask the user."""
+        if change is not None and change.adds and len(change.keys) == 1:
+            return False
         return not (yes or self.assume_yes or self.dry_run())
 
     async def approve(self, change: Change, *, yes: bool = False) -> None:
@@ -42,7 +45,7 @@ class Confirm:
 
         Raises `Declined` when the user says no, or cannot be asked.
         """
-        if self.will_ask(yes=yes):
+        if self.will_ask(change, yes=yes):
             if self.confirmer is None:
                 raise Declined(f"{change}? Refusing: there is no way to ask.")
             if not await self.confirmer.confirm(change):

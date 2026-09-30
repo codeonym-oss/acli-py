@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import csv
 import json
+import sys
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -168,13 +169,41 @@ def build(
 
 
 def read_rows(path: Path) -> list[dict[str, Any]]:
-    """Read issues from a JSON file (an object or a list) or a CSV file with a header row."""
+    """Read issues from a JSON file (an object, a list or JSON lines) or a CSV file with a header.
+
+    '-' reads JSON or JSON lines from stdin (`issue search --output jsonl | issue create …`).
+    """
+    if str(path) == "-":
+        return parse_rows(sys.stdin.read())
     text = path.read_text(encoding="utf-8-sig")
     if path.suffix.lower() == ".csv":
         return [dict(row) for row in csv.DictReader(text.splitlines())]
-    data = json.loads(text)
+    return parse_rows(text)
+
+
+def parse_rows(text: str) -> list[dict[str, Any]]:
+    """Return the issues in JSON text: one object, a list (or `{"issues": […]}`), or JSON lines."""
+    text = text.lstrip("\ufeff")
+    if not text.strip():
+        return []
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError as error:
+        lines = [line for line in text.splitlines() if line.strip()]
+        if len(lines) < 2:
+            raise resolve.ResolveError(f"not JSON or JSON lines: {error}") from error
+        data = []
+        for number, line in enumerate(lines, 1):
+            try:
+                data.append(json.loads(line))
+            except json.JSONDecodeError as bad:
+                raise resolve.ResolveError(f"line {number} is not JSON: {bad}") from bad
     if isinstance(data, dict) and isinstance(data.get("issues"), list):
         data = data["issues"]
     if isinstance(data, dict) and isinstance(data.get("issueUpdates"), list):
         data = data["issueUpdates"]
-    return data if isinstance(data, list) else [data]
+    rows = data if isinstance(data, list) else [data]
+    for number, row in enumerate(rows, 1):
+        if not isinstance(row, dict):
+            raise resolve.ResolveError(f"issue {number} is not a JSON object")
+    return rows

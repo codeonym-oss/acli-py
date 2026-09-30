@@ -146,12 +146,20 @@ See [the pipes guide](docs/guide/pipes.md) for more recipes.
 
 ## Asking first, and the audit log
 
-`issue transition`, `edit`, `assign`, `watch` and `unwatch` say what they are about to do and
-ask first (`Move 2 issues (DEMO-1, DEMO-2) to Done? [y/N]`,
+`issue transition`, `edit`, `assign`, `watch`, `unwatch`, `archive`, `unarchive` and `delete`
+say what they are about to do and ask first (`Move 2 issues (DEMO-1, DEMO-2) to Done? [y/N]`,
 `Edit DEMO-4: priority → High, labels +urgent? [y/N]`), once for the whole batch, after a
-preview of each issue's value now and after; the other commands that change issues follow as
-they move onto the same bus. `--yes` skips the question; mid-pipe, they ask on the terminal
-(`/dev/tty`), and without any terminal to ask on (in a script) they refuse unless given `--yes`. The TUI asks in a dialog.
+preview of each issue's value now and after. `delete` over several issues asks you to type how
+many (`… This can't be undone. Type 3 to agree`). `create` and `clone` go ahead for one issue,
+since nothing already there changes, and ask once for several. `--yes` skips the question;
+mid-pipe, they ask on the terminal (`/dev/tty`), and without any terminal to ask on (in a
+script) they refuse unless given `--yes`. The TUI asks in a dialog.
+
+Issues to create can come as JSON lines on stdin, created in order:
+
+```sh
+cat new.jsonl | acli-py issue create --from-json - -p DEMO --yes
+```
 
 Over many issues it runs a few at a time (`--concurrency`), stops at the first failure unless
 `--continue-on-error`, and refuses more than 200 issues without `--force`. It exits 0 when all
