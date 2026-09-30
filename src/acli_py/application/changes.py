@@ -45,7 +45,10 @@ class Change:
         else:
             shown = ", ".join(self.keys[:SHOWN_KEYS]) + ("…" if len(self.keys) > SHOWN_KEYS else "")
             what = f"{len(self.keys)} issues ({shown})"
-        return " ".join(part for part in (self.verb, what, self.detail) if part)
+        sentence = " ".join(part for part in (self.verb, what) if part)
+        if not self.detail:
+            return sentence
+        return sentence + ("" if self.detail.startswith((":", ",")) else " ") + self.detail
 
 
 @dataclass(frozen=True)
@@ -71,8 +74,12 @@ class Write(Protocol):
 class Previewable(Protocol):
     """A `Write` command that can say which field it sets, and to what, for a preview."""
 
-    def previews(self) -> tuple[str, str]:
-        """Return the id of the field this command sets, and the value it sets it to."""
+    def previews(self) -> str | None:
+        """Return the id of the field this command sets, or None when it can't say."""
+        ...
+
+    def after(self, now: Any) -> str:
+        """Return the field's value after the command, as text, given its value `now`."""
         ...
 
 

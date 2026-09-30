@@ -47,6 +47,41 @@ class Workflow(Protocol):
         ...
 
 
+class IssueEditor(Protocol):
+    """Changes an issue's fields, and reads them first so the change can be undone."""
+
+    def values(self, key: str, field_ids: tuple[str, ...]) -> dict[str, Any]:
+        """Return the fields' values now, as Jira has them (None for an empty field)."""
+        ...
+
+    def edit(
+        self,
+        key: str,
+        fields: Mapping[str, Any],
+        update: Mapping[str, Any],
+        *,
+        notify: bool = True,
+    ) -> None:
+        """Set `fields` and apply `update`'s operations, emailing watchers unless not `notify`."""
+        ...
+
+    def assign(self, key: str, account_id: str | None) -> None:
+        """Assign the issue (None: to nobody, '-1': to the project's default assignee)."""
+        ...
+
+
+class Watchers(Protocol):
+    """Who watches an issue."""
+
+    def watching(self, key: str, account_id: str) -> bool:
+        """Return whether the person watches the issue."""
+        ...
+
+    def watch(self, key: str, account_id: str, *, watch: bool = True) -> None:
+        """Make the person watch the issue, or (not `watch`) stop."""
+        ...
+
+
 class Confirmer(Protocol):
     """Asks the user whether to go ahead with a change; each front end brings its own."""
 

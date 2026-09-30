@@ -16,6 +16,7 @@ A declined question raises `Declined` before anything runs (front ends exit 2 on
 from __future__ import annotations
 
 import asyncio
+import contextlib
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Any
@@ -120,7 +121,9 @@ class Bulk:
         """Return each issue's value now and after, when the commands can say (else nothing)."""
         if not commands or not all(isinstance(c, Previewable) for c in commands):
             return ()
-        field_id = commands[0].previews()[0]
+        field_id = commands[0].previews()
+        if field_id is None or any(c.previews() != field_id for c in commands):
+            return ()
         keys = [key_of(c) for c in commands]
         found: dict[str, dict] = {}
         for start in range(0, len(keys), PREVIEW_PAGE):
@@ -138,7 +141,8 @@ class Bulk:
         for command, key in zip(commands, keys, strict=True):
             fields = found.get(key, {})
             now = text(fields.get(field_id)) if key in found else "?"
-            rows.append(PreviewRow(key, text(fields.get("summary")), now, command.previews()[1]))
+            later = command.after(fields.get(field_id))
+            rows.append(PreviewRow(key, text(fields.get("summary")), now, later))
         return tuple(rows)
 
     async def run(
@@ -161,7 +165,9 @@ class Bulk:
             raise TooManyError(len(commands), SAFETY_CAP)
         change = change or change_of(commands)
         if change is not None and self.confirm.will_ask(yes=yes) and not change.preview:
-            change = replace(change, preview=await self.preview(commands))
+            # A preview helps; when it can't be had, the question goes on without one.
+            with contextlib.suppress(Exception):
+                change = replace(change, preview=await self.preview(commands))
         report = Report(len(commands))
         if change is None:
             await self._run_all(commands, report, concurrency, keep_going, on_outcome)

@@ -251,7 +251,7 @@ def test_create_with_editor(site, tmp_path, monkeypatch):
 
 def test_edit_fields_and_labels(site):
     ok("issue", "edit", "DEMO-1", "-s", "New title", "--add-label", "urgent",
-       "--remove-label", "web", "-a", "none", "-F", "Story point estimate=13")  # fmt: skip
+       "--remove-label", "web", "-a", "none", "-F", "Story point estimate=13", "-y")  # fmt: skip
     fields = site.issues["DEMO-1"]["fields"]
     assert fields["summary"] == "New title"
     assert fields["labels"] == ["urgent"]
@@ -261,8 +261,9 @@ def test_edit_fields_and_labels(site):
 
 def test_edit_many_by_jql_needs_confirmation(site):
     result, out = run_cli("issue", "edit", "--jql", "project = DEMO", "--add-label", "q4")
-    assert result.exit_code == 1
-    assert "Edit 3 issues?" in out
+    assert result.exit_code == 2
+    assert "Edit 3 issues (DEMO-1, DEMO-2, DEMO-3): labels +q4? Refusing without --yes" in out
+    assert site.writes() == []
     out = ok("issue", "edit", "--jql", "project = DEMO", "--add-label", "q4", "-y")
     assert "3 of 3 edited" in out
     assert all("q4" in site.issues[f"DEMO-{n}"]["fields"]["labels"] for n in (1, 2, 3))
@@ -286,11 +287,11 @@ def test_edit_from_file_of_keys(site, tmp_path):
 
 
 def test_assign_and_unassign(site):
-    ok("issue", "assign", "DEMO-2", "--to", "@me")
+    assert "DEMO-2 assigned to @me" in ok("issue", "assign", "DEMO-2", "--to", "@me", "-y")
     assert site.issues["DEMO-2"]["fields"]["assignee"] == fake_jira.ALICE
-    ok("issue", "assign", "DEMO-2", "--to", "default")
+    ok("issue", "assign", "DEMO-2", "--to", "default", "-y")
     assert site.issues["DEMO-2"]["fields"]["assignee"] == BOB
-    ok("issue", "assign", "DEMO-2", "--unassign")
+    assert "DEMO-2 unassigned" in ok("issue", "assign", "DEMO-2", "--unassign", "-y")
     assert site.issues["DEMO-2"]["fields"]["assignee"] is None
     result, _ = run_cli("issue", "assign", "DEMO-2")
     assert result.exit_code == 1

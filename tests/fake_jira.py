@@ -307,6 +307,8 @@ class FakeJira:
         data["issuelinks"] = self.issue_links(issue["key"])
         data["comment"] = {"comments": issue["comments"], "total": len(issue["comments"])}
         data["attachment"] = issue["attachments"]
+        watchers = issue["watchers"]
+        data["watches"] = {"watchCount": len(watchers), "isWatching": ALICE in watchers}
         if fields and "*all" not in fields and "*navigable" not in fields:
             data = {k: v for k, v in data.items() if k in fields}
         return {"id": issue["id"], "key": issue["key"], "fields": data}

@@ -23,9 +23,11 @@ from textual.widgets.option_list import Option
 
 from acli_py.application.bulk import TooManyError
 from acli_py.application.changes import Change, Declined
+from acli_py.application.commands.assign_issue.command import AssignIssue
+from acli_py.application.commands.edit_issue.command import EditIssue
 from acli_py.application.commands.transition_issue.command import TransitionIssue
+from acli_py.application.commands.watch_issue.command import WatchIssue
 from acli_py.application.messages import (
-    AssignIssue,
     CommentOnIssue,
     CountIssues,
     CreateIssue,
@@ -36,9 +38,7 @@ from acli_py.application.messages import (
     ListPriorities,
     ListProjects,
     SearchIssues,
-    UpdateIssue,
     ValidateJql,
-    WatchIssue,
 )
 from acli_py.application.queries.get_issue.query import GetIssue
 from acli_py.domain import adf
@@ -666,7 +666,7 @@ class IssueBrowser(App[None]):
         new = await self.push_screen_wait(PromptScreen(f"Summary of {issue['key']}", old))
         if new and new.strip() and new != old:
             await self._each(
-                [issue["key"]], lambda k: UpdateIssue(k, (("summary", new.strip()),)), "renamed"
+                [issue["key"]], lambda k: EditIssue.setting(k, "summary", new.strip()), "renamed"
             )
 
     @work(group="action")
@@ -684,7 +684,7 @@ class IssueBrowser(App[None]):
         new = await self.push_screen_wait(TextScreen(f"Description of {key}", old))
         if new is not None and new != old:
             body = adf.to_adf(new)
-            await self._each([key], lambda k: UpdateIssue(k, (("description", body),)), "updated")
+            await self._each([key], lambda k: EditIssue.setting(k, "description", body), "updated")
 
     @work(group="action")
     async def action_labels(self) -> None:
@@ -705,7 +705,7 @@ class IssueBrowser(App[None]):
         words = text.replace(",", " ").split()
         add = tuple(w for w in words if not w.startswith("-"))
         remove = tuple(w[1:] for w in words if w.startswith("-") and len(w) > 1)
-        await self._each(keys, lambda k: UpdateIssue(k, (), add, remove), "relabelled")
+        await self._each(keys, lambda k: EditIssue.labelling(k, add, remove), "relabelled")
 
     @work(group="action")
     async def action_priority(self) -> None:
@@ -722,7 +722,9 @@ class IssueBrowser(App[None]):
         picked = await self.push_screen_wait(PickScreen("Priority", choices))
         if picked:
             await self._each(
-                keys, lambda k: UpdateIssue(k, (("priority", {"name": picked}),)), f"set {picked}"
+                keys,
+                lambda k: EditIssue.setting(k, "priority", {"name": picked}),
+                f"set to {picked}",
             )
 
     @work(group="action")
@@ -736,9 +738,12 @@ class IssueBrowser(App[None]):
         except ERRORS as error:
             self.notify(str(error), severity="error")
             return
+        me = await self._me()
+        if me is None:
+            return
         watching = view.issue.watching
         await self._each(
-            [key], lambda k: WatchIssue(k, not watching), "unwatched" if watching else "watched"
+            [key], lambda k: WatchIssue(k, me, not watching), "unwatched" if watching else "watched"
         )
 
     @work(group="action")

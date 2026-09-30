@@ -10,9 +10,11 @@ if TYPE_CHECKING:
     from acli_py.application.events.issue_changed.event import IssueChanged
 
 from acli_py.application.behaviors import describe
+from acli_py.application.commands.assign_issue.command import AssignIssue
+from acli_py.application.commands.edit_issue.command import EditIssue
 from acli_py.application.commands.transition_issue.command import TransitionIssue
+from acli_py.application.commands.watch_issue.command import WatchIssue
 from acli_py.application.messages import (
-    AssignIssue,
     CommentOnIssue,
     CountIssues,
     CreateIssue,
@@ -23,9 +25,7 @@ from acli_py.application.messages import (
     ListPriorities,
     ListProjects,
     SearchIssues,
-    UpdateIssue,
     ValidateJql,
-    WatchIssue,
 )
 from acli_py.application.queries.get_issue.query import GetIssue
 from acli_py.application.site import Site
@@ -96,11 +96,15 @@ def test_commands_change_jira_empty_the_cache_and_announce(site, fake):
         await bus.send(AssignIssue("DEMO-2", fake_jira.CAROL["accountId"], "Carol"))
         await bus.send(CommentOnIssue("DEMO-2", "Looks **good**"))
         await bus.send(
-            UpdateIssue("DEMO-2", (("summary", "Write the notes"),), ("docs2",), ("docs",))
+            EditIssue(
+                "DEMO-2",
+                {"summary": "Write the notes"},
+                {"labels": [{"add": "docs2"}, {"remove": "docs"}]},
+            )
         )
-        await bus.send(UpdateIssue("DEMO-2"))  # nothing to change: no request
-        await bus.send(WatchIssue("DEMO-2", True))
-        await bus.send(WatchIssue("DEMO-2", False))
+        await bus.send(EditIssue("DEMO-2"))  # nothing to change: no request
+        await bus.send(WatchIssue("DEMO-2", fake_jira.ALICE["accountId"], True))
+        await bus.send(WatchIssue("DEMO-2", fake_jira.ALICE["accountId"], False))
         return await bus.send(
             CreateIssue("DEMO", "Task", " New thing ", "Some *text*", True, ("x",))
         )
@@ -115,7 +119,7 @@ def test_commands_change_jira_empty_the_cache_and_announce(site, fake):
     assert created["fields"]["summary"] == "New thing"
     assert created["fields"]["assignee"]["accountId"] == fake_jira.ALICE["accountId"]
     assert [h.what for h in heard] == [
-        "TransitionIssue", "AssignIssue", "CommentOnIssue", "UpdateIssue", "UpdateIssue",
+        "TransitionIssue", "AssignIssue", "CommentOnIssue", "EditIssue", "EditIssue",
         "WatchIssue", "WatchIssue", "CreateIssue",
     ]  # fmt: skip
     assert heard[-1].key == key

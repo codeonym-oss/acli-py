@@ -16,11 +16,19 @@ from acli_py.application.audit import AuditTrail
 from acli_py.application.behaviors import CACHE_SECONDS, QueryCache
 from acli_py.application.bus import Bus
 from acli_py.application.events.issue_changed.subscribers import Screens
-from acli_py.application.ports import AuditLog, Confirmer, IssueReader, Workflow
+from acli_py.application.ports import (
+    AuditLog,
+    Confirmer,
+    IssueEditor,
+    IssueReader,
+    Watchers,
+    Workflow,
+)
 from acli_py.application.site import Site
 from acli_py.infrastructure.audit import AuditFile
 from acli_py.infrastructure.jira.catalog import JiraCatalog
 from acli_py.infrastructure.jira.client import JiraClient
+from acli_py.infrastructure.jira.editor import JiraEditor, JiraWatchers
 from acli_py.infrastructure.jira.issues import JiraIssues
 from acli_py.infrastructure.jira.workflow import JiraWorkflow
 
@@ -40,6 +48,8 @@ class SiteResolver:
             JiraClient: site.client,
             IssueReader: JiraIssues(site.client, site.url),
             Workflow: JiraWorkflow(site.client),
+            IssueEditor: JiraEditor(site.client),
+            Watchers: JiraWatchers(site.client),
             AuditLog: audit,
         }
 

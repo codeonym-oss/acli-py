@@ -102,32 +102,11 @@ class ListIssueTypes(Query[list]):
 
 @command
 @dataclass(frozen=True)
-class AssignIssue(Command[None]):
-    """Assign an issue (account_id None: unassign)."""
-
-    key: str
-    account_id: str | None
-    name: str = ""
-
-
-@command
-@dataclass(frozen=True)
 class CommentOnIssue(Command[str]):
     """Add a Markdown comment; returns the comment id."""
 
     key: str
     body: str
-
-
-@command
-@dataclass(frozen=True)
-class UpdateIssue(Command[None]):
-    """Set fields of an issue (summary, priority…), and add or remove labels."""
-
-    key: str
-    fields: tuple[tuple[str, object], ...] = ()
-    add_labels: tuple[str, ...] = ()
-    remove_labels: tuple[str, ...] = ()
 
 
 @command
@@ -141,12 +120,3 @@ class CreateIssue(Command[str]):
     description: str = ""
     assign_to_me: bool = False
     labels: tuple[str, ...] = ()
-
-
-@command
-@dataclass(frozen=True)
-class WatchIssue(Command[None]):
-    """Start or stop watching an issue."""
-
-    key: str
-    watch: bool = True

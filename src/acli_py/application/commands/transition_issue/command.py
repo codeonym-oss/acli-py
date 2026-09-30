@@ -27,6 +27,10 @@ class TransitionIssue(Command[Changed]):
         """Return what this command changes."""
         return Change("Move", (self.key.strip().upper(),), f"to {self.to.strip()}")
 
-    def previews(self) -> tuple[str, str]:
-        """Return the field this command sets, and to what (for a bulk run's preview)."""
-        return "status", self.to.strip()
+    def previews(self) -> str:
+        """Return the field this command sets (for a bulk run's preview)."""
+        return "status"
+
+    def after(self, now: Any) -> str:
+        """Return the status the issue will be in."""
+        return self.to.strip()

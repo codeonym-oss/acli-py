@@ -51,6 +51,7 @@ def test_options_and_their_values(completer):
     assert completions(completer, "issue transition DEMO-1 --to In") == ["'In Progress'"]
     assert completions(completer, "issue assign DEMO-1 --to b") == ["'Bob Jensen'"]
     assert completions(completer, "issue assign DEMO-1 --to @") == ["@me"]
+    assert completions(completer, "issue watch DEMO-1 --user b") == ["'Bob Jensen'"]
     assert completions(completer, "issue search -L w") == ["web"]
     assert completions(completer, "--dry-run issue edit DEMO-1 --priority H") == ["High"]
     assert "table" not in completions(completer, "issue search --json ")  # flags take no value

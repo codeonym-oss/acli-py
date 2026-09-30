@@ -117,6 +117,11 @@ acli-py issue create --from-csv backlog.csv -p DEMO --dry-run
 
 Change fields on one or many issues.
 
+Pick the issues by key, - (stdin), --jql, --filter or
+--from-file. Shows what changes (each issue's value now and after, when one field
+changes), then asks once; --yes skips the question. The fields' old values are
+kept in the audit log. Exits 0 when all were edited, 1 when some failed, 2 when nothing ran.
+
 ```text
 acli-py issue edit [KEYS] [OPTIONS]
 ```
@@ -151,8 +156,11 @@ acli-py issue edit --jql 'project = DEMO AND labels = old' --remove-label old -y
 | `--from-json` `PATH` |  | Apply a Jira edit payload ({fields, update}) file. |
 | `--notify`, `--no-notify` | `True` | Email watchers about the change. |
 | `--template` |  | Print an example --from-json file and exit. |
+| `-l`, `--limit` `INTEGER` |  | Act on at most this many issues. |
+| `-c`, `--concurrency` `INTEGER` | `4` | How many issues to work on at once. |
+| `--ignore-errors`, `--continue-on-error` |  | Keep going when an issue fails (else stop starting new ones); exit 1 at the end. |
+| `--force` |  | Allow acting on more than 200 issues at once. |
 | `-y`, `--yes` |  | Don't ask for confirmation. |
-| `--ignore-errors` |  | Keep going when one item fails; exit 1 at the end. |
 | `-n`, `--dry-run` |  | Show what would change without changing anything. Reads still run. |
 | `--json` |  | Print JSON. |
 
@@ -160,6 +168,9 @@ acli-py issue edit --jql 'project = DEMO AND labels = old' --remove-label old -y
 ## `acli-py issue assign`
 
 Assign issues to someone, to the project default, or to nobody.
+
+Shows each issue's assignee now and after, then asks once; --yes skips the
+question. The previous assignees are kept in the audit log.
 
 ```text
 acli-py issue assign [KEYS] [OPTIONS]
@@ -178,8 +189,68 @@ acli-py issue assign --jql 'assignee = "old@example.com"' --to new@example.com -
 | `-q`, `--jql` `TEXT` |  | Act on the issues this JQL or smart query finds. |
 | `--filter` `TEXT` |  | Act on the issues of this saved filter id. |
 | `-f`, `--from-file` `PATH` |  | Read issue keys from a file (commas, spaces or lines; '-' for stdin). |
+| `-l`, `--limit` `INTEGER` |  | Act on at most this many issues. |
+| `-c`, `--concurrency` `INTEGER` | `4` | How many issues to work on at once. |
+| `--ignore-errors`, `--continue-on-error` |  | Keep going when an issue fails (else stop starting new ones); exit 1 at the end. |
+| `--force` |  | Allow acting on more than 200 issues at once. |
 | `-y`, `--yes` |  | Don't ask for confirmation. |
-| `--ignore-errors` |  | Keep going when one item fails; exit 1 at the end. |
+| `-n`, `--dry-run` |  | Show what would change without changing anything. Reads still run. |
+| `--json` |  | Print JSON. |
+
+
+## `acli-py issue watch`
+
+Start watching issues (you, or someone else with --user).
+
+```text
+acli-py issue watch [KEYS] [OPTIONS]
+```
+
+```sh
+acli-py issue watch DEMO-1 DEMO-2
+acli-py issue search '#web is:open' --output keys | acli-py issue watch - -u bob@example.com
+```
+
+| Option | Default | Description |
+|---|---|---|
+| `KEYS` |  | Issue keys (DEMO-1 DEMO-2, or DEMO-1,DEMO-2); '-' reads keys or JSON lines from stdin. |
+| `-u`, `--user` `TEXT` | `@me` | Email, account id, name or @me (default). |
+| `-q`, `--jql` `TEXT` |  | Act on the issues this JQL or smart query finds. |
+| `--filter` `TEXT` |  | Act on the issues of this saved filter id. |
+| `-f`, `--from-file` `PATH` |  | Read issue keys from a file (commas, spaces or lines; '-' for stdin). |
+| `-l`, `--limit` `INTEGER` |  | Act on at most this many issues. |
+| `-c`, `--concurrency` `INTEGER` | `4` | How many issues to work on at once. |
+| `--ignore-errors`, `--continue-on-error` |  | Keep going when an issue fails (else stop starting new ones); exit 1 at the end. |
+| `--force` |  | Allow acting on more than 200 issues at once. |
+| `-y`, `--yes` |  | Don't ask for confirmation. |
+| `-n`, `--dry-run` |  | Show what would change without changing anything. Reads still run. |
+| `--json` |  | Print JSON. |
+
+
+## `acli-py issue unwatch`
+
+Stop watching issues (you, or someone else with --user).
+
+```text
+acli-py issue unwatch [KEYS] [OPTIONS]
+```
+
+```sh
+acli-py issue unwatch --jql 'watcher = currentUser() AND statusCategory = Done' -y
+```
+
+| Option | Default | Description |
+|---|---|---|
+| `KEYS` |  | Issue keys (DEMO-1 DEMO-2, or DEMO-1,DEMO-2); '-' reads keys or JSON lines from stdin. |
+| `-u`, `--user` `TEXT` | `@me` | Email, account id, name or @me (default). |
+| `-q`, `--jql` `TEXT` |  | Act on the issues this JQL or smart query finds. |
+| `--filter` `TEXT` |  | Act on the issues of this saved filter id. |
+| `-f`, `--from-file` `PATH` |  | Read issue keys from a file (commas, spaces or lines; '-' for stdin). |
+| `-l`, `--limit` `INTEGER` |  | Act on at most this many issues. |
+| `-c`, `--concurrency` `INTEGER` | `4` | How many issues to work on at once. |
+| `--ignore-errors`, `--continue-on-error` |  | Keep going when an issue fails (else stop starting new ones); exit 1 at the end. |
+| `--force` |  | Allow acting on more than 200 issues at once. |
+| `-y`, `--yes` |  | Don't ask for confirmation. |
 | `-n`, `--dry-run` |  | Show what would change without changing anything. Reads still run. |
 | `--json` |  | Print JSON. |
 
@@ -616,6 +687,8 @@ acli-py issue watcher list KEY [OPTIONS]
 
 Start watching an issue (you, by default, or someone else).
 
+For many issues at once, see acli-py issue watch.
+
 ```text
 acli-py issue watcher add KEY [WHO] [OPTIONS]
 ```
@@ -624,12 +697,15 @@ acli-py issue watcher add KEY [WHO] [OPTIONS]
 |---|---|---|
 | `KEY` | required | Issue key, e.g. DEMO-12. |
 | `WHO` | `@me` | Email, account id, name or @me. |
+| `-y`, `--yes` |  | Don't ask for confirmation. |
 | `-n`, `--dry-run` |  | Show what would change without changing anything. Reads still run. |
 
 
 ### `acli-py issue watcher remove`
 
 Stop someone (you, by default) watching an issue.
+
+For many issues at once, see acli-py issue unwatch.
 
 ```text
 acli-py issue watcher remove KEY [WHO] [OPTIONS]
@@ -639,6 +715,7 @@ acli-py issue watcher remove KEY [WHO] [OPTIONS]
 |---|---|---|
 | `KEY` | required | Issue key, e.g. DEMO-12. |
 | `WHO` | `@me` | Email, account id, name or @me. |
+| `-y`, `--yes` |  | Don't ask for confirmation. |
 | `-n`, `--dry-run` |  | Show what would change without changing anything. Reads still run. |
 
 
