@@ -244,3 +244,63 @@ def test_export_then_import_round_trips_through_csv(site, tmp_path):
     out = ok("issue", "import", str(target), "-y")
     assert "2 rows match their issue already." in out
     assert site.issues["DEMO-3"]["fields"]["priority"]["name"] == "High"
+
+
+# ── review fixes ─────────────────────────────────────────────────────────────
+
+
+def test_an_undo_that_failed_somewhere_can_be_finished(site):
+    from datetime import UTC, datetime
+
+    from acli_py.application.changes import AuditRecord
+    from acli_py.infrastructure.audit import AuditFile
+
+    ok("issue", "edit", "DEMO-1", "DEMO-2", "-P", "Low", "-y")
+    site.issues["DEMO-1"]["fields"]["priority"] = next(
+        p for p in fake_jira.PRIORITIES if p["name"] == "Medium"
+    )
+    # An undo that put DEMO-1 back but failed on DEMO-2 leaves change 1 open.
+    AuditFile().record(
+        AuditRecord("EditIssue", (), datetime.now(UTC), {"DEMO-2": "try again"}, undoes="1")
+    )
+    assert log()[-1]["undoneBy"] is None
+    result, out = run_cli("undo", "-y")
+    assert result.exit_code == 1  # DEMO-1 is skipped: it is back already
+    assert "DEMO-1: not undone, it is as it was already." in out
+    assert site.issues["DEMO-2"]["fields"]["priority"]["name"] == "Medium"
+    assert log()[-1]["undoneBy"] == "3"
+
+
+def test_undo_skips_issues_deleted_since(site):
+    ok("issue", "edit", "DEMO-1", "DEMO-2", "-P", "Low", "-y")
+    del site.issues["DEMO-2"]
+    result, out = run_cli("undo", "-y")
+    assert result.exit_code == 1
+    assert "DEMO-2: not undone" in out
+    assert site.issues["DEMO-1"]["fields"]["priority"]["name"] == "Medium"
+
+
+def test_undo_of_an_assignment_to_the_default_is_not_flagged_as_changed_since(site):
+    ok("issue", "assign", "DEMO-1", "--to", "default", "-y")
+    out = ok("undo", "-y")
+    assert "changed again" not in out
+    assert site.issues["DEMO-1"]["fields"]["assignee"] == fake_jira.ALICE
+
+
+def test_import_refuses_a_key_twice(site, tmp_path):
+    rows = tmp_path / "rows.csv"
+    rows.write_text("key,priority\nDEMO-1,High\ndemo-1,Low\n")
+    result, out = run_cli("issue", "import", str(rows), "-y")
+    assert result.exit_code == 1
+    assert "row 2 repeats the key" in out
+    assert site.issues["DEMO-1"]["fields"]["priority"]["name"] == "High"
+
+
+def test_a_failed_export_leaves_the_file_as_it_was(site, tmp_path):
+    target = tmp_path / "keep.csv"
+    target.write_text("precious\n")
+    site.fail_next[:] = [400]
+    result, _ = run_cli("issue", "export", "project = DEMO", "-o", str(target))
+    assert result.exit_code == 1
+    assert target.read_text() == "precious\n"
+    assert not list(tmp_path.glob(".*.part"))

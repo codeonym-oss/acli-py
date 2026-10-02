@@ -80,7 +80,7 @@ from acli_py.presentation.cli.common import (
     template_of,
 )
 from acli_py.presentation.output import Column, Format, dig
-from acli_py.presentation.writers import ExportFormat, IssueWriter
+from acli_py.presentation.writers import ExportFormat, IssueWriter, replacing
 
 app = typer.Typer(help="Work with issues (Jira's work items).", no_args_is_help=True)
 
@@ -648,7 +648,7 @@ def export(
     query = compiled_search(session, jql, saved_filter=saved_filter)
     names = split(fields)
     chosen = as_format or ExportFormat.of(to)
-    with to.open("w", encoding="utf-8", newline="") if to else nullcontext(sys.stdout) as out:
+    with replacing(to) if to else nullcontext(sys.stdout) as out:
         writer = IssueWriter(out, columns(names), chosen)
 
         async def write_all() -> None:

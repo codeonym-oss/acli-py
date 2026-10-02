@@ -5,13 +5,15 @@ from typing import Any
 
 from mediary.cqrs import query_handler
 
-from acli_py.application.changes import AuditRecord, Changed
+from acli_py.application.changes import AuditRecord, Changed, undone_by
 from acli_py.application.commands.assign_issue.command import AssignIssue
 from acli_py.application.commands.edit_issue.command import EditIssue
 from acli_py.application.commands.transition_issue.command import TransitionIssue
+from acli_py.application.errors import SiteError
 from acli_py.application.ports import AuditLog, IssueEditor, Workflow
 from acli_py.application.queries.plan_undo.query import PlanUndo
 from acli_py.application.queries.plan_undo.view import UndoPlan, UndoStep
+from acli_py.application.threads import map_in_threads
 from acli_py.domain import edits
 from acli_py.domain.values import text
 from acli_py.domain.workflow import NoSuchTransitionError, pick
@@ -22,36 +24,40 @@ UNDOABLE = (*EDITS, "AssignIssue", "TransitionIssue")
 
 
 @query_handler
-def plan_undo(
+async def plan_undo(
     request: PlanUndo, audit: AuditLog, editor: IssueEditor, workflow: Workflow
 ) -> UndoPlan:
-    """Find the record, and plan one command per issue it changed."""
+    """Find the record, and plan one command per issue it changed (read a few at a time)."""
     entry = _entry(audit.entries(), request.entry_id)
     if entry.command not in UNDOABLE:
         raise ValueError(
             f"Change {entry.id} ({entry.command}) can't be undone: undo puts back field "
             "edits, assignments and transitions."
         )
-    steps: list[UndoStep] = []
-    skipped: list[tuple[str, str]] = []
-    for changed in entry.changes:
+
+    def plan(changed: Changed) -> UndoStep | str:
         if not changed.before:
-            skipped.append((changed.key, "it was created; delete it to undo that"))
-            continue
-        if entry.command == "TransitionIssue":
-            planned = _transition_back(changed, editor, workflow)
-        else:
-            planned = _put_back(changed, editor, assign=entry.command == "AssignIssue")
-        if isinstance(planned, str):
-            skipped.append((changed.key, planned))
-        else:
-            steps.append(planned)
-    return UndoPlan(entry, tuple(steps), tuple(skipped))
+            # Only an import's new issues have nothing before: an edit always read its fields.
+            created = entry.command == "ImportIssues"
+            return "it was created; delete it to undo that" if created else "nothing to put back"
+        try:
+            if entry.command == "TransitionIssue":
+                return _transition_back(changed, editor, workflow)
+            return _put_back(changed, editor, assign=entry.command == "AssignIssue")
+        except SiteError as error:  # deleted since, or out of reach: skip it, undo the rest
+            return str(error)
+
+    planned = await map_in_threads(plan, entry.changes)
+    steps = tuple(p for p in planned if isinstance(p, UndoStep))
+    skipped = tuple(
+        (c.key, p) for c, p in zip(entry.changes, planned, strict=True) if isinstance(p, str)
+    )
+    return UndoPlan(entry, steps, skipped)
 
 
 def _entry(entries: list[AuditRecord], wanted: str | None) -> AuditRecord:
     """Return the record asked for, or the last one neither undone nor an undo itself."""
-    undone = {e.undoes: e.id for e in entries if e.undoes}
+    undone = undone_by(entries)
     if wanted is None:
         for entry in reversed(entries):
             if entry.id not in undone and not entry.undoes:
@@ -89,6 +95,8 @@ def _put_back(changed: Changed, editor: IssueEditor, *, assign: bool) -> UndoSte
 def _transition_back(changed: Changed, editor: IssueEditor, workflow: Workflow) -> UndoStep | str:
     """Return the transition back to the status the issue had, or why there is none."""
     status = str(changed.before.get("status") or "")
+    if not status:
+        return "its status before wasn't recorded"
     now = editor.values(changed.key, ("status", "summary"))
     if edits.equal(now.get("status"), status):
         return f"it is in {status} already"
