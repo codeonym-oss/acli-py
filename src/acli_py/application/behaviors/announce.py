@@ -5,7 +5,8 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from mediary import Mediator, Next
+from mediary import Next
+from mediary.cqrs import EventPublisher
 
 from acli_py.application.changes import Changed
 from acli_py.application.events.issue_changed.event import IssueChanged
@@ -14,8 +15,8 @@ from acli_py.application.events.issue_changed.event import IssueChanged
 class Announce:
     """Runs a command, then tells the event's subscribers (cache, audit log, screens)."""
 
-    def __init__(self, mediator: Mediator, dry_run: Callable[[], bool]) -> None:
-        self.mediator = mediator
+    def __init__(self, events: EventPublisher, dry_run: Callable[[], bool]) -> None:
+        self.events = events
         self.dry_run = dry_run
 
     async def handle(self, message: object, next: Next[Any], /) -> Any:
@@ -27,5 +28,5 @@ class Announce:
         else:
             key = getattr(message, "key", None) or (result if isinstance(result, str) else "")
             change = IssueChanged(str(key), what, dry_run)
-        await self.mediator.publish(change)
+        await self.events.publish(change)
         return result

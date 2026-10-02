@@ -4,12 +4,12 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
-from mediary.cqrs import event
+from mediary.cqrs import Event, event
 
 
 @event
 @dataclass(frozen=True)
-class IssueChanged:
+class IssueChanged(Event):
     """A command changed an issue (or, in a dry run, would have).
 
     `what` is the command's name; `before` and `after` hold the fields it touched, when the

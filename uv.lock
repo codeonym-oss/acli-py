@@ -50,7 +50,7 @@ test = [
 [package.metadata]
 requires-dist = [
     { name = "keyring", specifier = ">=24" },
-    { name = "mediary", specifier = ">=0.3" },
+    { name = "mediary", specifier = ">=0.4" },
     { name = "platformdirs", specifier = ">=4" },
     { name = "prompt-toolkit", specifier = ">=3.0.50" },
     { name = "requests", specifier = ">=2.31" },
@@ -1002,11 +1002,11 @@ wheels = [
 
 [[package]]
 name = "mediary"
-version = "0.3.0"
+version = "0.4.0"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/1f/35/a109af9ebb0b06f7e761b11d9d41d5440ac7fb32773719cd1ffa5d01528e/mediary-0.3.0.tar.gz", hash = "sha256:abefbf43b09f2392a3a73d714742d8765be94da2e659942dee233bf37b65af37", size = 39628, upload-time = "2026-09-29T11:37:33.47Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/ce/63/0d33ce69abdb38a13beb33c5f6467b969ea944e486e9a365379c70291bd5/mediary-0.4.0.tar.gz", hash = "sha256:eb9314b0540cb5d756b6329e9f131d984a037eb65efcb5a21c178f807220c2d1", size = 41595, upload-time = "2026-09-30T16:13:04.485Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/3b/44/eabf24c9e9eec9b785220feb764c03f1b3e52dc0c87cc72f275140783384/mediary-0.3.0-py3-none-any.whl", hash = "sha256:27b9e6b6d64dc2a2eba0404127a51c449b4ff5e8a67252ab6a3c44255a9faca8", size = 50004, upload-time = "2026-09-29T11:37:31.971Z" },
+    { url = "https://files.pythonhosted.org/packages/4b/02/036c83ca6a52a708dd37a5718227a8b3123da83443b84120eaf32f61fa35/mediary-0.4.0-py3-none-any.whl", hash = "sha256:91b135ed01915cb118c8302f0910c73e864ef9583105ef46dd3affc2d7419071", size = 52199, upload-time = "2026-09-30T16:13:03.256Z" },
 ]
 
 [[package]]
