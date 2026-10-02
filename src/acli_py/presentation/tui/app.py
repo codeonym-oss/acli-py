@@ -32,14 +32,14 @@ from acli_py.application.commands.watch_issue.command import WatchIssue
 from acli_py.application.messages import (
     FindAssignees,
     GetTransitions,
-    ListFilters,
     ListIssueTypes,
     ListPriorities,
-    ListProjects,
     ValidateJql,
 )
 from acli_py.application.queries.count_issues.query import CountIssues
 from acli_py.application.queries.get_issue.query import GetIssue
+from acli_py.application.queries.list_filters.query import ListFilters
+from acli_py.application.queries.list_projects.query import ListProjects
 from acli_py.application.queries.search_issues.query import SearchIssues
 from acli_py.domain import adf
 from acli_py.domain.jql import Completer, compile_query
@@ -307,7 +307,7 @@ class IssueBrowser(App[None]):
     @work(group="filters")
     async def _load_filters(self) -> None:
         try:
-            self.filters = await self.bus.send(ListFilters())
+            self.filters = (await self.bus.send(ListFilters(favourites=True))).to_json()
         except ERRORS:
             return
         self._fill_views()
@@ -752,7 +752,7 @@ class IssueBrowser(App[None]):
     async def action_new(self) -> None:
         """Create an issue."""
         try:
-            projects = await self.bus.send(ListProjects())
+            projects = (await self.bus.send(ListProjects(limit=200, recent_first=True))).to_json()
         except ERRORS as error:
             self.notify(str(error), severity="error")
             return

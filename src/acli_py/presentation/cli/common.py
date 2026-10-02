@@ -113,10 +113,6 @@ FormatOpt = Annotated[
         show_default=False,
     ),
 ]
-IgnoreErrorsOpt = Annotated[
-    bool,
-    typer.Option("--ignore-errors", help="Keep going when one item fails; exit 1 at the end."),
-]
 
 # Picking issues for bulk commands.
 KeysArg = Annotated[
@@ -415,16 +411,6 @@ def preview_table(change: Change) -> Table:
     return table
 
 
-def confirm(question: str, yes: bool, session: Session | None = None) -> None:
-    """Ask before a change; --yes and dry runs skip the question. Exits when declined."""
-    if yes or (session is not None and session.dry_run):
-        return
-    if not interactive():
-        raise fail(f"{question} Refusing without [bold]--yes[/] (no terminal to ask on).")
-    if not terminal.ask(question):
-        raise fail("Cancelled.", code=1)
-
-
 def read_text(text: str | None, file: Path | None) -> str | None:
     """Return text given inline or in a file; either being '-' reads stdin."""
     return resolve.read_text_arg(text, file)
@@ -456,63 +442,6 @@ def open_url(url: str) -> None:
 
 
 # ── bulk runs ────────────────────────────────────────────────────────────────
-
-
-@dataclass
-class Outcome:
-    """What happened to one item in a bulk run."""
-
-    item: str
-    ok: bool
-    detail: str = ""
-    data: Any = None
-
-
-def run_bulk(
-    items: list[str],
-    action: Callable[[str], Any],
-    *,
-    done: str,
-    ignore_errors: bool = False,
-    as_json: bool = False,
-    describe: Callable[[str, Any], str] | None = None,
-) -> list[Outcome]:
-    """Apply `action` to each item, printing ✔/✘ per item; exit 1 if anything failed.
-
-    Stops at the first failure unless `ignore_errors`.
-    """
-    outcomes: list[Outcome] = []
-    for item in items:
-        try:
-            result = action(item)
-        except (JiraError, ResolveError, ValueError) as error:
-            outcomes.append(Outcome(item, False, str(error)))
-            output.error(f"{escape(item)}: {escape(str(error))}")
-            if not ignore_errors:
-                break
-            continue
-        detail = describe(item, result) if describe else ""
-        outcomes.append(Outcome(item, True, detail, result))
-        output.success(f"{escape(item)} {done}" + (f" {detail}" if detail else ""))
-    if as_json:
-        output.print_json(
-            [
-                {"item": o.item, "ok": o.ok, "error" if not o.ok else "result": o.detail or o.data}
-                for o in outcomes
-            ]
-        )
-    failed = sum(not o.ok for o in outcomes)
-    skipped = len(items) - len(outcomes)
-    if len(items) > 1:
-        summary = f"{len(outcomes) - failed} of {len(items)} {done}"
-        if failed:
-            summary += f", {failed} failed"
-        if skipped:
-            summary += f", {skipped} not tried"
-        output.info(summary + ".")
-    if failed:
-        raise typer.Exit(1)
-    return outcomes
 
 
 def pick_issues(

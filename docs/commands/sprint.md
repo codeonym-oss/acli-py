@@ -72,6 +72,7 @@ acli-py sprint update SPRINT [OPTIONS]
 | `--start` `TEXT` |  | Start: YYYY-MM-DD or ISO time. |
 | `--end` `TEXT` |  | End: YYYY-MM-DD or ISO time. |
 | `-g`, `--goal` `TEXT` |  | Sprint goal. |
+| `-y`, `--yes` |  | Don't ask for confirmation. |
 | `-n`, `--dry-run` |  | Show what would change without changing anything. Reads still run. |
 
 
@@ -90,6 +91,7 @@ acli-py sprint start SPRINT [OPTIONS]
 | `--end` `TEXT` |  | End: YYYY-MM-DD or ISO time. |
 | `--weeks` `INTEGER` | `2` | Length when no --end is given. |
 | `-g`, `--goal` `TEXT` |  | Sprint goal. |
+| `-y`, `--yes` |  | Don't ask for confirmation. |
 | `-n`, `--dry-run` |  | Show what would change without changing anything. Reads still run. |
 
 
@@ -120,7 +122,7 @@ acli-py sprint delete SPRINTS [OPTIONS]
 |---|---|---|
 | `SPRINTS` | required | Sprint ids. |
 | `-y`, `--yes` |  | Don't ask for confirmation. |
-| `--ignore-errors` |  | Keep going when one item fails; exit 1 at the end. |
+| `--ignore-errors`, `--continue-on-error` |  | Keep going when an issue fails (else stop starting new ones); exit 1 at the end. |
 | `-n`, `--dry-run` |  | Show what would change without changing anything. Reads still run. |
 
 
@@ -153,12 +155,25 @@ Move issues into a sprint.
 acli-py sprint add SPRINT [KEYS] [OPTIONS]
 ```
 
+```sh
+acli-py sprint add 8 DEMO-1 DEMO-2
+acli-py issue search 'p:DEMO is:open #web' --output keys | acli-py sprint add 8 -
+```
+
 | Option | Default | Description |
 |---|---|---|
 | `SPRINT` | required | Sprint id (see `acli-py sprint list`). |
 | `KEYS` |  | Issue keys (DEMO-1 DEMO-2, or DEMO-1,DEMO-2); '-' reads keys or JSON lines from stdin. |
 | `-q`, `--jql` `TEXT` |  | Act on the issues this JQL or smart query finds. |
+| `--filter` `TEXT` |  | Act on the issues of this saved filter id. |
+| `-f`, `--from-file` `PATH` |  | Read issue keys from a file (commas, spaces or lines; '-' for stdin). |
+| `-l`, `--limit` `INTEGER` |  | Act on at most this many issues. |
+| `-c`, `--concurrency` `INTEGER` | `4` | How many issues to work on at once. |
+| `--ignore-errors`, `--continue-on-error` |  | Keep going when an issue fails (else stop starting new ones); exit 1 at the end. |
+| `--force` |  | Allow acting on more than 200 issues at once. |
+| `-y`, `--yes` |  | Don't ask for confirmation. |
 | `-n`, `--dry-run` |  | Show what would change without changing anything. Reads still run. |
+| `--json` |  | Print JSON. |
 
 
 ## `acli-py sprint remove`
@@ -173,4 +188,12 @@ acli-py sprint remove [KEYS] [OPTIONS]
 |---|---|---|
 | `KEYS` |  | Issue keys (DEMO-1 DEMO-2, or DEMO-1,DEMO-2); '-' reads keys or JSON lines from stdin. |
 | `-q`, `--jql` `TEXT` |  | Act on the issues this JQL or smart query finds. |
+| `--filter` `TEXT` |  | Act on the issues of this saved filter id. |
+| `-f`, `--from-file` `PATH` |  | Read issue keys from a file (commas, spaces or lines; '-' for stdin). |
+| `-l`, `--limit` `INTEGER` |  | Act on at most this many issues. |
+| `-c`, `--concurrency` `INTEGER` | `4` | How many issues to work on at once. |
+| `--ignore-errors`, `--continue-on-error` |  | Keep going when an issue fails (else stop starting new ones); exit 1 at the end. |
+| `--force` |  | Allow acting on more than 200 issues at once. |
+| `-y`, `--yes` |  | Don't ask for confirmation. |
 | `-n`, `--dry-run` |  | Show what would change without changing anything. Reads still run. |
+| `--json` |  | Print JSON. |

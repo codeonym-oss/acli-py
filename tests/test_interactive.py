@@ -301,7 +301,7 @@ def test_comment_body_adf_alias(site, tmp_path):
 def test_filter_owner_from_a_file(site, tmp_path):
     ids = tmp_path / "ids.txt"
     ids.write_text("10100\n")
-    result, out = run_cli("filter", "owner", "--to", "bob", "--from-file", str(ids))
+    result, out = run_cli("filter", "owner", "--to", "bob", "--from-file", str(ids), "-y")
     assert result.exit_code == 0, out
     assert site.filters["10100"]["owner"]["displayName"] == "Bob Jensen"
     result, out = run_cli("filter", "owner", "--to", "bob")

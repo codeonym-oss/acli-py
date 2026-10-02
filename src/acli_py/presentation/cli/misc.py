@@ -9,6 +9,8 @@ from typing import Annotated, Any
 import typer
 from rich.markup import escape
 
+from acli_py.application.queries.get_dashboard.query import GetDashboard
+from acli_py.application.queries.list_dashboards.query import ListDashboards
 from acli_py.infrastructure.jira import resolve
 from acli_py.infrastructure.jira.client import API
 from acli_py.presentation import output
@@ -50,24 +52,15 @@ def dashboard_list(
     out: OutputOpt = None,
 ) -> None:
     """Search dashboards."""
-    session = connect()
-    account = resolve.user(session.client, owner, session.me)["accountId"] if owner else None
-    found = session.client.paged(
-        f"{API}/dashboard/search",
-        limit=limit_of(limit, all_pages),
-        dashboardName=name,
-        accountId=account,
-        expand="owner,favourite",
-        orderBy="name",
-    )
+    found = connect().send(ListDashboards(name, owner, limit_of(limit, all_pages)))
     output.emit(
-        found,
+        found.to_json(),
         [
-            Column("Id", lambda d: d.get("id"), style="cyan"),
-            Column("Name", lambda d: d.get("name"), style="bold"),
-            Column("Owner", lambda d: dig(d, "owner", "displayName")),
-            Column("★", lambda d: "★" if d.get("isFavourite") else "", style="yellow"),
-            Column("URL", lambda d: d.get("view"), style="dim"),
+            Column("Id", lambda d: d["id"], style="cyan"),
+            Column("Name", lambda d: d["name"], style="bold"),
+            Column("Owner", lambda d: dig(d, "owner", "name")),
+            Column("★", lambda d: "★" if d["favourite"] else "", style="yellow"),
+            Column("URL", lambda d: d["url"], style="dim"),
         ],
         fmt(as_json, as_csv, out),
         empty="No dashboards match.",
@@ -83,21 +76,22 @@ def dashboard_view(
 ) -> None:
     """Show a dashboard."""
     session = connect()
-    data = session.client.get(f"{API}/dashboard/{dashboard_id}")
+    found = session.send(GetDashboard(dashboard_id))
+    board = found.dashboard
     if web:
-        open_url(data.get("view") or f"{session.url}/jira/dashboards/{dashboard_id}")
+        open_url(board.url or f"{session.url}/jira/dashboards/{dashboard_id}")
         return
     if as_json:
-        output.print_json(data)
+        output.print_json(found.to_json())
         return
     rows = [
-        ("Name", escape(data.get("name", ""))),
-        ("Owner", escape(dig(data, "owner", "displayName", default=""))),
-        ("Description", escape(data.get("description") or "")),
-        ("Popularity", data.get("popularity")),
-        ("URL", escape(data.get("view", ""))),
+        ("Name", escape(board.name)),
+        ("Owner", escape(board.owner.name if board.owner else "")),
+        ("Description", escape(board.description)),
+        ("Popularity", board.popularity),
+        ("URL", escape(board.url)),
     ]
-    output.console.print(output.details(f"Dashboard {dashboard_id}", rows))
+    output.console.print(output.details(f"Dashboard {escape(dashboard_id)}", rows))
 
 
 # ── users ────────────────────────────────────────────────────────────────────

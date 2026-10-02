@@ -86,6 +86,7 @@ acli-py project update PROJECT [OPTIONS]
 | `-d`, `--description` `TEXT` |  | New description. |
 | `--url` `TEXT` |  | New URL. |
 | `--from-json` `PATH` |  | Read the changes from a JSON file. |
+| `-y`, `--yes` |  | Don't ask for confirmation. |
 | `-n`, `--dry-run` |  | Show what would change without changing anything. Reads still run. |
 | `--json` |  | Print JSON. |
 
@@ -132,6 +133,7 @@ acli-py project restore KEY [OPTIONS]
 | Option | Default | Description |
 |---|---|---|
 | `KEY` | required | Project key, e.g. DEMO. |
+| `-y`, `--yes` |  | Don't ask for confirmation. |
 | `-n`, `--dry-run` |  | Show what would change without changing anything. Reads still run. |
 
 
