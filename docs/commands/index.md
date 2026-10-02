@@ -25,6 +25,8 @@ dashboard
 field
 user
 meta
+log
+undo
 api
 tui
 shell

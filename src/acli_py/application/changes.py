@@ -118,12 +118,18 @@ class Changed:
 
 @dataclass(frozen=True)
 class AuditRecord:
-    """One run of a command, as the audit log keeps it: every issue it changed, and failed on."""
+    """One run of a command, as the audit log keeps it: every issue it changed, and failed on.
+
+    `id` is the record's place in the log ('1' is the oldest), given when it is read back.
+    `undoes` names the record this run reversed, when it was an undo.
+    """
 
     command: str
     changes: tuple[Changed, ...]
     at: datetime
     failed: Mapping[str, str] = field(default_factory=dict)
+    undoes: str | None = None
+    id: str = ""
 
     @property
     def keys(self) -> tuple[str, ...]:

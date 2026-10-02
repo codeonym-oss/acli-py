@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import json
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 import pytest
 
@@ -21,14 +20,12 @@ from acli_py.application.site import Site
 from acli_py.bootstrap import build_bus
 from acli_py.domain.adf import to_text
 from acli_py.domain.links import IssueLink, LinkDirection, LinkType, UnknownLinkTypeError
+from acli_py.infrastructure.audit import AuditMemory
 from acli_py.infrastructure.jira.client import JiraClient
 from acli_py.presentation import terminal
 from acli_py.presentation.cli import common
 from tests import fake_jira
 from tests.conftest import run_cli
-
-if TYPE_CHECKING:
-    from acli_py.application.changes import AuditRecord
 
 BLOCKS = LinkType("Blocks", "blocks", "is blocked by", "1")
 DUPLICATE = LinkType("Duplicate", "duplicates", "is duplicated by", "2")
@@ -158,12 +155,7 @@ def test_list_json_shapes(site):
 # ── on the bus: audit and downloads ──────────────────────────────────────────
 
 
-class Kept:
-    def __init__(self) -> None:
-        self.records: list[AuditRecord] = []
-
-    def record(self, entry: AuditRecord) -> None:
-        self.records.append(entry)
+Kept = AuditMemory  # an `AuditLog` in memory
 
 
 def fake_bus(url: str, audit: Kept):

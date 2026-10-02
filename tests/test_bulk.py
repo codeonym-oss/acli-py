@@ -12,10 +12,11 @@ import pytest
 from acli_py.application.audit import AuditTrail
 from acli_py.application.behaviors import Confirm
 from acli_py.application.bulk import SAFETY_CAP, Bulk, TooManyError, change_of
-from acli_py.application.changes import AuditRecord, Change, Changed, Declined, PreviewRow
+from acli_py.application.changes import Change, Changed, Declined, PreviewRow
 from acli_py.application.commands.transition_issue.command import TransitionIssue
 from acli_py.application.site import Site
 from acli_py.bootstrap import build_bus
+from acli_py.infrastructure.audit import AuditMemory
 from acli_py.infrastructure.jira.client import JiraClient
 from acli_py.presentation import terminal
 from acli_py.presentation.cli import common
@@ -35,14 +36,7 @@ class Answers:
         return self.answers.pop(0)
 
 
-class Kept:
-    """An `AuditLog` in memory."""
-
-    def __init__(self) -> None:
-        self.records: list[AuditRecord] = []
-
-    def record(self, entry: AuditRecord) -> None:
-        self.records.append(entry)
+Kept = AuditMemory  # an `AuditLog` in memory
 
 
 def fake_bus(url: str, **options: Any):
