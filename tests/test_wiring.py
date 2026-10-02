@@ -13,9 +13,9 @@ from mediary.cqrs import Command, Event, Query, StreamQuery
 from acli_py.application import commands, events, queries
 from acli_py.application.behaviors import Activity, Announce, Confirm, QueryCache
 from acli_py.application.events.issue_changed.event import IssueChanged
-from acli_py.application.site import Site
 from acli_py.bootstrap import build_bus
 from acli_py.infrastructure.jira.client import JiraClient
+from acli_py.infrastructure.jira.site import Site
 from tests import fake_jira
 
 if TYPE_CHECKING:

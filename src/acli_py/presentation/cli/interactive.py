@@ -6,11 +6,9 @@ from typing import Annotated
 
 import typer
 
-from acli_py.application.site import Site
-from acli_py.bootstrap import build_bus, build_catalog
+from acli_py.bootstrap import Site, build_bus, build_catalog, saved_views, shell_history_path
 from acli_py.domain.jql import StaticCatalog
 from acli_py.domain.jql.catalog import Catalog
-from acli_py.infrastructure.storage import Views
 from acli_py.presentation import output
 from acli_py.presentation.cli.common import DryRunOpt, Session, connect, fail, guarded
 
@@ -20,9 +18,8 @@ def open_site(session: Session) -> Site:
 
     Plans and --debug lines would print over a full-screen UI, so the UI shows them instead.
     """
-    session.client.on_plan = None
-    session.client.session.hooks["response"] = []
-    return session.site()
+    session.site.quiet()
+    return session.site
 
 
 @guarded
@@ -49,7 +46,7 @@ def tui(
     from acli_py.presentation.tui.app import IssueBrowser  # Textual loads only for the TUI
 
     session = connect(dry_run)
-    views = Views()
+    views = saved_views()
     if view:
         found = views.find(view)
         if found is None:
@@ -59,7 +56,7 @@ def tui(
     site = open_site(session)
     app = IssueBrowser(
         build_bus(site),
-        build_catalog(site.client),
+        build_catalog(site),
         query=query or "",
         default_project=session.config.defaults.get("project"),
         views=views,
@@ -81,7 +78,6 @@ def shell(
     """
     import typer.main
 
-    from acli_py.infrastructure.config import config_dir
     from acli_py.presentation.cli import app
     from acli_py.presentation.cli.common import state
     from acli_py.presentation.shell import Shell
@@ -92,7 +88,7 @@ def shell(
         catalog: Catalog = StaticCatalog()
         account = "not logged in (run: auth login)"
     else:
-        catalog = build_catalog(session.client)
+        catalog = build_catalog(session.site)
         account = session.account.name
 
     def open_tui(query: str) -> None:
@@ -101,7 +97,7 @@ def shell(
     repl = Shell(
         typer.main.get_command(app),
         catalog,
-        history=config_dir() / "shell-history",
+        history=shell_history_path(),
         account=account,
         dry_run=dry_run or state.dry_run,
         open_tui=open_tui,

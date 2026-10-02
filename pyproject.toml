@@ -123,9 +123,8 @@ show_missing = true
 skip_covered = true
 exclude_also = ["if TYPE_CHECKING:", "@overload", "raise NotImplementedError", "if __name__ == .__main__.:"]
 
-# The layer rules from docs/adr/0001-layers.md, checked by `lint-imports` (pre-commit and CI).
-# ignore_imports lists the imports written before the layers existed. Each ticket that moves a
-# use case deletes its lines; a line that no longer matches an import fails the check.
+# The layer rules from docs/adr/0001-layers.md, checked by `lint-imports` (pre-commit and CI),
+# with no exceptions: presentation reaches Jira only by sending messages on the bus.
 [tool.importlinter]
 root_package = "acli_py"
 
@@ -140,10 +139,6 @@ layers = [
     "acli_py.application",
     "acli_py.domain",
 ]
-ignore_imports = [
-    "acli_py.application.site -> acli_py.infrastructure.jira.client",
-    "acli_py.application.handlers -> acli_py.infrastructure.jira.client",
-]
 
 [[tool.importlinter.contracts]]
 id = "no-shortcuts"
@@ -152,25 +147,3 @@ type = "forbidden"
 source_modules = ["acli_py.presentation"]
 forbidden_modules = ["acli_py.infrastructure"]
 allow_indirect_imports = true
-ignore_imports = [
-    "acli_py.presentation.cli.auth -> acli_py.infrastructure.config",
-    "acli_py.presentation.cli.auth -> acli_py.infrastructure.credentials",
-    "acli_py.presentation.cli.auth -> acli_py.infrastructure.jira.client",
-    "acli_py.presentation.cli.common -> acli_py.infrastructure.config",
-    "acli_py.presentation.cli.common -> acli_py.infrastructure.credentials",
-    "acli_py.presentation.cli.common -> acli_py.infrastructure.jira.client",
-    "acli_py.presentation.cli.common -> acli_py.infrastructure.jira.resolve",
-    "acli_py.presentation.cli.config_cmd -> acli_py.infrastructure.config",
-    "acli_py.presentation.cli.filters -> acli_py.infrastructure.jira.resolve",
-    "acli_py.presentation.cli.interactive -> acli_py.infrastructure.config",
-    "acli_py.presentation.cli.interactive -> acli_py.infrastructure.storage",
-    "acli_py.presentation.cli.issue -> acli_py.infrastructure.jira.client",
-    "acli_py.presentation.cli.issue -> acli_py.infrastructure.jira.fields",
-    "acli_py.presentation.cli.issue -> acli_py.infrastructure.jira.resolve",
-    "acli_py.presentation.cli.misc -> acli_py.infrastructure.jira.client",
-    "acli_py.presentation.cli.misc -> acli_py.infrastructure.jira.resolve",
-    "acli_py.presentation.output -> acli_py.infrastructure.jira.client",
-    "acli_py.presentation.tui.app -> acli_py.infrastructure.jira.client",
-    "acli_py.presentation.tui.app -> acli_py.infrastructure.jira.resolve",
-    "acli_py.presentation.tui.app -> acli_py.infrastructure.storage",
-]

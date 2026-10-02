@@ -15,12 +15,12 @@ from acli_py.application.ports import IssueReader
 from acli_py.application.queries import get_issue as get_issue_package
 from acli_py.application.queries.get_issue.query import GetIssue
 from acli_py.application.queries.get_issue.view import IssueView, size
-from acli_py.application.site import Site
 from acli_py.bootstrap import build_bus
 from acli_py.domain.adf import to_adf
 from acli_py.domain.issue import Direction, Issue, StatusCategory, User
 from acli_py.domain.values import moment, text, when
 from acli_py.infrastructure.jira.client import JiraClient, NotFoundError
+from acli_py.infrastructure.jira.site import Site
 from tests import fake_jira
 
 ISSUE = {

@@ -27,8 +27,7 @@ from acli_py.application.queries.list_filter_columns.query import ListFilterColu
 from acli_py.application.queries.list_filters.query import ListFilters
 from acli_py.application.queries.search_filters.query import SearchFilters
 from acli_py.domain.fields import FIELD_TYPES
-from acli_py.infrastructure.jira import resolve
-from acli_py.presentation import output
+from acli_py.presentation import inputs, output
 from acli_py.presentation.cli.common import (
     AllOpt,
     CsvOpt,
@@ -261,9 +260,7 @@ def filter_owner(
     dry_run: DryRunOpt = False,
 ) -> None:
     """Hand filters over to someone else."""
-    filter_ids = resolve.given(filter_ids) + (
-        resolve.read_keys_file(from_file) if from_file else []
-    )
+    filter_ids = inputs.given(filter_ids) + (inputs.read_keys_file(from_file) if from_file else [])
     if not filter_ids:
         raise fail("Say which filters: give their ids or --from-file.")
     session = connect(dry_run)

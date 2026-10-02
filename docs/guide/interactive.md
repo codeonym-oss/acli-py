@@ -131,7 +131,7 @@ The history is kept in `shell-history` next to your config. Lines containing an 
 
 The TUI and the shell send their reads and writes through a small application layer built on
 [mediary](https://pypi.org/project/mediary/), a CQRS mediator. Reads are queries, such as
-`SearchIssues`, `GetIssue` and `GetTransitions`. Changes are commands, such as
+`SearchIssues`, `GetIssue` and `ListTransitions`. Changes are commands, such as
 `TransitionIssue`, `AssignIssue` and `CommentOnIssue`. Behaviours wrap every message:
 
 - **Activity:** counts what is in flight (the `⟳` at the top) and keeps the activity log.
@@ -140,6 +140,6 @@ The TUI and the shell send their reads and writes through a small application la
 - **Announce:** after a command, empties the cache and publishes an `IssueChanged` event. The
   TUI listens for it and refreshes that row and the detail pane.
 
-Handlers are plain functions over the same HTTP client the command line uses, and mediary runs
-them on worker threads, so the UI never waits on the network. The client enforces dry runs
-here exactly as it does for the command line.
+Handlers are plain functions over ports, backed by the same HTTP client the command line
+uses, and mediary runs them on worker threads, so the UI never waits on the network. The
+client enforces dry runs here exactly as it does for the command line.

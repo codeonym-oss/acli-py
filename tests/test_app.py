@@ -9,6 +9,7 @@ if TYPE_CHECKING:
     from acli_py.application.bus import Bus
     from acli_py.application.events.issue_changed.event import IssueChanged
 
+
 from acli_py.application.behaviors import describe
 from acli_py.application.commands.assign_issue.command import AssignIssue
 from acli_py.application.commands.comment_on_issue.command import CommentOnIssue
@@ -16,23 +17,27 @@ from acli_py.application.commands.create_issue.command import CreateIssue
 from acli_py.application.commands.edit_issue.command import EditIssue
 from acli_py.application.commands.transition_issue.command import TransitionIssue
 from acli_py.application.commands.watch_issue.command import WatchIssue
-from acli_py.application.messages import (
-    FindAssignees,
-    GetTransitions,
-    ListIssueTypes,
-    ListPriorities,
-    ValidateJql,
-)
 from acli_py.application.queries.count_issues.query import CountIssues
+from acli_py.application.queries.find_assignees.query import FindAssignees
 from acli_py.application.queries.get_issue.query import GetIssue
 from acli_py.application.queries.list_filters.query import ListFilters
+from acli_py.application.queries.list_issue_types.query import ListIssueTypes
+from acli_py.application.queries.list_priorities.query import ListPriorities
 from acli_py.application.queries.list_projects.query import ListProjects
+from acli_py.application.queries.list_transitions.query import ListTransitions
 from acli_py.application.queries.search_issues.query import SearchIssues
-from acli_py.application.site import Site
+from acli_py.application.queries.validate_jql.query import ValidateJql
 from acli_py.bootstrap import build_bus
 from acli_py.infrastructure.jira.client import JiraClient, NotFoundError
+from acli_py.infrastructure.jira.site import Site
 from acli_py.infrastructure.storage import BUILTIN_VIEWS, History, Views
 from tests import fake_jira
+
+
+def site_of(bus: Bus) -> Site:
+    """Return the bus's site as the infrastructure built it."""
+    assert isinstance(bus.site, Site)
+    return bus.site
 
 
 def make_bus(url: str, *, dry_run: bool = False) -> Bus:
@@ -57,22 +62,23 @@ def test_queries_read_and_are_cached(site, fake):
         assert await bus.send(CountIssues("project = DEMO")) == 3
         view = await bus.send(GetIssue("DEMO-1"))
         assert view.issue.summary == "Login fails on Safari"
-        assert [t["name"] for t in await bus.send(GetTransitions("DEMO-1"))] == [
+        assert [t.name for t in (await bus.send(ListTransitions("DEMO-1"))).transitions] == [
             "Start work",
             "Finish",
         ]
-        assert [u["displayName"] for u in await bus.send(FindAssignees("DEMO-1", "bob"))] == [
+        assert [u.name for u in (await bus.send(FindAssignees("DEMO-1", "bob"))).people] == [
             "Bob Jensen"
         ]
-        assert await bus.send(ValidateJql("project = DEMO")) == []
-        assert await bus.send(ValidateJql("nosuchfield = 1")) != []
+        assert not await bus.send(ValidateJql("project = DEMO"))
+        assert await bus.send(ValidateJql("nosuchfield = 1"))
         assert [f.name for f in (await bus.send(ListFilters(favourites=True))).filters] == [
             "My open work"
         ]
-        assert [p["name"] for p in await bus.send(ListPriorities())] == ["High", "Medium", "Low"]
+        priorities = (await bus.send(ListPriorities())).entries
+        assert [p.name for p in priorities] == ["High", "Medium", "Low"]
         projects = await bus.send(ListProjects(recent_first=True))
         assert [p.key for p in projects.projects] == ["DEMO", "OPS"]
-        types = [t["name"] for t in await bus.send(ListIssueTypes("DEMO"))]
+        types = [t.name for t in (await bus.send(ListIssueTypes("DEMO", creatable=True))).types]
         assert "Subtask" not in types
         assert "Bug" in types
         before = len(site.log)
@@ -143,7 +149,7 @@ def test_dry_run_commands_plan_and_say_so(site, fake):
     bus.listeners.append(listener)
     run(bus.send(AssignIssue("DEMO-1", None)))
     assert site.writes() == []
-    assert len(bus.site.client.planned) == 1
+    assert len(site_of(bus).planned) == 1
     assert heard[0].dry_run
 
 

@@ -28,7 +28,7 @@ from rich.table import Table
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Iterator
 
-    from acli_py.infrastructure.jira.client import PlannedRequest
+    from acli_py.application.dry_run import PlannedRequest
 
 
 class _Stdout(Console):

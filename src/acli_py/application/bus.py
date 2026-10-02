@@ -27,8 +27,7 @@ from acli_py.application.audit import AuditTrail
 from acli_py.application.behaviors import CACHE_SECONDS, Activity, Announce, Confirm, QueryCache
 from acli_py.application.bulk import Bulk
 from acli_py.application.events.issue_changed.subscribers import Screens
-from acli_py.application.ports import AuditLog, Confirmer
-from acli_py.application.site import Site
+from acli_py.application.ports import AuditLog, Confirmer, CurrentSite
 
 T = TypeVar("T")
 
@@ -39,7 +38,7 @@ class Bus:
     def __init__(
         self,
         mediator: Mediator,
-        site: Site,
+        site: CurrentSite,
         audit: AuditLog,
         *,
         confirmer: Confirmer | None = None,

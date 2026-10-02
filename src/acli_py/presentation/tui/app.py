@@ -29,27 +29,23 @@ from acli_py.application.commands.create_issue.command import CreateIssue
 from acli_py.application.commands.edit_issue.command import EditIssue
 from acli_py.application.commands.transition_issue.command import TransitionIssue
 from acli_py.application.commands.watch_issue.command import WatchIssue
-from acli_py.application.messages import (
-    FindAssignees,
-    GetTransitions,
-    ListIssueTypes,
-    ListPriorities,
-    ValidateJql,
-)
+from acli_py.application.errors import SiteError
 from acli_py.application.queries.count_issues.query import CountIssues
+from acli_py.application.queries.find_assignees.query import FindAssignees
 from acli_py.application.queries.get_issue.query import GetIssue
 from acli_py.application.queries.list_filters.query import ListFilters
+from acli_py.application.queries.list_issue_types.query import ListIssueTypes
+from acli_py.application.queries.list_priorities.query import ListPriorities
 from acli_py.application.queries.list_projects.query import ListProjects
+from acli_py.application.queries.list_transitions.query import ListTransitions
 from acli_py.application.queries.plan_undo.query import PlanUndo
 from acli_py.application.queries.search_issues.query import SearchIssues
+from acli_py.application.queries.validate_jql.query import ValidateJql
+from acli_py.bootstrap import History, Views, query_history, saved_views
 from acli_py.domain import adf
 from acli_py.domain.jql import Completer, compile_query
 from acli_py.domain.jql.catalog import Catalog, spelling
 from acli_py.domain.jql.smart import looks_like_jql, terms
-from acli_py.infrastructure.jira.client import JiraError, PlannedRequest
-from acli_py.infrastructure.jira.resolve import ResolveError
-from acli_py.infrastructure.storage import History, Views
-from acli_py.presentation.output import dig
 from acli_py.presentation.tui.screens import (
     ActivityScreen,
     Choice,
@@ -74,6 +70,7 @@ if TYPE_CHECKING:
     from textual.screen import Screen
 
     from acli_py.application.bus import Bus
+    from acli_py.application.dry_run import PlannedRequest
     from acli_py.application.events.issue_changed.event import IssueChanged
     from acli_py.domain.issue import Issue
 
@@ -90,7 +87,7 @@ SORTS = [
     ("rank", "Board rank"),
     ("assignee", "By assignee"),
 ]
-ERRORS = (JiraError, ResolveError, ValueError)
+ERRORS = (SiteError, ValueError)
 SUMMARY = "summary"
 # (label, key, width): the key column fits the keys, and the summary takes what is left.
 COLUMNS = (
@@ -180,8 +177,8 @@ class IssueBrowser(App[None]):
         self.catalog = catalog
         self.completer = Completer(catalog)
         self.default_project = default_project
-        self.views = views or Views()
-        self.history = history or History()
+        self.views = views or saved_views()
+        self.history = history or query_history()
         self.first_query = query or self.views.all()[0].query
         self.rows: list[Issue] = []
         self.marked: list[str] = []
@@ -192,7 +189,7 @@ class IssueBrowser(App[None]):
         self.filters: list[dict] = []
         self.plans: list[PlannedRequest] = []
         self.view_queries: list[str | None] = []
-        self.site.client.on_plan = self._planned_from_thread
+        self.site.on_plan = self._planned_from_thread
         bus.listeners.append(self._changed)
         bus.confirm.confirmer = AskInModal(self)
         bus.activity.listeners.append(self._show_busy)
@@ -362,7 +359,7 @@ class IssueBrowser(App[None]):
         try:
             problems = await self.bus.send(ValidateJql(jql))
             if problems:
-                self.bar.show_jql("✘ " + " ".join(problems), error=True)
+                self.bar.show_jql("✘ " + " ".join(problems.problems), error=True)
                 return
             self.status(Text("Searching…", style="yellow"))
             page = await self.bus.send(SearchIssues(jql, PAGE, ROW_FIELDS))
@@ -577,17 +574,17 @@ class IssueBrowser(App[None]):
         if not keys:
             return
         try:
-            options = await asyncio.gather(*(self.bus.send(GetTransitions(k)) for k in keys))
+            options = await asyncio.gather(*(self.bus.send(ListTransitions(k)) for k in keys))
         except ERRORS as error:
             self.notify(str(error), severity="error")
             return
         # Several issues: offer the statuses every one of them can reach.
-        reachable = [{dig(t, "to", "name") for t in found} for found in options]
+        reachable = [found.targets for found in options]
         common = set.intersection(*reachable) if reachable else set()
         choices = [
-            Choice(f"{t['name']}", dig(t, "to", "name"), f"→ {dig(t, 'to', 'name')}")
-            for t in options[0]
-            if dig(t, "to", "name") in common
+            Choice(t.name, t.target, f"→ {t.target}")
+            for t in options[0].transitions
+            if t.target in common
         ]
         if not choices:
             self.notify("No transition is available to all of them.", severity="warning")
@@ -611,17 +608,10 @@ class IssueBrowser(App[None]):
 
         async def search(text: str) -> list[Choice[tuple[str | None, str]]]:
             try:
-                people = await self.bus.send(FindAssignees(keys[0], text))
+                people = (await self.bus.send(FindAssignees(keys[0], text))).people
             except ERRORS:
-                people = []
-            found = [
-                Choice(
-                    p.get("displayName", "?"),
-                    (p["accountId"], p.get("displayName", "")),
-                    p.get("emailAddress", ""),
-                )
-                for p in people
-            ]
+                people = ()
+            found = [Choice(p.name, (p.account_id, p.name), p.email) for p in people]
             return [c for c in fixed if not text or text.lower() in c.label.lower()] + found
 
         start = await search("")
@@ -723,11 +713,11 @@ class IssueBrowser(App[None]):
         if not keys:
             return
         try:
-            priorities = await self.bus.send(ListPriorities())
+            priorities = (await self.bus.send(ListPriorities())).entries
         except ERRORS as error:
             self.notify(str(error), severity="error")
             return
-        choices = [Choice(p["name"], p["name"], p.get("description", "")) for p in priorities]
+        choices = [Choice(p.name, p.name, p.description) for p in priorities]
         picked = await self.push_screen_wait(PickScreen("Priority", choices))
         if picked:
             await self._each(
@@ -766,7 +756,8 @@ class IssueBrowser(App[None]):
 
         async def types_for(project: str) -> list[str]:
             try:
-                return [t["name"] for t in await self.bus.send(ListIssueTypes(project))]
+                found = await self.bus.send(ListIssueTypes(project, creatable=True))
+                return [t.name for t in found.types]
             except ERRORS:
                 return ["Task"]
 

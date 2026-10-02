@@ -24,6 +24,9 @@ from acli_py.application.commands.delete_issue.command import DeleteIssue
 from acli_py.application.commands.edit_issue.command import EditIssue
 from acli_py.application.commands.transition_issue.command import TransitionIssue
 from acli_py.application.commands.watch_issue.command import WatchIssue
+from acli_py.application.dry_run import DRY_RUN_ID
+from acli_py.application.inputs import TEMPLATE, IssueInput, flat
+from acli_py.application.queries.build_fields.query import BuildFields, ResolveFieldValues
 from acli_py.application.queries.compile_search.query import (
     ME,
     NOBODY,
@@ -32,19 +35,16 @@ from acli_py.application.queries.compile_search.query import (
 )
 from acli_py.application.queries.count_issues.query import CountIssues
 from acli_py.application.queries.export_issues.query import ExportIssues
+from acli_py.application.queries.find_person.query import NOBODY as NOBODY_WORDS
 from acli_py.application.queries.get_history.query import GetHistory
 from acli_py.application.queries.get_issue.query import GetIssue
 from acli_py.application.queries.issue_columns import columns, split
+from acli_py.application.queries.list_transitions.query import ListTransitions
 from acli_py.application.queries.plan_import.query import PlanImport
 from acli_py.application.queries.search_issues.query import SearchIssues
-from acli_py.domain import adf
 from acli_py.domain.jql.smart import cheatsheet
 from acli_py.domain.values import when
-from acli_py.infrastructure.jira import fields as issue_fields
-from acli_py.infrastructure.jira import resolve
-from acli_py.infrastructure.jira.client import DRY_RUN_ID
-from acli_py.infrastructure.jira.fields import IssueInput, flat
-from acli_py.presentation import output
+from acli_py.presentation import inputs, output
 from acli_py.presentation.cli.common import (
     AllOpt,
     BulkLimitOpt,
@@ -129,7 +129,7 @@ FieldOpt = Annotated[
 
 def description_of(text: str | None, file: Path | None) -> str | None:
     """Return the description from -d, -D or stdin."""
-    return resolve.read_text_arg(text, file)
+    return inputs.read_text_arg(text, file)
 
 
 # ── view ─────────────────────────────────────────────────────────────────────
@@ -223,9 +223,9 @@ def show_syntax() -> None:
 def _who(session: Session, assignee: str | None) -> str:
     """Return the assignee as `CompileSearch` takes it: ME, NOBODY or an account id."""
     who = (assignee or "").strip()
-    if who.lower() in resolve.ME:
+    if who.lower() in (ME, ME.lstrip("@")):
         return ME
-    if who.lower() in resolve.NOBODY:
+    if who.lower() in NOBODY_WORDS:
         return NOBODY
     return session.account_id(who) if who else ""
 
@@ -506,7 +506,7 @@ def create(
     cat new.jsonl | acli-py issue create --from-json - -p DEMO -y[/]
     """
     if template:
-        output.print_json([issue_fields.TEMPLATE])
+        output.print_json([TEMPLATE])
         return
     session = connect(dry_run)
     common = IssueInput(
@@ -527,7 +527,7 @@ def create(
     if from_json or from_csv:
         if from_json and from_csv:
             raise fail("Give one of --from-json and --from-csv.")
-        rows = issue_fields.read_rows(from_json or from_csv)  # type: ignore[arg-type]
+        rows = inputs.read_rows(from_json or from_csv)  # type: ignore[arg-type]
         if not rows:
             raise fail("No issues to create.")
         wanted = [_merge(IssueInput.from_mapping(row), common) for row in rows]
@@ -547,7 +547,7 @@ def create(
         )
         return
     if from_file:
-        text = resolve.read_text_arg(None, from_file) or ""
+        text = inputs.read_text_arg(None, from_file) or ""
         first, _, rest = text.strip("\n").partition("\n")
         common.summary = common.summary or first.strip()
         common.description = common.description or rest.strip() or None
@@ -576,13 +576,10 @@ def create(
 
 def _creations(session: Session, wanted: list[IssueInput]) -> list[CreateIssue]:
     """Return one `CreateIssue` per issue, its fields resolved (names to ids) on the site."""
-    catalog = resolve.FieldCatalog.load(session.client) if any(w.extra for w in wanted) else None
     commands = []
     for n, item in enumerate(wanted, 1):
         item = _defaults(session, item)
-        fields = issue_fields.build(
-            session.client, item, me=session.me, creating=True, catalog=catalog
-        )
+        fields = session.send(BuildFields(item, creating=True))
         commands.append(CreateIssue(fields, item.raw.get("update") or {}, f"#{n}"))
     return commands
 
@@ -704,7 +701,7 @@ def import_(
     [dim]acli-py issue export 'p:DEMO is:open' --fields key,summary,priority,labels -o open.csv
     acli-py issue import open.csv --dry-run[/]
     """
-    rows = issue_fields.read_rows(file)
+    rows = inputs.read_rows(file)
     session = connect(dry_run)
     defaults = session.config.defaults
     plan = session.send(
@@ -856,11 +853,11 @@ def edit(
     if editor:
         if len(picked) != 1:
             raise fail("--editor edits one issue at a time.")
-        current = session.client.issue(picked[0], ["summary", "description"])["fields"]
+        current = session.send(GetIssue(picked[0])).issue
         wanted.summary, wanted.description = _edit_issue_text(
-            session, current.get("summary", ""), adf.to_text(current.get("description"))
+            session, current.summary, current.description
         )
-    fields = issue_fields.build(session.client, wanted, me=session.me)
+    fields = dict(session.send(BuildFields(wanted)))
     update: dict[str, list] = {}
     if from_json:
         extra = json.loads(from_json.read_text(encoding="utf-8"))
@@ -888,7 +885,7 @@ def edit(
 
 def _assignee(session: Session, who: str) -> dict | None:
     """Return the assignee field for `who`, with the name questions show (never sent)."""
-    account = resolve.account_id(session.client, who, session.me)
+    account = session.assignee(who)
     if account is None:
         return None
     return {"accountId": account, "displayName": who}
@@ -932,7 +929,7 @@ def assign(
     if not picked:
         output.info("No issues match; nothing to assign.")
         return
-    who = None if unassign else resolve.account_id(session.client, to or "", session.me)
+    who = None if unassign else session.assignee(to or "")
     run_many(
         session,
         [AssignIssue(key, who, to or "") for key in picked],
@@ -965,7 +962,7 @@ def _watch(watch: bool, **kwargs: Any) -> None:
         output.info("No issues match; nothing to watch." if watch else "No issues match.")
         return
     user = kwargs["user"]
-    account = resolve.user(session.client, user, session.me)["accountId"]
+    account = session.account_id(user)
     name = "" if account == session.me else user
     done = ("now watched" if watch else "no longer watched") + (
         f" by {escape(name)}" if name else ""
@@ -1086,7 +1083,7 @@ def transition(
     if not picked:
         output.info("No issues match; nothing to move.")
         return
-    extra = resolve.field_values(session.client, list(field or []), session.me)
+    extra = dict(session.send(ResolveFieldValues(tuple(field or []))))
     if resolution:
         extra["resolution"] = {"name": resolution}
     run_many(
@@ -1110,14 +1107,13 @@ def transitions(
     out: OutputOpt = None,
 ) -> None:
     """List the statuses an issue can move to right now."""
-    session = connect()
     output.emit(
-        session.client.transitions(key.upper()),
+        connect().send(ListTransitions(key)).to_json(),
         [
-            Column("Id", lambda t: t.get("id"), style="dim"),
-            Column("Transition", lambda t: t.get("name"), style="bold"),
-            Column("To status", lambda t: dig(t, "to", "name")),
-            Column("Category", lambda t: dig(t, "to", "statusCategory", "name"), style="dim"),
+            Column("Id", lambda t: t["id"], style="dim"),
+            Column("Transition", lambda t: t["name"], style="bold"),
+            Column("To status", lambda t: t["to"]),
+            Column("Category", lambda t: t["category"], style="dim"),
         ],
         fmt(as_json, chosen=out),
         empty="No transitions available.",

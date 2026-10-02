@@ -1,9 +1,11 @@
-"""`JiraPeople` and `JiraProjects`: people and projects, over the client."""
+"""People, projects, the site's lists and its raw API, over the client."""
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from acli_py.domain.issue import User
+from acli_py.domain.meta import IssueTypeInfo, Named, Profile, StatusInfo
 from acli_py.domain.projects import DEFAULT_TEMPLATE, TEMPLATES, Component, Project, Version
 from acli_py.infrastructure.jira import resolve
 from acli_py.infrastructure.jira.client import API, NotFoundError
@@ -41,6 +43,68 @@ class JiraPeople:
         if who.strip().lower() in resolve.ME:
             return self.me()
         return str(resolve.user(self.client, who)["accountId"])
+
+    def search(self, text: str, *, limit: int) -> list[Profile]:
+        """Return the people the user search finds."""
+        found = self.client.get(f"{API}/user/search", query=text, maxResults=limit) or ()
+        return [Profile.from_jira(u) for u in found]
+
+    def profile(self, who: str) -> Profile:
+        """Return a profile, with groups; '@me' is the logged-in user's own."""
+        if who.strip().lower() in resolve.ME:
+            return Profile.from_jira(self.client.myself())
+        account = self.account_id(who)
+        return Profile.from_jira(self.client.get(f"{API}/user", accountId=account, expand="groups"))
+
+    def assignable(self, key: str, text: str) -> list[User]:
+        """Return the assignable people (apps left out)."""
+        found = self.client.get(f"{API}/user/assignable/search", issueKey=key,
+                                query=text or None, maxResults=20) or ()  # fmt: skip
+        humans = (u for u in found if u.get("accountType", "atlassian") == "atlassian")
+        return [user for u in humans if (user := User.from_jira(u))]
+
+
+class JiraSiteLists:
+    """Reads the site's statuses, priorities, resolutions and issue types."""
+
+    def __init__(self, client: JiraClient) -> None:
+        self.client = client
+
+    def statuses(self) -> list[StatusInfo]:
+        """Return every status."""
+        return [StatusInfo.from_jira(s) for s in self.client.get(f"{API}/status") or ()]
+
+    def priorities(self) -> list[Named]:
+        """Return the priorities."""
+        return [Named.from_jira(p) for p in self.client.paged(f"{API}/priority/search")]
+
+    def resolutions(self) -> list[Named]:
+        """Return the resolutions."""
+        return [Named.from_jira(r) for r in self.client.paged(f"{API}/resolution/search")]
+
+    def issue_types(self, project: str | None = None) -> list[IssueTypeInfo]:
+        """Return the issue types, of one project or all."""
+        if project:
+            project_id = self.client.get(f"{API}/project/{project}")["id"]
+            found = self.client.get(f"{API}/issuetype/project", projectId=project_id)
+        else:
+            found = self.client.get(f"{API}/issuetype")
+        return [IssueTypeInfo.from_jira(t) for t in found or ()]
+
+
+class JiraRawApi:
+    """Any endpoint, through the client: dry runs and --debug apply as everywhere."""
+
+    def __init__(self, client: JiraClient) -> None:
+        self.client = client
+
+    def request(self, method: str, path: str, params: Mapping[str, Any], body: Any = None) -> Any:
+        """Send the request."""
+        return self.client.request(method, path, params=dict(params), body=body)
+
+    def is_write(self, method: str, path: str) -> bool:
+        """Return whether it changes something."""
+        return self.client.is_write(method, path)
 
 
 class JiraProjects:

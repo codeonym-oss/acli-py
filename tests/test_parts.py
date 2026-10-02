@@ -16,12 +16,12 @@ from acli_py.application.commands.link_issues.command import LinkIssues
 from acli_py.application.commands.log_work.command import LogWork
 from acli_py.application.commands.unlink_issues.command import UnlinkIssues
 from acli_py.application.queries.download_attachment.query import DownloadAttachment
-from acli_py.application.site import Site
 from acli_py.bootstrap import build_bus
 from acli_py.domain.adf import to_text
 from acli_py.domain.links import IssueLink, LinkDirection, LinkType, UnknownLinkTypeError
 from acli_py.infrastructure.audit import AuditMemory
 from acli_py.infrastructure.jira.client import JiraClient
+from acli_py.infrastructure.jira.site import Site
 from acli_py.presentation import terminal
 from acli_py.presentation.cli import common
 from tests import fake_jira
