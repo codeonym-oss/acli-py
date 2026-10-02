@@ -1,17 +1,12 @@
-"""The composition root: the one place that wires infrastructure into the application.
-
-Front ends (the CLI, the shell, the TUI) never build Jira clients, catalogs or handlers
-themselves; they ask for a ready bus or catalog here. Swapping an adapter (a fake Jira in
-tests, another backend later) means changing this module only.
-"""
+"""The bus and the catalog for a site: every port's adapter, handed to the use cases."""
 
 from __future__ import annotations
 
-from typing import TypeVar
+from typing import TYPE_CHECKING, TypeVar
 
 from mediary import Mediator
 
-from acli_py.application import commands, events, handlers, queries
+from acli_py.application import commands, events, queries
 from acli_py.application.audit import AuditTrail
 from acli_py.application.behaviors import CACHE_SECONDS, QueryCache
 from acli_py.application.bus import Bus
@@ -33,33 +28,41 @@ from acli_py.application.ports import (
     IssueStore,
     People,
     Projects,
+    RawApi,
     SiteFields,
+    SiteLists,
     Sprints,
     Watchers,
     Workflow,
     Worklogs,
 )
-from acli_py.application.site import Site
 from acli_py.domain.jql.catalog import Catalog
 from acli_py.infrastructure.audit import AuditFile
 from acli_py.infrastructure.jira.agile import JiraBoards, JiraSprints
 from acli_py.infrastructure.jira.catalog import JiraCatalog
-from acli_py.infrastructure.jira.client import JiraClient
 from acli_py.infrastructure.jira.editor import JiraEditor, JiraWatchers
 from acli_py.infrastructure.jira.fields import JiraIssueFields
 from acli_py.infrastructure.jira.filters import JiraDashboards, JiraFields, JiraFilters
 from acli_py.infrastructure.jira.issues import JiraIssues, JiraSearch
 from acli_py.infrastructure.jira.lifecycle import JiraLinks, JiraStore
 from acli_py.infrastructure.jira.parts import JiraAttachments, JiraComments, JiraWorklogs
-from acli_py.infrastructure.jira.projects import JiraPeople, JiraProjects
+from acli_py.infrastructure.jira.projects import (
+    JiraPeople,
+    JiraProjects,
+    JiraRawApi,
+    JiraSiteLists,
+)
 from acli_py.infrastructure.jira.workflow import JiraWorkflow
-from acli_py.infrastructure.storage import Views
+from acli_py.infrastructure.storage import History, Views
+
+if TYPE_CHECKING:
+    from acli_py.infrastructure.jira.site import Site
 
 T = TypeVar("T")
 
 
 class SiteResolver:
-    """Hands the handlers their dependencies: the ports' adapters, the `Site`, else `cls()`.
+    """Hands the handlers their dependencies: the ports' adapters, else `cls()`.
 
     Copies go to `destination`'s site, or to `site` itself.
     """
@@ -69,8 +72,6 @@ class SiteResolver:
         there = destination or site
         store = JiraStore(site.client, site.url)
         self.provided: dict[type, object] = {
-            Site: site,
-            JiraClient: site.client,
             IssueReader: JiraIssues(site.client, site.url),
             IssueSearch: JiraSearch(site.client),
             Catalog: JiraCatalog(site.client),
@@ -94,6 +95,8 @@ class SiteResolver:
             Filters: JiraFilters(site.client),
             SiteFields: JiraFields(site.client),
             Dashboards: JiraDashboards(site.client),
+            SiteLists: JiraSiteLists(site.client),
+            RawApi: JiraRawApi(site.client),
         }
 
     def resolve(self, cls: type[T], /) -> T:
@@ -122,7 +125,7 @@ def build_bus(
     audit = audit or AuditFile()
     resolver = SiteResolver(site, audit, destination)
     mediator = Mediator(resolver=resolver)
-    mediator.scan(handlers, commands, queries, events)
+    mediator.scan(commands, queries, events)
     bus = Bus(
         mediator,
         site,
@@ -136,11 +139,16 @@ def build_bus(
     return bus
 
 
-def build_catalog(client: JiraClient) -> Catalog:
-    """Return the completion catalog for the site `client` talks to."""
-    return JiraCatalog(client)
+def build_catalog(site: Site) -> Catalog:
+    """Return the completion catalog for `site`."""
+    return JiraCatalog(site.client)
 
 
 def saved_views() -> Views:
     """Return the saved views and aliases (shared by the CLI, the shell and the TUI)."""
     return Views()
+
+
+def query_history() -> History:
+    """Return the queries run lately (shared by the TUI and the shell)."""
+    return History()

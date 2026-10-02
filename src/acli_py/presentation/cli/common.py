@@ -24,16 +24,22 @@ from rich.table import Table
 from acli_py.application.bulk import CONCURRENCY, MAX_CONCURRENCY, SAFETY_CAP, Report, TooManyError
 from acli_py.application.bus import Bus
 from acli_py.application.changes import Change, Declined
+from acli_py.application.errors import SettingsError, SiteError
 from acli_py.application.queries.compile_search.query import CompileSearch
+from acli_py.application.queries.find_person.query import FindPerson
 from acli_py.application.queries.issue_columns import Template
-from acli_py.application.site import Site
-from acli_py.bootstrap import build_bus
-from acli_py.infrastructure import credentials
-from acli_py.infrastructure.config import Account, Config
-from acli_py.infrastructure.jira import resolve
-from acli_py.infrastructure.jira.client import JiraClient, JiraError, normalize_url, site_host
-from acli_py.infrastructure.jira.resolve import ResolveError
-from acli_py.presentation import output, terminal
+from acli_py.application.queries.search_issues.query import SearchIssues
+from acli_py.bootstrap import (
+    Account,
+    Config,
+    Site,
+    build_bus,
+    normalize_url,
+    open_site,
+    site_host,
+    token_of,
+)
+from acli_py.presentation import inputs, output, terminal
 from acli_py.presentation.output import Column, Format, pick_format
 
 if TYPE_CHECKING:
@@ -59,7 +65,7 @@ class State:
     dry_run: bool = False
     debug: bool = False
     account: str | None = None
-    clients: list[JiraClient] = field(default_factory=list)
+    sites: list[Site] = field(default_factory=list)
 
 
 state = State()
@@ -203,7 +209,7 @@ def guarded(command: Callable) -> Callable:
             raise fail(
                 f"{error} Narrow it down, or pass [bold]--force[/] to go ahead.", EXIT_ABORTED
             ) from None
-        except (JiraError, ResolveError, credentials.CredentialError, ValueError) as error:
+        except (SiteError, SettingsError, ValueError) as error:
             raise fail(escape(str(error))) from None
         except Declined as declined:
             raise fail(escape(str(declined)), EXIT_ABORTED) from None
@@ -221,9 +227,9 @@ def guarded(command: Callable) -> Callable:
 
 @dataclass
 class Session:
-    """An open client for one account, plus the loaded config."""
+    """An open site for one account, plus the loaded config."""
 
-    client: JiraClient
+    site: Site
     account: Account
     config: Config
     _bus: Bus | None = field(default=None, repr=False)
@@ -231,7 +237,7 @@ class Session:
     @property
     def dry_run(self) -> bool:
         """Return whether writes are only shown."""
-        return self.client.dry_run
+        return self.site.dry_run
 
     @property
     def url(self) -> str:
@@ -241,34 +247,32 @@ class Session:
     @property
     def me(self) -> str:
         """Return the account id of the logged-in user (asking Jira once if unknown)."""
-        if not self.account.account_id:
-            self.account.account_id = self.client.myself().get("accountId", "")
-        return self.account.account_id
+        return self.site.me
 
     def account_id(self, who: str) -> str:
         """Return the account id of the one person `who` names: @me, an email, a name."""
-        return str(resolve.user(self.client, who, self.me)["accountId"])
+        return str(self.send(FindPerson(who)))
+
+    def assignee(self, who: str) -> str | None:
+        """Return the account id `who` names as an assignee: None for 'none', '-1' 'default'."""
+        return self.send(FindPerson(who, assignee=True))
 
     def browse(self, key: str) -> str:
         """Return an issue's web URL."""
-        return f"{self.url}/browse/{key}"
-
-    def site(self) -> Site:
-        """Return the site the application layer works on."""
-        return Site(self.client, self.url, self.account.account_id, self.account.display_name)
+        return self.site.browse(key)
 
     @property
     def bus(self) -> Bus:
         """Return the bus, built on first use; it asks at the terminal before changes."""
         if self._bus is None:
-            self._bus = build_bus(self.site(), confirmer=TerminalConfirmer())
+            self._bus = build_bus(self.site, confirmer=TerminalConfirmer())
         return self._bus
 
     def bus_to(self, other: Session) -> Bus:
         """Return a bus for this site whose copies (clones) go to `other`'s site."""
         if other.url == self.url:
             return self.bus
-        return build_bus(self.site(), confirmer=TerminalConfirmer(), destination=other.site())
+        return build_bus(self.site, confirmer=TerminalConfirmer(), destination=other.site)
 
     def send(self, message: Any) -> Any:
         """Send a query or command on the bus, and wait for its answer."""
@@ -337,34 +341,33 @@ def connect(dry_run: bool = False, account_name: str | None = None) -> Session:
     account = (
         find_account(config, account_name, "--to-site") if account_name else pick_account(config)
     )
-    token = credentials.load_token(account.name, account.token_backend)
+    token = token_of(account)
     if not token:
         raise fail(
             f"No API token saved for {escape(account.name)}. Run [bold]acli-py auth login[/] again."
         )
-    client = JiraClient(
-        account.url,
-        account.email,
+    site = open_site(
+        account,
         token,
         dry_run=dry_run or state.dry_run or env_flag("ACLI_PY_DRY_RUN"),
         on_response=trace_response if state.debug else None,
         on_plan=output.show_plan,
     )
-    state.clients.append(client)
-    return Session(client, account, config)
+    state.sites.append(site)
+    return Session(site, account, config)
 
 
 def close_clients() -> None:
-    """Close every client the command opened, and sum up a dry run."""
-    while state.clients:
-        client = state.clients.pop()
-        if client.dry_run:
-            count = len(client.planned)
+    """Close every site the command opened, and sum up a dry run."""
+    while state.sites:
+        site = state.sites.pop()
+        if site.dry_run:
+            count = len(site.planned)
             output.errors.print(
                 f"[bold magenta]DRY RUN[/] {count} change{'s' if count != 1 else ''} "
                 "planned, nothing was sent to Jira."
             )
-        client.close()
+        site.close()
 
 
 # ── interaction ──────────────────────────────────────────────────────────────
@@ -413,7 +416,7 @@ def preview_table(change: Change) -> Table:
 
 def read_text(text: str | None, file: Path | None) -> str | None:
     """Return text given inline or in a file; either being '-' reads stdin."""
-    return resolve.read_text_arg(text, file)
+    return inputs.read_text_arg(text, file)
 
 
 def edit_text(initial: str = "", suffix: str = ".md", config: Config | None = None) -> str:
@@ -464,7 +467,22 @@ def pick_issues(
             output.warn(escape(warning))
         jql = compiled.jql
     fetch = limit or (None if force else SAFETY_CAP + 1)
-    picked = resolve.targets(session.client, keys, jql, saved_filter, from_file, limit=fetch)
+    found = inputs.given(keys)
+    if from_file:
+        found += [k for k in inputs.read_keys_file(from_file) if k not in found]
+    if saved_filter:
+        queries = [jql, session.send(CompileSearch(saved_filter=saved_filter)).jql]
+    else:
+        queries = [jql]
+    for query in filter(None, queries):
+        view = session.send(SearchIssues(query, fetch, ("key",)))
+        found += [i.key for i in view.issues if i.key not in found]
+    piped = inputs.STDIN in (keys or []) or (from_file is not None and str(from_file) == "-")
+    if not found and not (jql or saved_filter or piped):
+        raise inputs.InputError(
+            "say which issues: give keys, '-' for stdin, --jql, --filter or --from-file"
+        )
+    picked = inputs.check_keys(found)
     return picked[:limit] if limit else picked
 
 

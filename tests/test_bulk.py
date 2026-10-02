@@ -14,10 +14,10 @@ from acli_py.application.behaviors import Confirm
 from acli_py.application.bulk import SAFETY_CAP, Bulk, TooManyError, change_of
 from acli_py.application.changes import Change, Changed, Declined, PreviewRow
 from acli_py.application.commands.transition_issue.command import TransitionIssue
-from acli_py.application.site import Site
 from acli_py.bootstrap import build_bus
 from acli_py.infrastructure.audit import AuditMemory
 from acli_py.infrastructure.jira.client import JiraClient
+from acli_py.infrastructure.jira.site import Site
 from acli_py.presentation import terminal
 from acli_py.presentation.cli import common
 from tests import fake_jira

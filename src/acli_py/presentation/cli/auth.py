@@ -9,9 +9,8 @@ import typer
 from rich.markup import escape
 from rich.prompt import IntPrompt, Prompt
 
-from acli_py.infrastructure import credentials
-from acli_py.infrastructure.config import Account, Config
-from acli_py.infrastructure.jira.client import JiraClient, normalize_url
+from acli_py.application.queries.get_person.query import GetPerson
+from acli_py.bootstrap import Account, Config, forget_token, sign_in, token_store
 from acli_py.presentation import output
 from acli_py.presentation.cli.common import JsonOpt, connect, fail, guarded
 from acli_py.presentation.output import Column, Format
@@ -50,33 +49,15 @@ def login(
     if not token:
         output.info(f"Create a token at {TOKEN_URL}")
         token = Prompt.ask("API token", password=True, console=output.errors)
-    token, email, url = token.strip(), email.strip(), normalize_url(site)
+    token, email = token.strip(), email.strip()
     if not token:
         raise fail("The API token is empty.")
-
-    client = JiraClient(url, email, token, retries=2)
-    try:
-        with output.errors.status("Checking the token with Jira…"):
-            me = client.myself()
-    finally:
-        client.close()
-
-    account = Account(
-        url=url,
-        email=email,
-        account_id=me.get("accountId", ""),
-        display_name=me.get("displayName", ""),
-        time_zone=me.get("timeZone", ""),
-    )
-    account.token_backend = credentials.save_token(account.name, token)
-    config = Config.load()
-    config.accounts[account.name] = account
-    config.active = account.name
-    config.save()
+    with output.errors.status("Checking the token with Jira…"):
+        account = sign_in(site, email, token)
     output.success(
         f"Logged in to [bold]{escape(account.host)}[/] as [bold]{escape(account.display_name)}[/]"
     )
-    output.info(f"Token stored in {escape(credentials.describe(account.token_backend))}")
+    output.info(f"Token stored in {escape(token_store(account))}")
 
 
 @app.command()
@@ -99,7 +80,7 @@ def logout(
     if not chosen:
         raise fail("Not logged in.")
     for gone in chosen:
-        credentials.delete_token(gone.name)
+        forget_token(gone)
         del config.accounts[gone.name]
         output.success(f"Logged out of {escape(gone.name)}")
     if config.active not in config.accounts:
@@ -151,9 +132,9 @@ def status(
     if check:
         session = connect()
         with output.errors.status("Checking the token…"):
-            me = session.client.myself()
+            (me,) = session.send(GetPerson()).people
         output.success(
-            f"Token for {escape(session.account.name)} is valid ({me.get('displayName')})"
+            f"Token for {escape(session.account.name)} is valid ({escape(me.user.name)})"
         )
 
 

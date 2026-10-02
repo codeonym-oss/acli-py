@@ -21,10 +21,9 @@ from acli_py.application.ports import Destination, IssueEditor, IssueLinks, Issu
 from acli_py.domain.copies import copy_of
 from acli_py.domain.links import IssueLink, LinkType
 from acli_py.infrastructure.audit import default_path
-from acli_py.infrastructure.jira.fields import parse_rows
-from acli_py.infrastructure.jira.resolve import ResolveError
 from acli_py.presentation import terminal
 from acli_py.presentation.cli import common
+from acli_py.presentation.inputs import InputError, parse_rows
 from tests.conftest import run_cli
 
 ORIGINAL = {
@@ -191,11 +190,11 @@ def test_rows_come_as_json_a_list_or_json_lines():
         {"summary": "a"}, {"summary": "b"},
     ]  # fmt: skip
     assert parse_rows("  ") == []
-    with pytest.raises(ResolveError, match="line 2 is not JSON"):
+    with pytest.raises(InputError, match="line 2 is not JSON"):
         parse_rows('{"summary": "a"}\n{"summary": \n')
-    with pytest.raises(ResolveError, match="not JSON or JSON lines"):
+    with pytest.raises(InputError, match="not JSON or JSON lines"):
         parse_rows("summary: a")
-    with pytest.raises(ResolveError, match="issue 1 is not a JSON object"):
+    with pytest.raises(InputError, match="issue 1 is not a JSON object"):
         parse_rows('["a"]')
 
 

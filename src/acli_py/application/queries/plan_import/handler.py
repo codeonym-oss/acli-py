@@ -7,6 +7,7 @@ from mediary.cqrs import query_handler
 
 from acli_py.application.commands.create_issue.command import CreateIssue
 from acli_py.application.commands.edit_issue.command import EditIssue
+from acli_py.application.errors import SiteError
 from acli_py.application.ports import IssueEditor, IssueFields
 from acli_py.application.queries.plan_import.query import PlanImport
 from acli_py.application.queries.plan_import.view import (
@@ -86,7 +87,7 @@ def _update(
     wanted = fields.build(settable) if settable else {}
     try:
         now = editor.values(key, (*wanted, "summary"))
-    except Exception as error:  # the site's own error (not found, no permission): one row
+    except SiteError as error:  # not found, no permission: this row fails, not the import
         raise ValueError(str(error)) from error
     changed = {f: v for f, v in wanted.items() if not edits.equal(now.get(f), v)}
     if not changed:

@@ -43,6 +43,11 @@ class StatusCategory(StrEnum):
     DONE = "done"
     UNKNOWN = "undefined"
 
+    @property
+    def label(self) -> str:
+        """Return the category as Jira's boards name it: 'To Do', 'In Progress', 'Done'."""
+        return {"new": "To Do", "indeterminate": "In Progress", "done": "Done"}.get(self.value, "")
+
 
 @dataclass(frozen=True)
 class Status:

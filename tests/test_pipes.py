@@ -10,10 +10,9 @@ import sys
 
 import pytest
 
-from acli_py.infrastructure.jira import resolve
-from acli_py.infrastructure.jira.resolve import ResolveError
-from acli_py.presentation import output, terminal
+from acli_py.presentation import inputs, output, terminal
 from acli_py.presentation.cli import common
+from acli_py.presentation.inputs import InputError
 from acli_py.presentation.output import Column, Format, pick_format
 from tests import fake_jira
 from tests.conftest import run_cli
@@ -26,24 +25,24 @@ posix_only = pytest.mark.skipif(os.name != "posix", reason="needs POSIX pipes an
 
 
 def test_keys_in_reads_plain_keys_json_lines_and_json_arrays():
-    assert resolve.keys_in("demo-1, DEMO-2\n# a comment\nDEMO-3 # trailing\n\n") == [
+    assert inputs.keys_in("demo-1, DEMO-2\n# a comment\nDEMO-3 # trailing\n\n") == [
         "DEMO-1", "DEMO-2", "DEMO-3",
     ]  # fmt: skip
     jsonl = '{"key": "DEMO-1", "fields": {}}\n{"id": 10042}\n'
-    assert resolve.keys_in(jsonl) == ["DEMO-1", "10042"]
-    assert resolve.keys_in('[{"key": "demo-1"}, "DEMO-2", {"key": "DEMO-1"}]') == [
+    assert inputs.keys_in(jsonl) == ["DEMO-1", "10042"]
+    assert inputs.keys_in('[{"key": "demo-1"}, "DEMO-2", {"key": "DEMO-1"}]') == [
         "DEMO-1", "DEMO-2",
     ]  # fmt: skip
-    assert resolve.keys_in("") == []
+    assert inputs.keys_in("") == []
 
 
 def test_keys_in_says_what_is_wrong():
-    with pytest.raises(ResolveError, match="line 2 starts like JSON"):
-        resolve.keys_in('{"key": "DEMO-1"}\n{"key": \n')
-    with pytest.raises(ResolveError, match="JSON array but isn't valid"):
-        resolve.keys_in("[1, 2")
-    with pytest.raises(ResolveError, match="has no key or id"):
-        resolve.keys_in('{"summary": "no key"}')
+    with pytest.raises(InputError, match="line 2 starts like JSON"):
+        inputs.keys_in('{"key": "DEMO-1"}\n{"key": \n')
+    with pytest.raises(InputError, match="JSON array but isn't valid"):
+        inputs.keys_in("[1, 2")
+    with pytest.raises(InputError, match="has no key or id"):
+        inputs.keys_in('{"summary": "no key"}')
 
 
 def test_a_dash_reads_issues_from_stdin(site):

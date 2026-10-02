@@ -4,15 +4,21 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated
 
 import typer
 from rich.markup import escape
 
+from acli_py.application.commands.call_api.command import CallApi
+from acli_py.application.queries.call_api.query import ApiGet
 from acli_py.application.queries.get_dashboard.query import GetDashboard
+from acli_py.application.queries.get_person.query import GetPerson
 from acli_py.application.queries.list_dashboards.query import ListDashboards
-from acli_py.infrastructure.jira import resolve
-from acli_py.infrastructure.jira.client import API
+from acli_py.application.queries.list_issue_types.query import ListIssueTypes
+from acli_py.application.queries.list_priorities.query import ListPriorities
+from acli_py.application.queries.list_resolutions.query import ListResolutions
+from acli_py.application.queries.list_statuses.query import ListStatuses
+from acli_py.application.queries.search_people.query import SearchPeople
 from acli_py.presentation import output
 from acli_py.presentation.cli.common import (
     AllOpt,
@@ -28,6 +34,7 @@ from acli_py.presentation.cli.common import (
     guarded,
     limit_of,
     open_url,
+    read_text,
 )
 from acli_py.presentation.output import Column, dig
 
@@ -97,11 +104,11 @@ def dashboard_view(
 # ── users ────────────────────────────────────────────────────────────────────
 
 USER_COLUMNS = [
-    Column("Name", lambda u: u.get("displayName"), style="bold"),
-    Column("Email", lambda u: u.get("emailAddress")),
-    Column("Account id", lambda u: u.get("accountId"), style="dim"),
-    Column("Type", lambda u: u.get("accountType"), style="dim"),
-    Column("Active", lambda u: "yes" if u.get("active", True) else "no"),
+    Column("Name", lambda u: u["name"], style="bold"),
+    Column("Email", lambda u: u["email"]),
+    Column("Account id", lambda u: u["accountId"], style="dim"),
+    Column("Type", lambda u: u["accountType"], style="dim"),
+    Column("Active", lambda u: "yes" if u["active"] else "no"),
 ]
 
 
@@ -115,9 +122,8 @@ def user_search(
     out: OutputOpt = None,
 ) -> None:
     """Find people by name or email."""
-    session = connect()
-    found = session.client.get(f"{API}/user/search", query=query, maxResults=limit)
-    output.emit(found, USER_COLUMNS, fmt(as_json, as_csv, out), empty="Nobody matches.")
+    found = connect().send(SearchPeople(query, limit))
+    output.emit(found.to_json(), USER_COLUMNS, fmt(as_json, as_csv, out), empty="Nobody matches.")
 
 
 @user_app.command("view")
@@ -127,34 +133,28 @@ def user_view(
     as_json: JsonOpt = False,
 ) -> None:
     """Show a person's profile (yours by default)."""
-    session = connect()
-    if who.lower() in resolve.ME:
-        data = session.client.myself()
-    else:
-        account = resolve.user(session.client, who)["accountId"]
-        data = session.client.get(f"{API}/user", accountId=account, expand="groups")
+    (data,) = connect().send(GetPerson(who)).to_json()
     if as_json:
         output.print_json(data)
         return
-    groups = [g["name"] for g in dig(data, "groups", "items", default=[])]
     rows = [
-        ("Email", escape(data.get("emailAddress") or "[hidden]")),
-        ("Account id", data.get("accountId")),
-        ("Type", data.get("accountType")),
-        ("Time zone", data.get("timeZone")),
-        ("Locale", data.get("locale")),
-        ("Active", "yes" if data.get("active", True) else "no"),
-        ("Groups", escape(", ".join(groups))),
+        ("Email", escape(data["email"] or "[hidden]")),
+        ("Account id", data["accountId"]),
+        ("Type", data["accountType"]),
+        ("Time zone", data["timeZone"]),
+        ("Locale", data["locale"]),
+        ("Active", "yes" if data["active"] else "no"),
+        ("Groups", escape(", ".join(data["groups"]))),
     ]
-    output.console.print(output.details(escape(data.get("displayName", who)), rows))
+    output.console.print(output.details(escape(data["name"] or who), rows))
 
 
 # ── meta ─────────────────────────────────────────────────────────────────────
 
 NAME_COLUMNS = [
-    Column("Id", lambda r: r.get("id"), style="dim"),
-    Column("Name", lambda r: r.get("name"), style="bold"),
-    Column("Description", lambda r: r.get("description")),
+    Column("Id", lambda r: r["id"], style="dim"),
+    Column("Name", lambda r: r["name"], style="bold"),
+    Column("Description", lambda r: r["description"]),
 ]
 
 
@@ -162,14 +162,13 @@ NAME_COLUMNS = [
 @guarded
 def statuses(as_json: JsonOpt = False, as_csv: CsvOpt = False, out: OutputOpt = None) -> None:
     """List every status and its category."""
-    session = connect()
     output.emit(
-        session.client.get(f"{API}/status"),
+        connect().send(ListStatuses()).to_json(),
         [
-            Column("Id", lambda s: s.get("id"), style="dim"),
-            Column("Name", lambda s: s.get("name"), style="bold"),
-            Column("Category", lambda s: dig(s, "statusCategory", "name")),
-            Column("Project", lambda s: dig(s, "scope", "project", "id"), style="dim"),
+            Column("Id", lambda s: s["id"], style="dim"),
+            Column("Name", lambda s: s["name"], style="bold"),
+            Column("Category", lambda s: s["category"]),
+            Column("Project", lambda s: s["projectId"], style="dim"),
         ],
         fmt(as_json, as_csv, out),
     )
@@ -179,20 +178,16 @@ def statuses(as_json: JsonOpt = False, as_csv: CsvOpt = False, out: OutputOpt = 
 @guarded
 def priorities(as_json: JsonOpt = False, as_csv: CsvOpt = False, out: OutputOpt = None) -> None:
     """List priorities."""
-    session = connect()
-    output.emit(
-        session.client.paged(f"{API}/priority/search"), NAME_COLUMNS, fmt(as_json, as_csv, out)
-    )
+    found = connect().send(ListPriorities()).to_json()
+    output.emit(found, NAME_COLUMNS, fmt(as_json, as_csv, out))
 
 
 @meta_app.command()
 @guarded
 def resolutions(as_json: JsonOpt = False, as_csv: CsvOpt = False, out: OutputOpt = None) -> None:
     """List resolutions."""
-    session = connect()
-    output.emit(
-        session.client.paged(f"{API}/resolution/search"), NAME_COLUMNS, fmt(as_json, as_csv, out)
-    )
+    found = connect().send(ListResolutions()).to_json()
+    output.emit(found, NAME_COLUMNS, fmt(as_json, as_csv, out))
 
 
 @meta_app.command("issue-types")
@@ -206,18 +201,12 @@ def issue_types(
     out: OutputOpt = None,
 ) -> None:
     """List issue types."""
-    session = connect()
-    if project:
-        project_id = session.client.get(f"{API}/project/{project.upper()}")["id"]
-        found = session.client.get(f"{API}/issuetype/project", projectId=project_id)
-    else:
-        found = session.client.get(f"{API}/issuetype")
     output.emit(
-        found,
+        connect().send(ListIssueTypes(project)).to_json(),
         [
             *NAME_COLUMNS[:2],
-            Column("Subtask", lambda t: "yes" if t.get("subtask") else ""),
-            Column("Level", lambda t: t.get("hierarchyLevel"), justify="right"),
+            Column("Subtask", lambda t: "yes" if t["subtask"] else ""),
+            Column("Level", lambda t: t["hierarchyLevel"], justify="right"),
             NAME_COLUMNS[2],
         ],
         fmt(as_json, as_csv, out),
@@ -225,6 +214,9 @@ def issue_types(
 
 
 # ── raw API ──────────────────────────────────────────────────────────────────
+
+API_ROOT = "/rest/api/3"  # where a path without a leading '/' goes
+METHODS = ("GET", "POST", "PUT", "DELETE", "PATCH")
 
 
 @guarded
@@ -242,37 +234,34 @@ def api(
 ) -> None:
     """Call any Jira REST endpoint with your credentials and print the JSON.
 
-    Writes honour --dry-run like every other command.
+    Writes honour --dry-run like every other command, and are kept in the audit log.
 
     [dim]acli-py api GET myself
     acli-py api POST /rest/api/3/issue -d @issue.json --dry-run[/]
     """
     method = method.upper()
-    if method not in ("GET", "POST", "PUT", "DELETE", "PATCH"):
+    if method not in METHODS:
         raise fail(f"Unsupported method {escape(method)}.")
     if not path.startswith("/"):
-        path = f"{API}/{path}"
-    params: dict[str, Any] = {}
+        path = f"{API_ROOT}/{path}"
+    params: dict[str, list[str]] = {}
     for item in query or []:
         key, sep, value = item.partition("=")
         if not sep:
             raise fail(f"--query takes KEY=VALUE, got {escape(item)!r}.")
         params.setdefault(key, []).append(value)
+    pairs = tuple((k, tuple(v)) for k, v in params.items())
     body = None
     if data is not None:
-        import sys
-
-        text = (
-            sys.stdin.read()
-            if data == "-"
-            else Path(data[1:]).read_text(encoding="utf-8")
-            if data.startswith("@")
-            else data
-        )
-        body = json.loads(text) if text.strip() else None
+        from_file = Path(data[1:]) if data.startswith("@") else None
+        text = read_text(None if from_file else data, from_file)
+        body = json.loads(text) if text and text.strip() else None
     session = connect(dry_run)
-    result = session.client.request(
-        method, path, params={k: v[0] if len(v) == 1 else v for k, v in params.items()}, body=body
-    )
-    if result is not None and not (session.dry_run and session.client.is_write(method, path)):
+    if method == "GET":
+        result = session.send(ApiGet(path, pairs))
+    else:
+        result = session.send(CallApi(method, path, pairs, body))
+        if session.dry_run:
+            return
+    if result is not None:
         output.print_json(result)

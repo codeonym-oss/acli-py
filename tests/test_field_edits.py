@@ -19,11 +19,11 @@ from acli_py.application.commands.edit_issue.command import EditIssue
 from acli_py.application.commands.watch_issue.command import WatchIssue
 from acli_py.application.ports import IssueEditor, Watchers
 from acli_py.application.queries.search_issues.query import SearchIssues
-from acli_py.application.site import Site
 from acli_py.bootstrap import build_bus
 from acli_py.domain import edits
 from acli_py.infrastructure.audit import AuditMemory, default_path
 from acli_py.infrastructure.jira.client import JiraClient
+from acli_py.infrastructure.jira.site import Site
 from acli_py.presentation import terminal
 from acli_py.presentation.cli import common
 from tests import fake_jira

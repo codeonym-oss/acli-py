@@ -25,12 +25,17 @@ from acli_py.domain.issue import (
     Worklog,
 )
 from acli_py.domain.links import IssueLink, LinkType
+from acli_py.domain.meta import IssueTypeInfo, Named, Profile, StatusInfo
 from acli_py.domain.projects import Component, Project, ProjectSpec, Version
 from acli_py.domain.workflow import Transition
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from datetime import datetime
     from pathlib import Path
+
+    from acli_py.application.dry_run import PlannedRequest
+    from acli_py.application.inputs import IssueInput
 
 
 class IssueReader(Protocol):
@@ -70,6 +75,10 @@ class IssueSearch(Protocol):
 
     def filter_jql(self, filter_id: str) -> str:
         """Return the JQL the saved filter runs."""
+        ...
+
+    def problems(self, jql: str) -> list[str]:
+        """Return what the site finds wrong with `jql`; none when it is valid."""
         ...
 
 
@@ -143,6 +152,14 @@ class IssueFields(Protocol):
 
     def field_of(self, column: str) -> str:
         """Return the id of the field a column fills; raise `ValueError` when none matches."""
+        ...
+
+    def fields_for(self, wanted: IssueInput, *, creating: bool = False) -> dict[str, Any]:
+        """Return the fields `wanted` sets, as Jira takes them (a new issue's when `creating`)."""
+        ...
+
+    def field_values(self, assignments: tuple[str, ...]) -> dict[str, Any]:
+        """Return {field id: value} for 'NAME=VALUE' and 'NAME:=JSON' assignments."""
         ...
 
 
@@ -301,13 +318,57 @@ class Destination(Protocol):
 
 
 class People(Protocol):
-    """Finds the person a user means."""
+    """Finds the people a user means."""
 
     def account_id(self, who: str) -> str:
         """Return the account id of the one person `who` names: '@me', an email, a name, an id.
 
         Raises `ValueError` when nobody, or more than one person, matches.
         """
+        ...
+
+    def search(self, text: str, *, limit: int) -> list[Profile]:
+        """Return up to `limit` people whose name or email contain `text`."""
+        ...
+
+    def profile(self, who: str) -> Profile:
+        """Return the profile (with groups) of the one person `who` names, '@me' included."""
+        ...
+
+    def assignable(self, key: str, text: str) -> list[User]:
+        """Return people (not apps) who can be assigned issue `key`, matching `text`."""
+        ...
+
+
+class SiteLists(Protocol):
+    """The site's own lists: statuses, priorities, resolutions and issue types."""
+
+    def statuses(self) -> list[StatusInfo]:
+        """Return every status."""
+        ...
+
+    def priorities(self) -> list[Named]:
+        """Return the priorities, highest first."""
+        ...
+
+    def resolutions(self) -> list[Named]:
+        """Return the resolutions."""
+        ...
+
+    def issue_types(self, project: str | None = None) -> list[IssueTypeInfo]:
+        """Return the issue types: all of them, or those project `project` uses."""
+        ...
+
+
+class RawApi(Protocol):
+    """Any REST endpoint, as the site answers it."""
+
+    def request(self, method: str, path: str, params: Mapping[str, Any], body: Any = None) -> Any:
+        """Send the request and return the JSON answer (None for an empty one)."""
+        ...
+
+    def is_write(self, method: str, path: str) -> bool:
+        """Return whether the request would change something."""
         ...
 
 
@@ -571,6 +632,36 @@ class Dashboards(Protocol):
     def dashboard(self, dashboard_id: str) -> Dashboard:
         """Return the dashboard."""
         ...
+
+
+class CurrentSite(Protocol):
+    """The site a bus works on, as front ends see it: where, who, and whether it's a dry run."""
+
+    url: str
+    account_id: str
+    display_name: str
+
+    @property
+    def dry_run(self) -> bool:
+        """Return whether writes are only planned."""
+        ...
+
+    @property
+    def me(self) -> str:
+        """Return the user's account id (asking the site once, if need be)."""
+        ...
+
+    def browse(self, key: str) -> str:
+        """Return an issue's page on the site."""
+        ...
+
+    @property
+    def on_plan(self) -> Callable[[PlannedRequest], Any] | None:
+        """Return what is told of each write a dry run plans instead of sending."""
+        ...
+
+    @on_plan.setter
+    def on_plan(self, listener: Callable[[PlannedRequest], Any] | None) -> None: ...
 
 
 class Confirmer(Protocol):

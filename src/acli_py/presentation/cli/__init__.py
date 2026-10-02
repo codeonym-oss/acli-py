@@ -96,5 +96,5 @@ def main(
 ) -> None:
     """Start with [bold]acli-py auth login[/], then use [bold]acli-py issue[/], [bold]sprint[/]…."""
     state.dry_run, state.debug, state.account = dry_run, debug, account
-    state.clients.clear()
+    state.sites.clear()
     ctx.call_on_close(close_clients)

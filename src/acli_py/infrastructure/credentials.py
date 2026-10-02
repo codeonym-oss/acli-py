@@ -16,6 +16,7 @@ import json
 import os
 from typing import TYPE_CHECKING
 
+from acli_py.application.errors import SettingsError
 from acli_py.infrastructure.config import config_dir, write_private_file
 
 if TYPE_CHECKING:
@@ -26,7 +27,7 @@ KEYRING = "keyring"
 FILE = "file"
 
 
-class CredentialError(RuntimeError):
+class CredentialError(SettingsError):
     """The token could not be stored or read."""
 
 
