@@ -73,7 +73,7 @@ acli-py board delete BOARDS [OPTIONS]
 |---|---|---|
 | `BOARDS` | required | Board ids. |
 | `-y`, `--yes` |  | Don't ask for confirmation. |
-| `--ignore-errors` |  | Keep going when one item fails; exit 1 at the end. |
+| `--ignore-errors`, `--continue-on-error` |  | Keep going when an issue fails (else stop starting new ones); exit 1 at the end. |
 | `-n`, `--dry-run` |  | Show what would change without changing anything. Reads still run. |
 
 

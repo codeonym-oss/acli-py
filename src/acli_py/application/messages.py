@@ -40,20 +40,8 @@ class ValidateJql(Query[list]):
 
 @query
 @dataclass(frozen=True)
-class ListFilters(Query[list]):
-    """The user's favourite filters."""
-
-
-@query
-@dataclass(frozen=True)
 class ListPriorities(Query[list]):
     """The site's priorities."""
-
-
-@query
-@dataclass(frozen=True)
-class ListProjects(Query[list]):
-    """Projects, most recently viewed first."""
 
 
 @query

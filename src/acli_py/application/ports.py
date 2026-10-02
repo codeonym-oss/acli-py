@@ -10,6 +10,9 @@ from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any, Protocol
 
 from acli_py.application.changes import AuditRecord, Change
+from acli_py.domain.agile import Board, BoardSetup, Sprint, SprintState
+from acli_py.domain.fields import FieldInfo
+from acli_py.domain.filters import Dashboard, Filter, FilterColumn
 from acli_py.domain.history import HistoryEntry
 from acli_py.domain.issue import (
     Attachment,
@@ -22,6 +25,7 @@ from acli_py.domain.issue import (
     Worklog,
 )
 from acli_py.domain.links import IssueLink, LinkType
+from acli_py.domain.projects import Component, Project, ProjectSpec, Version
 from acli_py.domain.workflow import Transition
 
 if TYPE_CHECKING:
@@ -277,6 +281,279 @@ class Destination(Protocol):
 
     def web_link(self, key: str, url: str, title: str) -> None:
         """Add a web link to an issue there."""
+        ...
+
+
+class People(Protocol):
+    """Finds the person a user means."""
+
+    def account_id(self, who: str) -> str:
+        """Return the account id of the one person `who` names: '@me', an email, a name, an id.
+
+        Raises `ValueError` when nobody, or more than one person, matches.
+        """
+        ...
+
+
+class Projects(Protocol):
+    """The site's projects."""
+
+    def projects(self, *, query: str | None, status: str, limit: int | None) -> list[Project]:
+        """Return projects by key, whose key or name match `query`, in `status`.
+
+        `status` is 'live', 'archived' or 'deleted' (in the trash).
+        """
+        ...
+
+    def recent(self) -> list[Project]:
+        """Return up to 20 projects the user viewed lately, most recent first."""
+        ...
+
+    def project(self, key: str) -> Project:
+        """Return the project with its lead, issue types, components and versions."""
+        ...
+
+    def components(self, key: str) -> list[Component]:
+        """Return the project's components."""
+        ...
+
+    def versions(self, key: str) -> list[Version]:
+        """Return the project's versions."""
+        ...
+
+    def shared_configuration(self, key: str) -> dict[str, int]:
+        """Return the type, category and scheme ids a project copying `key`'s setup takes.
+
+        Keys are Jira's project fields ('permissionScheme', 'categoryId'); `projectTypeKey` is
+        among them. Raises `ValueError` for a team-managed project: its setup is its own.
+        """
+        ...
+
+    def create(self, spec: ProjectSpec, lead: str, shared: Mapping[str, Any]) -> str:
+        """Create the project `spec` describes, led by account `lead`; return its id.
+
+        `shared` holds the type and schemes copied from another project (see
+        `shared_configuration`); a template and shared schemes don't go together.
+        """
+        ...
+
+    def update(self, key: str, spec: ProjectSpec, lead: str | None) -> None:
+        """Change what `spec` gives, and the lead to account `lead` when given."""
+        ...
+
+    def delete(self, key: str, *, permanent: bool = False) -> None:
+        """Move the project to the trash, or (`permanent`) delete it for good."""
+        ...
+
+    def archive(self, key: str) -> None:
+        """Archive the project."""
+        ...
+
+    def restore(self, key: str) -> None:
+        """Bring the project back from the trash or the archive."""
+        ...
+
+
+class Boards(Protocol):
+    """Jira Software's boards."""
+
+    def boards(
+        self,
+        *,
+        name: str | None = None,
+        type: str | None = None,
+        project: str | None = None,
+        filter_id: str | None = None,
+        order: str | None = None,
+        private: bool = False,
+        limit: int | None = None,
+    ) -> list[Board]:
+        """Return the boards matching what is given."""
+        ...
+
+    def board(self, board_id: int) -> BoardSetup:
+        """Return the board and how it is set up."""
+        ...
+
+    def projects(self, board_id: int, *, limit: int | None) -> list[Project]:
+        """Return the projects the board shows."""
+        ...
+
+    def backlog(
+        self, board_id: int, jql: str | None, fields: tuple[str, ...], *, limit: int | None
+    ) -> list[Issue]:
+        """Return the issues in the board's backlog (narrowed by `jql`), with `fields`."""
+        ...
+
+    def create(self, name: str, type: str, filter_id: int, project: str | None, owner: str) -> int:
+        """Create a board fed by a filter, in `project`, else owned by account `owner`.
+
+        Returns its id.
+        """
+        ...
+
+    def delete(self, board_id: int) -> None:
+        """Delete the board (its issues and filter stay)."""
+        ...
+
+
+class Sprints(Protocol):
+    """Sprints, and the issues in them."""
+
+    def sprints(
+        self, board_id: int, states: tuple[SprintState, ...], *, limit: int | None
+    ) -> list[Sprint]:
+        """Return the board's sprints in `states` (all when none)."""
+        ...
+
+    def sprint(self, sprint_id: int) -> Sprint:
+        """Return the sprint."""
+        ...
+
+    def issues(
+        self, sprint_id: int, jql: str | None, fields: tuple[str, ...], *, limit: int | None
+    ) -> list[Issue]:
+        """Return the issues in the sprint (narrowed by `jql`), with `fields`."""
+        ...
+
+    def create(
+        self,
+        board_id: int,
+        name: str,
+        start: datetime | None,
+        end: datetime | None,
+        goal: str | None,
+    ) -> int:
+        """Create a future sprint on the board; return its id."""
+        ...
+
+    def update(
+        self,
+        sprint_id: int,
+        *,
+        name: str | None = None,
+        start: datetime | None = None,
+        end: datetime | None = None,
+        goal: str | None = None,
+        state: SprintState | None = None,
+    ) -> None:
+        """Change what is given (None: leave it)."""
+        ...
+
+    def delete(self, sprint_id: int) -> None:
+        """Delete the sprint; its issues go back to the backlog."""
+        ...
+
+    def move(self, keys: tuple[str, ...], sprint_id: int | None) -> None:
+        """Move issues into the sprint, or (None) back to the backlog."""
+        ...
+
+
+class Filters(Protocol):
+    """Saved filters. Share permissions go in as Jira takes them."""
+
+    def mine(self) -> list[Filter]:
+        """Return the user's own filters."""
+        ...
+
+    def favourites(self) -> list[Filter]:
+        """Return the filters the user starred."""
+        ...
+
+    def search(
+        self, *, name: str | None, owner: str | None, project: str | None, limit: int | None
+    ) -> list[Filter]:
+        """Return the filters the user can see: by name, owner (account id), project (key)."""
+        ...
+
+    def filter(self, filter_id: str) -> Filter:
+        """Return the filter, with who it is shared with."""
+        ...
+
+    def create(
+        self,
+        name: str,
+        jql: str,
+        description: str | None,
+        favourite: bool,
+        shares: tuple[Mapping[str, Any], ...] | None,
+    ) -> str:
+        """Save a filter; return its id."""
+        ...
+
+    def update(
+        self,
+        filter_id: str,
+        *,
+        name: str,
+        jql: str | None = None,
+        description: str | None = None,
+        shares: tuple[Mapping[str, Any], ...] | None = None,
+        edit_shares: tuple[Mapping[str, Any], ...] | None = None,
+    ) -> None:
+        """Change the filter; Jira needs its `name` even when that stays."""
+        ...
+
+    def delete(self, filter_id: str) -> None:
+        """Delete the filter."""
+        ...
+
+    def star(self, filter_id: str, *, star: bool = True) -> None:
+        """Add the filter to the user's favourites, or (not `star`) take it out."""
+        ...
+
+    def give(self, filter_id: str, account_id: str) -> None:
+        """Make account `account_id` the filter's owner."""
+        ...
+
+    def columns(self, filter_id: str) -> list[FilterColumn]:
+        """Return the columns the filter shows."""
+        ...
+
+    def set_columns(self, filter_id: str, fields: tuple[str, ...]) -> None:
+        """Show these field ids as the filter's columns; none goes back to the default ones."""
+        ...
+
+
+class SiteFields(Protocol):
+    """The site's fields, and its custom fields' lifecycle."""
+
+    def fields(self) -> list[FieldInfo]:
+        """Return every field."""
+        ...
+
+    def trashed(self, query: str | None) -> list[FieldInfo]:
+        """Return the custom fields in the trash, matching `query`."""
+        ...
+
+    def create(self, name: str, type: str, searcher: str | None, description: str | None) -> str:
+        """Create a custom field; return its id."""
+        ...
+
+    def update(
+        self, field_id: str, *, name: str | None, description: str | None, searcher: str | None
+    ) -> None:
+        """Change what is given of a custom field."""
+        ...
+
+    def trash(self, field_id: str) -> None:
+        """Move a custom field to the trash."""
+        ...
+
+    def restore(self, field_id: str) -> None:
+        """Bring a custom field back from the trash."""
+        ...
+
+
+class Dashboards(Protocol):
+    """Dashboards."""
+
+    def search(self, *, name: str | None, owner: str | None, limit: int | None) -> list[Dashboard]:
+        """Return the dashboards matching a name and owner (account id)."""
+        ...
+
+    def dashboard(self, dashboard_id: str) -> Dashboard:
+        """Return the dashboard."""
         ...
 
 

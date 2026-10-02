@@ -19,14 +19,14 @@ from acli_py.application.commands.watch_issue.command import WatchIssue
 from acli_py.application.messages import (
     FindAssignees,
     GetTransitions,
-    ListFilters,
     ListIssueTypes,
     ListPriorities,
-    ListProjects,
     ValidateJql,
 )
 from acli_py.application.queries.count_issues.query import CountIssues
 from acli_py.application.queries.get_issue.query import GetIssue
+from acli_py.application.queries.list_filters.query import ListFilters
+from acli_py.application.queries.list_projects.query import ListProjects
 from acli_py.application.queries.search_issues.query import SearchIssues
 from acli_py.application.site import Site
 from acli_py.bootstrap import build_bus
@@ -66,9 +66,12 @@ def test_queries_read_and_are_cached(site, fake):
         ]
         assert await bus.send(ValidateJql("project = DEMO")) == []
         assert await bus.send(ValidateJql("nosuchfield = 1")) != []
-        assert [f["name"] for f in await bus.send(ListFilters())] == ["My open work"]
+        assert [f.name for f in (await bus.send(ListFilters(favourites=True))).filters] == [
+            "My open work"
+        ]
         assert [p["name"] for p in await bus.send(ListPriorities())] == ["High", "Medium", "Low"]
-        assert {p["key"] for p in await bus.send(ListProjects())} == {"DEMO", "OPS"}
+        projects = await bus.send(ListProjects(recent_first=True))
+        assert [p.key for p in projects.projects] == ["DEMO", "OPS"]
         types = [t["name"] for t in await bus.send(ListIssueTypes("DEMO"))]
         assert "Subtask" not in types
         assert "Bug" in types

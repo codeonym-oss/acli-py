@@ -183,6 +183,7 @@ class FakeJira:
                 "8": {"id": 8, "name": "Sprint 8", "state": "future", "originBoardId": 1},
             }  # fmt: skip
             self.trashed_fields: set[str] = set()
+            self.fields = copy.deepcopy(FIELDS)  # field update renames them
             self.custom_fields: list[dict] = []
             self.blobs: dict[str, bytes] = {}
             self.add_issue("DEMO", "Login fails on Safari", "Bug", assignee=ALICE,
@@ -431,7 +432,7 @@ class FakeJira:
                 }
             elif name == "project":
                 continue
-            elif name.startswith("customfield_") and not any(f["id"] == name for f in FIELDS):
+            elif name.startswith("customfield_") and not any(f["id"] == name for f in self.fields):
                 raise BadRequestError(json.dumps({"errors": {name: "Field does not exist"}}))
             else:
                 target[name] = value
@@ -520,7 +521,7 @@ def _issue(jira, q, body, key):
     fields = q.get("fields", [""])[0].split(",") if "fields" in q else None
     data = jira.render(jira.issue(key), fields)
     if "names" in q.get("expand", [""])[0]:
-        data["names"] = {f["id"]: f["name"] for f in FIELDS}
+        data["names"] = {f["id"]: f["name"] for f in jira.fields}
     return data
 
 
@@ -888,7 +889,7 @@ def _user(jira, q, body):
 
 @route("GET", f"{A}/field")
 def _fields(jira, q, body):
-    return [f for f in FIELDS + jira.custom_fields if f["id"] not in jira.trashed_fields]
+    return [f for f in jira.fields + jira.custom_fields if f["id"] not in jira.trashed_fields]
 
 
 @route("POST", f"{A}/field")
@@ -901,7 +902,7 @@ def _create_field(jira, q, body):
 
 @route("PUT", f"{A}/field/(?P<fid>[^/]+)")
 def _update_field(jira, q, body, fid):
-    for field in FIELDS + jira.custom_fields:
+    for field in jira.fields + jira.custom_fields:
         if field["id"] == fid:
             field.update({k: v for k, v in body.items() if k == "name"})
             return 204, None

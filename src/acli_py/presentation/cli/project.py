@@ -9,8 +9,16 @@ from typing import Annotated, Any
 import typer
 from rich.markup import escape
 
-from acli_py.infrastructure.jira import resolve
-from acli_py.infrastructure.jira.client import API, NotFoundError
+from acli_py.application.commands.archive_project.command import ArchiveProject
+from acli_py.application.commands.create_project.command import CreateProject
+from acli_py.application.commands.delete_project.command import DeleteProject
+from acli_py.application.commands.restore_project.command import RestoreProject
+from acli_py.application.commands.update_project.command import UpdateProject
+from acli_py.application.queries.get_project.query import GetProject
+from acli_py.application.queries.list_components.query import ListComponents
+from acli_py.application.queries.list_projects.query import ListProjects
+from acli_py.application.queries.list_versions.query import ListVersions
+from acli_py.domain.projects import TEMPLATES, ProjectSpec
 from acli_py.presentation import output
 from acli_py.presentation.cli.common import (
     AllOpt,
@@ -21,30 +29,17 @@ from acli_py.presentation.cli.common import (
     OutputOpt,
     WebOpt,
     YesOpt,
-    confirm,
     connect,
-    fail,
     fmt,
     guarded,
     limit_of,
     open_url,
+    run_many,
 )
 from acli_py.presentation.output import Column, dig
 
 app = typer.Typer(help="Work with projects.", no_args_is_help=True)
 KeyArg = Annotated[str, typer.Argument(help="Project key, e.g. DEMO.")]
-
-# Friendly names for Jira's company-managed project templates.
-GREENHOPPER = "com.pyxis.greenhopper.jira:gh-simplified-"
-CORE = "com.atlassian.jira-core-project-templates:jira-core-simplified-"
-TEMPLATES = {
-    "scrum": ("software", f"{GREENHOPPER}scrum-classic"),
-    "kanban": ("software", f"{GREENHOPPER}kanban-classic"),
-    "basic": ("software", f"{GREENHOPPER}basic"),
-    "tasks": ("business", f"{CORE}task-tracking"),
-    "process": ("business", f"{CORE}process-control"),
-    "service": ("service_desk", "com.atlassian.servicedesk:simplified-it-service-management"),
-}
 
 PROJECT_TEMPLATE = {
     "key": "DEMO",
@@ -56,12 +51,12 @@ PROJECT_TEMPLATE = {
 }
 
 PROJECT_COLUMNS = [
-    Column("Key", lambda p: p.get("key"), style="cyan", no_wrap=True),
-    Column("Name", lambda p: p.get("name"), style="bold"),
-    Column("Type", lambda p: p.get("projectTypeKey")),
-    Column("Style", lambda p: p.get("style")),
-    Column("Lead", lambda p: dig(p, "lead", "displayName")),
-    Column("Id", lambda p: p.get("id"), style="dim"),
+    Column("Key", lambda p: p["key"], style="cyan", no_wrap=True),
+    Column("Name", lambda p: p["name"], style="bold"),
+    Column("Type", lambda p: p["projectTypeKey"]),
+    Column("Style", lambda p: p["style"]),
+    Column("Lead", lambda p: dig(p, "lead", "name")),
+    Column("Id", lambda p: p["id"], style="dim"),
 ]
 
 
@@ -84,21 +79,11 @@ def list_(
 ) -> None:
     """List the projects you can see."""
     session = connect()
-    if recent:
-        projects = session.client.get(f"{API}/project/recent", expand="lead")
-    else:
-        action = ["archived"] if archived else ["deleted"] if deleted else ["live"]
-        projects = list(
-            session.client.paged(
-                f"{API}/project/search",
-                limit=limit_of(limit, all_pages),
-                query=query,
-                orderBy="key",
-                expand="lead",
-                status=",".join(action),
-            )
-        )
-    output.emit(projects, PROJECT_COLUMNS, fmt(as_json, as_csv, out), empty="No projects found.")
+    status = "archived" if archived else "deleted" if deleted else "live"
+    view = session.send(ListProjects(query, status, limit_of(limit, all_pages), recent=recent))
+    output.emit(
+        view.to_json(), PROJECT_COLUMNS, fmt(as_json, as_csv, out), empty="No projects found."
+    )
 
 
 @app.command()
@@ -109,103 +94,25 @@ def view(key: KeyArg, web: WebOpt = False, as_json: JsonOpt = False) -> None:
     if web:
         open_url(f"{session.url}/browse/{key.upper()}")
         return
-    project = session.client.get(
-        f"{API}/project/{key.upper()}", expand="lead,description,issueTypes,url,projectKeys"
-    )
+    found = session.send(GetProject(key))
     if as_json:
-        output.print_json(project)
+        output.print_json(found.to_json())
         return
+    project = found.project
     rows = [
-        ("Name", escape(project.get("name", ""))),
-        ("Id", project.get("id")),
-        ("Type", project.get("projectTypeKey")),
-        ("Style", project.get("style")),
-        ("Lead", escape(dig(project, "lead", "displayName", default=""))),
-        ("Category", escape(dig(project, "projectCategory", "name", default=""))),
-        ("URL", escape(project.get("url") or "")),
-        ("Description", escape(project.get("description") or "")),
-        ("Issue types", escape(", ".join(t["name"] for t in project.get("issueTypes", [])))),
-        ("Components", escape(", ".join(c["name"] for c in project.get("components", [])))),
-        ("Versions", escape(", ".join(v["name"] for v in project.get("versions", [])))),
+        ("Name", escape(project.name)),
+        ("Id", project.id),
+        ("Type", project.type),
+        ("Style", project.style),
+        ("Lead", escape(project.lead.name if project.lead else "")),
+        ("Category", escape(project.category)),
+        ("URL", escape(project.url)),
+        ("Description", escape(project.description)),
+        ("Issue types", escape(", ".join(project.issue_types))),
+        ("Components", escape(", ".join(c.name for c in project.components))),
+        ("Versions", escape(", ".join(v.name for v in project.versions))),
     ]
-    output.console.print(output.details(escape(project.get("key", key)), rows))
-
-
-# Where to read each scheme a project uses: (body field, path, key in a values entry).
-_SCHEMES_BY_PROJECT = (
-    ("issueTypeScheme", "issuetypescheme/project", "issueTypeScheme"),
-    ("issueTypeScreenScheme", "issuetypescreenscheme/project", "issueTypeScreenScheme"),
-    ("workflowScheme", "workflowscheme/project", "workflowScheme"),
-)
-
-
-def shared_configuration(client: Any, key: str) -> dict[str, Any]:
-    """Return the POST /project fields that make a new project share `key`'s configuration."""
-    source = client.get(f"{API}/project/{key.upper()}")
-    if source.get("style") == "next-gen" or source.get("simplified"):
-        raise fail(
-            f"{escape(key.upper())} is team-managed; only company-managed projects "
-            "can share their configuration."
-        )
-    shared: dict[str, Any] = {"projectTypeKey": source.get("projectTypeKey", "software")}
-    if category := (source.get("projectCategory") or {}).get("id"):
-        shared["categoryId"] = int(category)
-    for field_name, path in (
-        ("permissionScheme", "permissionscheme"),
-        ("notificationScheme", "notificationscheme"),
-        ("issueSecurityScheme", "issuesecuritylevelscheme"),
-    ):
-        try:
-            scheme = client.get(f"{API}/project/{key.upper()}/{path}")
-        except NotFoundError:  # no issue security scheme, say
-            continue
-        if scheme and scheme.get("id") is not None:
-            shared[field_name] = int(scheme["id"])
-    for field_name, path, inner in _SCHEMES_BY_PROJECT:
-        values = client.get(f"{API}/{path}", projectId=source["id"]).get("values") or []
-        scheme_id = (values[0].get(inner) or {}).get("id") if values else None
-        if scheme_id is not None:
-            shared[field_name] = int(scheme_id)
-    return shared
-
-
-def _project_body(
-    session: Any, data: dict[str, Any], creating: bool, *, schemes: bool = False
-) -> dict[str, Any]:
-    body: dict[str, Any] = {}
-    for src, dest in (
-        ("key", "key"),
-        ("name", "name"),
-        ("description", "description"),
-        ("url", "url"),
-    ):
-        if data.get(src) is not None:
-            body[dest] = data[src]
-    if data.get("lead"):
-        body["leadAccountId"] = resolve.user(session.client, data["lead"], session.me)["accountId"]
-    elif creating:
-        body["leadAccountId"] = session.me
-    template = data.get("template")
-    if template:
-        type_key, template_key = TEMPLATES.get(template.lower(), (data.get("type"), template))
-        body["projectTemplateKey"] = template_key
-        body["projectTypeKey"] = data.get("type") or type_key
-    elif data.get("type"):
-        body["projectTypeKey"] = data["type"]
-    if creating:
-        body.setdefault("projectTypeKey", "software")
-        # A template and shared schemes are two ways to configure a project: not both.
-        if (
-            not schemes
-            and "projectTemplateKey" not in body
-            and body["projectTypeKey"] == "software"
-        ):
-            body["projectTemplateKey"] = TEMPLATES["kanban"][1]
-        body.setdefault("assigneeType", "UNASSIGNED")
-    # Anything else in a JSON file is Jira's own field name: pass it through.
-    known = {"key", "name", "description", "url", "lead", "template", "type"}
-    body.update({k: v for k, v in data.items() if k not in known})
-    return body
+    output.console.print(output.details(escape(project.key), rows))
 
 
 @app.command()
@@ -253,30 +160,30 @@ def create(
     if print_template:
         output.print_json(PROJECT_TEMPLATE)
         return
-    data = json.loads(from_json.read_text(encoding="utf-8")) if from_json else {}
-    given = {"key": key, "name": name, "template": template, "lead": lead,
-             "description": description, "url": url}  # fmt: skip
-    data.update({k: v for k, v in given.items() if v is not None})
-    if not data.get("key") or not data.get("name"):
-        raise fail("A new project needs [bold]--key[/] and [bold]--name[/].")
-    data["key"] = data["key"].upper()
+    given = {
+        "key": key,
+        "name": name,
+        "template": template,
+        "lead": lead,
+        "description": description,
+        "url": url,
+    }
+    spec = ProjectSpec.from_mapping(_merged(from_json, given))
+    like = from_project.upper() if from_project else None
     session = connect(dry_run)
-    shared: dict[str, Any] = {}
-    if from_project:
-        shared = shared_configuration(session.client, from_project)
-        data.pop("template", None)
-        data.setdefault("type", shared.pop("projectTypeKey"))
-        copied = ", ".join(k.removesuffix("Scheme") for k in shared if k.endswith("Scheme"))
-        output.info(f"Sharing {escape(from_project.upper())}'s configuration: {copied}.")
-    body = _project_body(session, data, creating=True, schemes=bool(shared))
-    body.update({k: v for k, v in shared.items() if k not in body})
-    result = session.client.post(f"{API}/project", body)
-    if as_json:
-        output.print_json(result)
-    if not session.dry_run:
-        output.success(
-            f"Created project [bold cyan]{escape(data['key'])}[/] {escape(data['name'])}"
-        )
+
+    def described(result: Any) -> str:
+        if shares := result.after.get("shares"):
+            output.info(f"Sharing {escape(like or '')}'s configuration: {', '.join(shares)}.")
+        return "" if session.dry_run else escape(result.after.get("name") or "")
+
+    run_many(
+        session,
+        [CreateProject(spec, like)],
+        done="would be created" if session.dry_run else "created",
+        as_json=as_json,
+        describe=described,
+    )
 
 
 @app.command()
@@ -293,40 +200,28 @@ def update(
     from_json: Annotated[
         Path | None, typer.Option("--from-json", help="Read the changes from a JSON file.")
     ] = None,
+    yes: YesOpt = False,
     dry_run: DryRunOpt = False,
     as_json: JsonOpt = False,
 ) -> None:
     """Change a project's key, name, lead, description or URL."""
-    data = json.loads(from_json.read_text(encoding="utf-8")) if from_json else {}
-    given = {"key": key.upper() if key else None, "name": name, "lead": lead,
-             "description": description, "url": url}  # fmt: skip
-    data.update({k: v for k, v in given.items() if v is not None})
-    if not data:
-        raise fail("Nothing to change. See [bold]acli-py project update --help[/].")
+    given = {"key": key, "name": name, "lead": lead, "description": description, "url": url}
+    command = UpdateProject(project, ProjectSpec.from_mapping(_merged(from_json, given)))
     session = connect(dry_run)
-    result = session.client.put(
-        f"{API}/project/{project.upper()}", _project_body(session, data, creating=False)
+    run_many(
+        session,
+        [command],
+        done="would be updated" if session.dry_run else "updated",
+        yes=yes,
+        as_json=as_json,
     )
-    if as_json:
-        output.print_json(result)
-    if not session.dry_run:
-        output.success(f"Updated project {escape(project.upper())}")
 
 
-def _project_action(key: str, action: str, question: str, yes: bool, dry_run: bool) -> None:
-    session = connect(dry_run)
-    key = key.upper()
-    confirm(question.format(key=key), yes, session)
-    if action == "delete":
-        session.client.delete(f"{API}/project/{key}", enableUndo="true")
-    elif action == "purge":
-        session.client.delete(f"{API}/project/{key}", enableUndo="false")
-    else:
-        session.client.post(f"{API}/project/{key}/{action}")
-    if not session.dry_run:
-        done = {"delete": "moved to the trash", "purge": "deleted permanently",
-                "archive": "archived", "restore": "restored"}[action]  # fmt: skip
-        output.success(f"Project {key} {done}")
+def _merged(from_json: Path | None, given: dict[str, Any]) -> dict[str, Any]:
+    """Return a JSON file's members, overridden by the options given."""
+    data = json.loads(from_json.read_text(encoding="utf-8")) if from_json else {}
+    data.update({k: v for k, v in given.items() if v is not None})
+    return data
 
 
 @app.command()
@@ -340,24 +235,40 @@ def delete(
     dry_run: DryRunOpt = False,
 ) -> None:
     """Move a project to the trash (restorable for 60 days), or delete it for good."""
-    if permanent:
-        _project_action(key, "purge", "PERMANENTLY delete {key} and all its issues?", yes, dry_run)
-    else:
-        _project_action(key, "delete", "Move project {key} to the trash?", yes, dry_run)
+    session = connect(dry_run)
+    done = "deleted permanently" if permanent else "moved to the trash"
+    run_many(
+        session,
+        [DeleteProject(key, permanent)],
+        done=f"would be {done}" if session.dry_run else done,
+        yes=yes,
+    )
 
 
 @app.command()
 @guarded
 def archive(key: KeyArg, yes: YesOpt = False, dry_run: DryRunOpt = False) -> None:
     """Archive a project (read-only, restorable)."""
-    _project_action(key, "archive", "Archive project {key}?", yes, dry_run)
+    session = connect(dry_run)
+    run_many(
+        session,
+        [ArchiveProject(key)],
+        done="would be archived" if session.dry_run else "archived",
+        yes=yes,
+    )
 
 
 @app.command()
 @guarded
-def restore(key: KeyArg, dry_run: DryRunOpt = False) -> None:
+def restore(key: KeyArg, yes: YesOpt = False, dry_run: DryRunOpt = False) -> None:
     """Restore a project from the trash or the archive."""
-    _project_action(key, "restore", "", True, dry_run)
+    session = connect(dry_run)
+    run_many(
+        session,
+        [RestoreProject(key)],
+        done="would be restored" if session.dry_run else "restored",
+        yes=yes,
+    )
 
 
 @app.command()
@@ -366,17 +277,17 @@ def components(
     key: KeyArg, as_json: JsonOpt = False, as_csv: CsvOpt = False, out: OutputOpt = None
 ) -> None:
     """List a project's components."""
-    session = connect()
+    found = connect().send(ListComponents(key))
     output.emit(
-        session.client.get(f"{API}/project/{key.upper()}/components"),
+        found.to_json(),
         [
-            Column("Id", lambda c: c.get("id"), style="dim"),
-            Column("Name", lambda c: c.get("name"), style="bold"),
-            Column("Lead", lambda c: dig(c, "lead", "displayName")),
-            Column("Description", lambda c: c.get("description")),
+            Column("Id", lambda c: c["id"], style="dim"),
+            Column("Name", lambda c: c["name"], style="bold"),
+            Column("Lead", lambda c: dig(c, "lead", "name")),
+            Column("Description", lambda c: c["description"]),
         ],
         fmt(as_json, as_csv, out),
-        empty=f"{key.upper()} has no components.",
+        empty=f"{found.key} has no components.",
     )
 
 
@@ -392,21 +303,18 @@ def versions(
     out: OutputOpt = None,
 ) -> None:
     """List a project's versions (releases)."""
-    session = connect()
-    found = session.client.get(f"{API}/project/{key.upper()}/versions")
-    if unreleased:
-        found = [v for v in found if not v.get("released")]
+    found = connect().send(ListVersions(key, unreleased))
     output.emit(
-        found,
+        found.to_json(),
         [
-            Column("Id", lambda v: v.get("id"), style="dim"),
-            Column("Name", lambda v: v.get("name"), style="bold"),
-            Column("Released", lambda v: "yes" if v.get("released") else ""),
-            Column("Archived", lambda v: "yes" if v.get("archived") else ""),
-            Column("Start", lambda v: v.get("startDate")),
-            Column("Release", lambda v: v.get("releaseDate")),
-            Column("Description", lambda v: v.get("description")),
+            Column("Id", lambda v: v["id"], style="dim"),
+            Column("Name", lambda v: v["name"], style="bold"),
+            Column("Released", lambda v: "yes" if v["released"] else ""),
+            Column("Archived", lambda v: "yes" if v["archived"] else ""),
+            Column("Start", lambda v: v["startDate"]),
+            Column("Release", lambda v: v["releaseDate"]),
+            Column("Description", lambda v: v["description"]),
         ],
         fmt(as_json, as_csv, out),
-        empty=f"{key.upper()} has no versions.",
+        empty=f"{found.key} has no versions.",
     )
