@@ -21,12 +21,15 @@ project
 board
 sprint
 filter
+git
+alias
 dashboard
 field
 user
 meta
 log
 undo
+standup
 api
 tui
 shell
