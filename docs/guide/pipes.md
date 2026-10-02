@@ -34,6 +34,7 @@ Every command that lists things takes `--output`:
 | `csv` | CSV with a header row. Same as `--csv`. |
 | `keys` | One key per line. For rows without one: the id, account id or name. |
 | `jsonl` | One JSON object per line. |
+| `markdown` | A Markdown table, for notes, tickets and chat. |
 
 Results go to stdout. Messages, progress and dry-run plans go to stderr, so they never end up
 in the next command's input.

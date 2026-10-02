@@ -41,7 +41,7 @@ In the TUI, the activity log (`L`) undoes the last change with `u`.
 ## Import
 
 ```sh
-acli-py issue search 'p:DEMO is:open' --fields key,summary,priority,labels --csv > open.csv
+acli-py issue export 'p:DEMO is:open' --fields key,summary,priority,labels -o open.csv
 # … edit open.csv …
 acli-py issue import open.csv --dry-run
 acli-py issue import open.csv

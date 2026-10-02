@@ -193,8 +193,11 @@ class Bulk:
                 await self._run_all(commands, report, concurrency, keep_going, on_outcome)
         if not self.dry_run():
             failed = {o.key: o.error for o in report.failed}
+            # Record the run in the order it was asked for, not the order commands finished.
+            order = {key_of(c): n for n, c in enumerate(commands)}
+            ordered = sorted(changes, key=lambda c: order.get(c.key, len(order)))
             command = name or type(commands[0]).__name__
-            self.trail.keep(command, list(changes), failed, undoes=undoes)
+            self.trail.keep(command, ordered, failed, undoes=undoes)
         return report
 
     async def _run_all(

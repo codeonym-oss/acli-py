@@ -24,6 +24,8 @@ from acli_py.application.queries.list_board_projects.query import ListBoardProje
 from acli_py.application.queries.list_boards.query import ListBoards
 from acli_py.application.queries.list_sprint_issues.query import ListSprintIssues
 from acli_py.application.queries.list_sprints.query import ListSprints
+from acli_py.application.queries.sprint_report.query import SprintReport
+from acli_py.application.queries.sprint_report.view import CATEGORIES as CATEGORY_NAMES
 from acli_py.domain.agile import SPRINT_WEEKS, SprintState
 from acli_py.domain.values import when
 from acli_py.presentation import output
@@ -463,6 +465,58 @@ def sprint_issues(
     shown = _shown(fields, template, chosen)
     message = ListSprintIssues(sprint, jql, limit_of(limit, all_pages), shown)
     _issue_list(connect(), message, template, chosen, empty="No issues.")
+
+
+@sprint_app.command("report")
+@guarded
+def sprint_report(
+    sprint: Annotated[
+        int | None, typer.Argument(help="Sprint id (default: the board's active sprint).")
+    ] = None,
+    board: BoardOpt = None,
+    as_json: JsonOpt = False,
+    out: OutputOpt = None,
+) -> None:
+    """How a sprint is going: its issues by status and by assignee, and how much is done.
+
+    [dim]acli-py sprint report --board 1
+    acli-py sprint report 7 --output markdown[/]
+    """
+    session = connect()
+    target = None if sprint is not None else board_id(session, board)
+    report = session.send(SprintReport(sprint, target))
+    chosen = fmt(as_json, chosen=out)
+    data = report.to_json()
+    if chosen is Format.json:
+        output.print_json(data)
+        return
+    by_status = [
+        Column("Category", lambda r: r["category"]),
+        Column("Status", lambda r: r["status"]),
+        Column("Issues", lambda r: r["issues"], justify="right"),
+    ]
+    by_assignee = [Column("Assignee", lambda r: r["assignee"], style="bold")] + [
+        Column(label, lambda r, label=label: r["counts"][label] or "", justify="right")
+        for label in CATEGORY_NAMES.values()
+    ]
+    if chosen in (Format.jsonl, Format.keys, Format.csv):
+        output.emit(data["byAssignee"], by_assignee, chosen)
+        return
+    s = report.sprint
+    done = sum(r["counts"]["Done"] for r in data["byAssignee"])
+    heading = (f"{s.name} ({s.state.value}, {when(s.start, with_time=False)} → "
+               f"{when(s.end, with_time=False)}): {done} of {data['issues']} done, "
+               f"{report.done:.0%}")  # fmt: skip
+    if chosen is Format.markdown:
+        output.lines([f"## {heading}", *([f"Goal: {s.goal}"] if s.goal else []), ""])
+    else:
+        output.console.print(f"[bold]{escape(heading)}[/]")
+        if s.goal:
+            output.console.print(f"[dim]Goal:[/] {escape(s.goal)}")
+    output.emit(data["byStatus"], by_status, chosen, empty="The sprint has no issues.")
+    if chosen is Format.markdown:
+        output.lines([""])
+    output.emit(data["byAssignee"], by_assignee, chosen, empty="")
 
 
 def _move(

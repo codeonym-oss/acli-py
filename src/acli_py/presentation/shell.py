@@ -21,6 +21,7 @@ from prompt_toolkit.history import FileHistory
 from acli_py.domain.jql import Completer as QueryCompleter
 from acli_py.domain.jql.catalog import Catalog, Value
 from acli_py.domain.jql.smart import terms, unquote
+from acli_py.presentation.cli.helpers import alias_names
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Iterator
@@ -127,6 +128,10 @@ class ShellCompleter(Completer):
                 for name, meta in META.items():
                     if name.startswith(current):
                         yield Completion(name, -len(current), display_meta=meta)
+                if current.startswith("@"):
+                    for name in alias_names():
+                        if name.lower().startswith(current.lower()):
+                            yield Completion(name, -len(current), display_meta="alias")
             return
         # A command: the value of an option, an option, or an argument.
         if rest:

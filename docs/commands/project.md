@@ -23,7 +23,7 @@ acli-py project list [OPTIONS]
 | `-A`, `--all` |  | Fetch every page, ignoring --limit. |
 | `--json` |  | Print JSON. |
 | `--csv` |  | Print CSV. |
-| `--output` `[table\|json\|csv\|keys\|jsonl]` |  | How to print: table, json, csv, or keys / jsonl (one per line, for pipes). |
+| `--output` `[table\|json\|csv\|keys\|jsonl\|markdown]` |  | How to print: table, json, csv, markdown, or keys / jsonl (one per line, for pipes). |
 
 
 ## `acli-py project view`
@@ -150,7 +150,7 @@ acli-py project components KEY [OPTIONS]
 | `KEY` | required | Project key, e.g. DEMO. |
 | `--json` |  | Print JSON. |
 | `--csv` |  | Print CSV. |
-| `--output` `[table\|json\|csv\|keys\|jsonl]` |  | How to print: table, json, csv, or keys / jsonl (one per line, for pipes). |
+| `--output` `[table\|json\|csv\|keys\|jsonl\|markdown]` |  | How to print: table, json, csv, markdown, or keys / jsonl (one per line, for pipes). |
 
 
 ## `acli-py project versions`
@@ -167,4 +167,4 @@ acli-py project versions KEY [OPTIONS]
 | `--unreleased` |  | Hide released versions. |
 | `--json` |  | Print JSON. |
 | `--csv` |  | Print CSV. |
-| `--output` `[table\|json\|csv\|keys\|jsonl]` |  | How to print: table, json, csv, or keys / jsonl (one per line, for pipes). |
+| `--output` `[table\|json\|csv\|keys\|jsonl\|markdown]` |  | How to print: table, json, csv, markdown, or keys / jsonl (one per line, for pipes). |

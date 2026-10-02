@@ -13,6 +13,7 @@ from acli_py.presentation.cli import (
     auth,
     config_cmd,
     filters,
+    helpers,
     history,
     interactive,
     issue,
@@ -28,6 +29,7 @@ app = typer.Typer(
     "[bold]--dry-run[/].",
     no_args_is_help=True,
     rich_markup_mode="rich",
+    cls=helpers.AliasGroup,
     context_settings={"help_option_names": ["-h", "--help"]},
 )
 
@@ -46,6 +48,9 @@ app.add_typer(agile.sprint_app, name="sprint", rich_help_panel="Work")
 app.add_typer(filters.filter_app, name="filter", rich_help_panel="Work")
 app.command("log", rich_help_panel="Work")(history.log)
 app.command("undo", rich_help_panel="Work")(history.undo)
+app.command("standup", rich_help_panel="Helpers")(helpers.standup)
+app.add_typer(helpers.git_app, name="git", rich_help_panel="Helpers")
+app.add_typer(helpers.alias_app, name="alias", rich_help_panel="Helpers")
 app.add_typer(misc.dashboard_app, name="dashboard", rich_help_panel="Work")
 app.add_typer(filters.field_app, name="field", rich_help_panel="Site")
 app.add_typer(misc.user_app, name="user", rich_help_panel="Site")

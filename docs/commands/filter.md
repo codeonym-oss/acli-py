@@ -18,7 +18,7 @@ acli-py filter list [OPTIONS]
 | `--favorites`, `--favourites` |  | Your starred filters instead. |
 | `--json` |  | Print JSON. |
 | `--csv` |  | Print CSV. |
-| `--output` `[table\|json\|csv\|keys\|jsonl]` |  | How to print: table, json, csv, or keys / jsonl (one per line, for pipes). |
+| `--output` `[table\|json\|csv\|keys\|jsonl\|markdown]` |  | How to print: table, json, csv, markdown, or keys / jsonl (one per line, for pipes). |
 
 
 ## `acli-py filter search`
@@ -38,7 +38,7 @@ acli-py filter search [OPTIONS]
 | `-A`, `--all` |  | Fetch every page, ignoring --limit. |
 | `--json` |  | Print JSON. |
 | `--csv` |  | Print CSV. |
-| `--output` `[table\|json\|csv\|keys\|jsonl]` |  | How to print: table, json, csv, or keys / jsonl (one per line, for pipes). |
+| `--output` `[table\|json\|csv\|keys\|jsonl\|markdown]` |  | How to print: table, json, csv, markdown, or keys / jsonl (one per line, for pipes). |
 
 
 ## `acli-py filter view`
@@ -162,4 +162,4 @@ acli-py filter columns FILTER_ID [OPTIONS]
 | `-y`, `--yes` |  | Don't ask for confirmation. |
 | `-n`, `--dry-run` |  | Show what would change without changing anything. Reads still run. |
 | `--json` |  | Print JSON. |
-| `--output` `[table\|json\|csv\|keys\|jsonl]` |  | How to print: table, json, csv, or keys / jsonl (one per line, for pipes). |
+| `--output` `[table\|json\|csv\|keys\|jsonl\|markdown]` |  | How to print: table, json, csv, markdown, or keys / jsonl (one per line, for pipes). |

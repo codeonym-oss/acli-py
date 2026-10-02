@@ -101,6 +101,13 @@ Every command has `--help` with examples. The whole tree:
 | `acli-py filter list \| search \| view \| create \| update \| delete \| star \| owner \| columns` | Saved filters, sharing, favourites, navigator columns. |
 | `acli-py field list \| create \| update \| delete \| restore` | Fields and their ids. `create --type text\|number\|select\|date\|user…`. |
 | `acli-py dashboard list \| view` | Dashboards. |
+| `acli-py issue export [QUERY]` | Every issue a search finds, streamed as CSV, JSON, JSON lines or a Markdown table (`--as`, or from `-o file.md`). |
+| `acli-py issue import FILE` | Update issues by key and create the rest, from CSV or JSON: the column mapping and each row's change shown first, asked once. |
+| `acli-py log` / `acli-py undo [ID]` | The changes you made, and putting back what one replaced (edits, assignments, transitions). |
+| `acli-py standup` | What you changed since the last working day, and what is next. |
+| `acli-py sprint report [SPRINT]` | A sprint's issues by status and assignee, and how much is done. |
+| `acli-py git branch \| commit-msg KEY` | A branch name or commit message from an issue. |
+| `acli-py alias set \| list \| delete` | Save a query or command line; run it as `@name`. |
 | `acli-py user search \| view` | Look people up (`acli-py user view` is you). |
 | `acli-py meta statuses \| priorities \| resolutions \| issue-types` | Site-wide lists. |
 | `acli-py api METHOD PATH` | Any REST endpoint with your credentials: `acli-py api GET myself`, `-d @body.json`, `-q key=value`. |

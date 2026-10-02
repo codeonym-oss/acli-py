@@ -17,11 +17,12 @@ HISTORY_SIZE = 500
 
 @dataclass(frozen=True)
 class View:
-    """A named query."""
+    """A named query, or (`command`) a named command line: an alias, `acli-py @name`."""
 
     name: str
     query: str
     builtin: bool = False
+    command: bool = False
 
 
 BUILTIN_VIEWS = (
@@ -50,44 +51,73 @@ def _write(path: Path, data: object) -> None:
 
 
 class Views:
-    """The built-in views plus the user's, in `views.json`."""
+    """The built-in views plus the user's, in `views.json`.
+
+    The file maps each name to a query, or to `{"command": "issue search …"}` for an alias of
+    a whole command line. The TUI shows the queries; `acli-py @name` runs either.
+    """
 
     def __init__(self, path: Path | None = None) -> None:
         self.path = path or config_dir() / "views.json"
 
-    def saved(self) -> list[View]:
-        """Return the user's views."""
+    def _stored(self) -> list[View]:
         data = _read(self.path, {})
         if not isinstance(data, dict):
             return []
-        return [View(str(k), str(v)) for k, v in data.items()]
+        found = []
+        for name, value in data.items():
+            if isinstance(value, dict) and isinstance(value.get("command"), str):
+                found.append(View(str(name), value["command"], command=True))
+            elif isinstance(value, str):
+                found.append(View(str(name), value))
+        return found
+
+    def saved(self) -> list[View]:
+        """Return the user's views (queries only)."""
+        return [v for v in self._stored() if not v.command]
 
     def all(self) -> list[View]:
         """Return the built-in views, then the user's."""
         return [*BUILTIN_VIEWS, *self.saved()]
 
+    def aliases(self) -> list[View]:
+        """Return everything `acli-py @name` runs: the views, then the command lines."""
+        return [*BUILTIN_VIEWS, *self._stored()]
+
     def find(self, name: str) -> View | None:
         """Return the view called `name` (any case)."""
         return next((v for v in self.all() if v.name.lower() == name.strip().lower()), None)
 
-    def save(self, name: str, query: str) -> None:
-        """Save (or replace) a view."""
+    def find_alias(self, name: str) -> View | None:
+        """Return the view or command line called `name` (any case)."""
+        return next((v for v in self.aliases() if v.name.lower() == name.strip().lower()), None)
+
+    def save(self, name: str, query: str, *, command: bool = False) -> None:
+        """Save (or replace) a view, or (`command`) an alias of a command line."""
         name = name.strip()
         if not name:
             raise ValueError("a view needs a name")
         if any(v.name.lower() == name.lower() for v in BUILTIN_VIEWS):
             raise ValueError(f"{name!r} is a built-in view; pick another name")
-        data = {v.name: v.query for v in self.saved() if v.name.lower() != name.lower()}
-        data[name] = query.strip()
-        _write(self.path, data)
+        kept = [v for v in self._stored() if v.name.lower() != name.lower()]
+        _write(self.path, {**_data(kept), name: _value(query.strip(), command)})
 
     def delete(self, name: str) -> bool:
-        """Delete a saved view; return whether there was one."""
-        kept = {v.name: v.query for v in self.saved() if v.name.lower() != name.strip().lower()}
-        if len(kept) == len(self.saved()):
+        """Delete a saved view or alias; return whether there was one."""
+        stored = self._stored()
+        kept = [v for v in stored if v.name.lower() != name.strip().lower()]
+        if len(kept) == len(stored):
             return False
-        _write(self.path, kept)
+        _write(self.path, _data(kept))
         return True
+
+
+def _value(query: str, command: bool) -> object:
+    return {"command": query} if command else query
+
+
+def _data(views: list[View]) -> dict[str, object]:
+    return {v.name: _value(v.query, v.command) for v in views}
 
 
 class History:

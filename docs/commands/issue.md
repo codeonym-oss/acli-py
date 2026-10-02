@@ -67,7 +67,7 @@ acli-py issue search @me --format '{key}\t{status}\t{summary}'
 | `-w`, `--web` |  | Open it in the browser instead. |
 | `--json` |  | Print JSON. |
 | `--csv` |  | Print CSV. |
-| `--output` `[table\|json\|csv\|keys\|jsonl]` |  | How to print: table, json, csv, or keys / jsonl (one per line, for pipes). |
+| `--output` `[table\|json\|csv\|keys\|jsonl\|markdown]` |  | How to print: table, json, csv, markdown, or keys / jsonl (one per line, for pipes). |
 | `--syntax` |  | Show the smart query syntax and exit. |
 | `--raw` |  | Send the query as JQL, never as a smart query. |
 
@@ -121,7 +121,7 @@ acli-py issue history DEMO-12 --field status --newest-first
 | `-l`, `--limit` `INTEGER` |  | Show at most this many changes. |
 | `--json` |  | Print JSON. |
 | `--csv` |  | Print CSV. |
-| `--output` `[table\|json\|csv\|keys\|jsonl]` |  | How to print: table, json, csv, or keys / jsonl (one per line, for pipes). |
+| `--output` `[table\|json\|csv\|keys\|jsonl\|markdown]` |  | How to print: table, json, csv, markdown, or keys / jsonl (one per line, for pipes). |
 
 
 ## `acli-py issue create`
@@ -173,6 +173,32 @@ cat new.jsonl | acli-py issue create --from-json - -p DEMO -y
 | `--json` |  | Print JSON. |
 
 
+## `acli-py issue export`
+
+Write every issue a search finds as CSV, JSON, JSON lines or a Markdown table.
+
+Issues are fetched a page at a time and written as they come, so exports of any size
+work. Columns are --fields (as for `issue search`). `issue import` reads the file back.
+
+```text
+acli-py issue export [JQL] [OPTIONS]
+```
+
+```sh
+acli-py issue export 'p:DEMO is:open' --fields key,summary,priority,labels -o open.csv
+acli-py issue export '@me is:open' --as markdown
+```
+
+| Option | Default | Description |
+|---|---|---|
+| `JQL` |  | A smart query or JQL (default: the default project). |
+| `--filter` `TEXT` |  | Export a saved filter's issues. |
+| `--fields` `TEXT` |  | Columns, comma-separated: key,status,assignee,summary… or field ids (customfield_10016). |
+| `--as` `[csv\|json\|jsonl\|markdown]` |  | csv, json, jsonl or markdown (default: from -o, else csv). |
+| `-o`, `--to` `PATH` |  | Write to this file instead of stdout. |
+| `-l`, `--limit` `INTEGER` |  | Stop after this many issues. |
+
+
 ## `acli-py issue import`
 
 Update issues from a file, by key, and create the rows without one.
@@ -189,7 +215,7 @@ acli-py issue import FILE [OPTIONS]
 ```
 
 ```sh
-acli-py issue search 'p:DEMO is:open' --fields key,summary,priority,labels --csv > open.csv
+acli-py issue export 'p:DEMO is:open' --fields key,summary,priority,labels -o open.csv
 acli-py issue import open.csv --dry-run
 ```
 
@@ -399,7 +425,7 @@ acli-py issue transitions KEY [OPTIONS]
 |---|---|---|
 | `KEY` | required | Issue key. |
 | `--json` |  | Print JSON. |
-| `--output` `[table\|json\|csv\|keys\|jsonl]` |  | How to print: table, json, csv, or keys / jsonl (one per line, for pipes). |
+| `--output` `[table\|json\|csv\|keys\|jsonl\|markdown]` |  | How to print: table, json, csv, markdown, or keys / jsonl (one per line, for pipes). |
 
 
 ## `acli-py issue delete`
@@ -643,7 +669,7 @@ acli-py issue comment visibility [OPTIONS]
 |---|---|---|
 | `-p`, `--project` `TEXT` |  | Show this project's roles. |
 | `--json` |  | Print JSON. |
-| `--output` `[table\|json\|csv\|keys\|jsonl]` |  | How to print: table, json, csv, or keys / jsonl (one per line, for pipes). |
+| `--output` `[table\|json\|csv\|keys\|jsonl\|markdown]` |  | How to print: table, json, csv, markdown, or keys / jsonl (one per line, for pipes). |
 
 
 ## `acli-py issue link`
@@ -695,7 +721,7 @@ acli-py issue link list KEY [OPTIONS]
 |---|---|---|
 | `KEY` | required | Issue key, e.g. DEMO-12. |
 | `--json` |  | Print JSON. |
-| `--output` `[table\|json\|csv\|keys\|jsonl]` |  | How to print: table, json, csv, or keys / jsonl (one per line, for pipes). |
+| `--output` `[table\|json\|csv\|keys\|jsonl\|markdown]` |  | How to print: table, json, csv, markdown, or keys / jsonl (one per line, for pipes). |
 
 
 ### `acli-py issue link delete`
@@ -727,7 +753,7 @@ acli-py issue link types [OPTIONS]
 | Option | Default | Description |
 |---|---|---|
 | `--json` |  | Print JSON. |
-| `--output` `[table\|json\|csv\|keys\|jsonl]` |  | How to print: table, json, csv, or keys / jsonl (one per line, for pipes). |
+| `--output` `[table\|json\|csv\|keys\|jsonl\|markdown]` |  | How to print: table, json, csv, markdown, or keys / jsonl (one per line, for pipes). |
 
 
 ## `acli-py issue attachment`
@@ -747,7 +773,7 @@ acli-py issue attachment list KEY [OPTIONS]
 |---|---|---|
 | `KEY` | required | Issue key, e.g. DEMO-12. |
 | `--json` |  | Print JSON. |
-| `--output` `[table\|json\|csv\|keys\|jsonl]` |  | How to print: table, json, csv, or keys / jsonl (one per line, for pipes). |
+| `--output` `[table\|json\|csv\|keys\|jsonl\|markdown]` |  | How to print: table, json, csv, markdown, or keys / jsonl (one per line, for pipes). |
 
 
 ### `acli-py issue attachment upload`
@@ -815,7 +841,7 @@ acli-py issue watcher list KEY [OPTIONS]
 |---|---|---|
 | `KEY` | required | Issue key, e.g. DEMO-12. |
 | `--json` |  | Print JSON. |
-| `--output` `[table\|json\|csv\|keys\|jsonl]` |  | How to print: table, json, csv, or keys / jsonl (one per line, for pipes). |
+| `--output` `[table\|json\|csv\|keys\|jsonl\|markdown]` |  | How to print: table, json, csv, markdown, or keys / jsonl (one per line, for pipes). |
 
 
 ### `acli-py issue watcher add`
@@ -871,7 +897,7 @@ acli-py issue worklog list KEY [OPTIONS]
 |---|---|---|
 | `KEY` | required | Issue key, e.g. DEMO-12. |
 | `--json` |  | Print JSON. |
-| `--output` `[table\|json\|csv\|keys\|jsonl]` |  | How to print: table, json, csv, or keys / jsonl (one per line, for pipes). |
+| `--output` `[table\|json\|csv\|keys\|jsonl\|markdown]` |  | How to print: table, json, csv, markdown, or keys / jsonl (one per line, for pipes). |
 
 
 ### `acli-py issue worklog add`
