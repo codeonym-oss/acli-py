@@ -11,10 +11,8 @@ from mediary.cqrs import query_handler
 from acli_py.application.messages import (
     FindAssignees,
     GetTransitions,
-    ListFilters,
     ListIssueTypes,
     ListPriorities,
-    ListProjects,
     ValidateJql,
 )
 from acli_py.application.site import Site
@@ -48,28 +46,9 @@ def validate_jql(request: ValidateJql, site: Site) -> list:
 
 
 @query_handler
-def list_filters(request: ListFilters, site: Site) -> list:
-    """Return favourite filters."""
-    return list(site.client.get(f"{API}/filter/favourite") or [])
-
-
-@query_handler
 def list_priorities(request: ListPriorities, site: Site) -> list:
     """Return the priorities."""
     return list(site.client.paged(f"{API}/priority/search", limit=100))
-
-
-@query_handler
-def list_projects(request: ListProjects, site: Site) -> list:
-    """Return projects: recent ones first, then the rest."""
-    recent = list(site.client.get(f"{API}/project/recent", maxResults=20) or [])
-    seen = {p["key"] for p in recent}
-    rest = [
-        p
-        for p in site.client.paged(f"{API}/project/search", limit=200, orderBy="name")
-        if p["key"] not in seen
-    ]
-    return recent + rest
 
 
 @query_handler

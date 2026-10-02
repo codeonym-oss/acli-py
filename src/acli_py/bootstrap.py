@@ -19,14 +19,21 @@ from acli_py.application.events.issue_changed.subscribers import Screens
 from acli_py.application.ports import (
     Attachments,
     AuditLog,
+    Boards,
     Comments,
     Confirmer,
+    Dashboards,
     Destination,
+    Filters,
     IssueEditor,
     IssueLinks,
     IssueReader,
     IssueSearch,
     IssueStore,
+    People,
+    Projects,
+    SiteFields,
+    Sprints,
     Watchers,
     Workflow,
     Worklogs,
@@ -34,12 +41,15 @@ from acli_py.application.ports import (
 from acli_py.application.site import Site
 from acli_py.domain.jql.catalog import Catalog
 from acli_py.infrastructure.audit import AuditFile
+from acli_py.infrastructure.jira.agile import JiraBoards, JiraSprints
 from acli_py.infrastructure.jira.catalog import JiraCatalog
 from acli_py.infrastructure.jira.client import JiraClient
 from acli_py.infrastructure.jira.editor import JiraEditor, JiraWatchers
+from acli_py.infrastructure.jira.filters import JiraDashboards, JiraFields, JiraFilters
 from acli_py.infrastructure.jira.issues import JiraIssues, JiraSearch
 from acli_py.infrastructure.jira.lifecycle import JiraLinks, JiraStore
 from acli_py.infrastructure.jira.parts import JiraAttachments, JiraComments, JiraWorklogs
+from acli_py.infrastructure.jira.projects import JiraPeople, JiraProjects
 from acli_py.infrastructure.jira.workflow import JiraWorkflow
 
 T = TypeVar("T")
@@ -73,6 +83,13 @@ class SiteResolver:
             if there is site
             else JiraStore(there.client, there.url, elsewhere=there.url != site.url),
             AuditLog: audit,
+            People: JiraPeople(site.client, lambda: site.me),
+            Projects: JiraProjects(site.client),
+            Boards: JiraBoards(site.client),
+            Sprints: JiraSprints(site.client),
+            Filters: JiraFilters(site.client),
+            SiteFields: JiraFields(site.client),
+            Dashboards: JiraDashboards(site.client),
         }
 
     def resolve(self, cls: type[T], /) -> T:

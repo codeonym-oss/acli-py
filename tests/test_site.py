@@ -50,14 +50,14 @@ def test_project_create_update_archive_restore_delete(site):
     assert body["leadAccountId"] == fake_jira.BOB["accountId"]
     assert body["projectTypeKey"] == "software"
     assert "NEW" in site.projects
-    ok("project", "update", "NEW", "--name", "Renamed")
+    ok("project", "update", "NEW", "--name", "Renamed", "-y")
     assert site.projects["NEW"]["name"] == "Renamed"
     ok("project", "archive", "NEW", "-y")
     assert site.projects["NEW"]["archived"]
-    ok("project", "restore", "NEW")
+    ok("project", "restore", "NEW", "-y")
     assert not site.projects["NEW"]["archived"]
     result, _ = run_cli("project", "delete", "NEW")
-    assert result.exit_code == 1
+    assert result.exit_code == 2  # declined: there is no terminal to ask on
     ok("project", "delete", "NEW", "-y")
     assert ("DELETE", "/rest/api/3/project/NEW", None) in site.log
     assert "NEW" not in site.projects
@@ -107,18 +107,18 @@ def test_sprints_lifecycle(site):
     new = next(s for s in site.sprints.values() if s["name"] == "Sprint 9")
     assert new["endDate"] == "2026-10-19T23:59:00.000Z"
 
-    ok("sprint", "add", "8", "DEMO-2")
+    ok("sprint", "add", "8", "DEMO-2", "-y")
     assert site.issues["DEMO-2"]["sprint"] == 8
-    ok("sprint", "remove", "DEMO-2")
+    ok("sprint", "remove", "DEMO-2", "-y")
     assert site.issues["DEMO-2"]["sprint"] is None
 
-    result, out = run_cli("sprint", "start", "7")
+    result, out = run_cli("sprint", "start", "7", "-y")
     assert result.exit_code == 1
     assert "only a future sprint can start" in out
-    ok("sprint", "start", "8", "--start", "2026-10-05", "--weeks", "1")
+    ok("sprint", "start", "8", "--start", "2026-10-05", "--weeks", "1", "-y")
     assert site.sprints["8"]["state"] == "active"
     assert site.sprints["8"]["endDate"] == "2026-10-12T00:00:00.000Z"
-    ok("sprint", "update", "8", "--name", "Sprint 8b")
+    ok("sprint", "update", "8", "--name", "Sprint 8b", "-y")
     assert site.sprints["8"]["name"] == "Sprint 8b"
     ok("sprint", "close", "7", "-y")
     assert site.sprints["7"]["state"] == "closed"
@@ -148,22 +148,22 @@ def test_filters(site):
     new = next(f for f in site.filters.values() if f["name"] == "Bugs")
     assert new["sharePermissions"][0]["type"] == "project"
 
-    ok("filter", "update", new["id"], "--jql", "type = Bug AND project = DEMO")
+    ok("filter", "update", new["id"], "--jql", "type = Bug AND project = DEMO", "-y")
     assert new["jql"] == "type = Bug AND project = DEMO"
     assert new["name"] == "Bugs"
 
-    ok("filter", "star", new["id"])
+    ok("filter", "star", new["id"], "-y")
     assert new["favourite"]
-    ok("filter", "star", new["id"], "--remove")
+    ok("filter", "star", new["id"], "--remove", "-y")
     assert not new["favourite"]
 
-    ok("filter", "owner", new["id"], "--to", "bob@example.com")
+    ok("filter", "owner", new["id"], "--to", "bob@example.com", "-y")
     assert new["owner"] == fake_jira.BOB
 
-    ok("filter", "columns", "10100", "--set", "summary,status")
+    ok("filter", "columns", "10100", "--set", "summary,status", "-y")
     assert site.filters["10100"]["columns"] == ["summary", "status"]
     assert "Status" in ok("filter", "columns", "10100")
-    ok("filter", "columns", "10100", "--reset")
+    ok("filter", "columns", "10100", "--reset", "-y")
     assert site.filters["10100"]["columns"] == []
 
     ok("filter", "delete", new["id"], "-y")
@@ -186,10 +186,10 @@ def test_fields(site):
     assert body["searcherKey"].endswith(":multiselectsearcher")
     _, out = run_cli("field", "create", "--name", "x", "--type", "blob")
     assert "Unknown field type" in out
-    ok("field", "update", "customfield_10016", "--name", "Points")
+    ok("field", "update", "customfield_10016", "--name", "Points", "-y")
     ok("field", "delete", "customfield_10030", "-y")
     assert "customfield_10030" in site.trashed_fields
-    ok("field", "restore", "customfield_10030")
+    ok("field", "restore", "customfield_10030", "-y")
     assert not site.trashed_fields
 
 

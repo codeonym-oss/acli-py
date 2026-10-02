@@ -157,6 +157,8 @@ being a command.
 | `application/changes.py` | application | `Change`, `Changed`, `Declined`: what commands change |
 | `application/bulk.py`, `audit.py` | application | The bulk engine; the audit trail, one record per run |
 | `infrastructure/audit.py` | infrastructure | `AuditFile`, the `AuditLog` port as JSON lines |
+| `domain/projects.py`, `agile.py`, `filters.py`, `fields.py` | domain | Projects, boards and sprints (and when a sprint can start), filters, dashboards, fields |
+| `infrastructure/jira/projects.py`, `agile.py`, `filters.py` | infrastructure | The `People`, `Projects`, `Boards`, `Sprints`, `Filters`, `SiteFields` and `Dashboards` ports |
 | `application/messages.py`, `handlers.py`, `site.py` | application | The use cases written before this layout |
 | `presentation/cli/`, `shell.py`, `tui/`, `output.py` | presentation | The front ends |
 

@@ -55,6 +55,7 @@ acli-py field update FIELD_ID [OPTIONS]
 | `--name` `TEXT` |  | New name. |
 | `-d`, `--description` `TEXT` |  |  |
 | `--searcher` `TEXT` |  | New searcher key. |
+| `-y`, `--yes` |  | Don't ask for confirmation. |
 | `-n`, `--dry-run` |  | Show what would change without changing anything. Reads still run. |
 
 
@@ -84,4 +85,5 @@ acli-py field restore FIELD_ID [OPTIONS]
 | Option | Default | Description |
 |---|---|---|
 | `FIELD_ID` | required | Custom field id, e.g. customfield_10042. |
+| `-y`, `--yes` |  | Don't ask for confirmation. |
 | `-n`, `--dry-run` |  | Show what would change without changing anything. Reads still run. |

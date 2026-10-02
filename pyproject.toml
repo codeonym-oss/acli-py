@@ -153,9 +153,6 @@ source_modules = ["acli_py.presentation"]
 forbidden_modules = ["acli_py.infrastructure"]
 allow_indirect_imports = true
 ignore_imports = [
-    "acli_py.presentation.cli.agile -> acli_py.infrastructure.jira.client",
-    "acli_py.presentation.cli.agile -> acli_py.infrastructure.jira.fields",
-    "acli_py.presentation.cli.agile -> acli_py.infrastructure.jira.resolve",
     "acli_py.presentation.cli.auth -> acli_py.infrastructure.config",
     "acli_py.presentation.cli.auth -> acli_py.infrastructure.credentials",
     "acli_py.presentation.cli.auth -> acli_py.infrastructure.jira.client",
@@ -164,7 +161,6 @@ ignore_imports = [
     "acli_py.presentation.cli.common -> acli_py.infrastructure.jira.client",
     "acli_py.presentation.cli.common -> acli_py.infrastructure.jira.resolve",
     "acli_py.presentation.cli.config_cmd -> acli_py.infrastructure.config",
-    "acli_py.presentation.cli.filters -> acli_py.infrastructure.jira.client",
     "acli_py.presentation.cli.filters -> acli_py.infrastructure.jira.resolve",
     "acli_py.presentation.cli.interactive -> acli_py.infrastructure.config",
     "acli_py.presentation.cli.interactive -> acli_py.infrastructure.storage",
@@ -173,8 +169,6 @@ ignore_imports = [
     "acli_py.presentation.cli.issue -> acli_py.infrastructure.jira.resolve",
     "acli_py.presentation.cli.misc -> acli_py.infrastructure.jira.client",
     "acli_py.presentation.cli.misc -> acli_py.infrastructure.jira.resolve",
-    "acli_py.presentation.cli.project -> acli_py.infrastructure.jira.client",
-    "acli_py.presentation.cli.project -> acli_py.infrastructure.jira.resolve",
     "acli_py.presentation.output -> acli_py.infrastructure.jira.client",
     "acli_py.presentation.tui.app -> acli_py.infrastructure.jira.client",
     "acli_py.presentation.tui.app -> acli_py.infrastructure.jira.resolve",

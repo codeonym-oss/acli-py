@@ -91,6 +91,7 @@ acli-py filter update FILTER_ID [OPTIONS]
 | `-d`, `--description` `TEXT` |  |  |
 | `--share` `TEXT` |  | Share permissions as a JSON array, or @file. |
 | `--edit-share` `TEXT` |  | Edit permissions as a JSON array, or @file. |
+| `-y`, `--yes` |  | Don't ask for confirmation. |
 | `-n`, `--dry-run` |  | Show what would change without changing anything. Reads still run. |
 | `--json` |  | Print JSON. |
 
@@ -107,7 +108,7 @@ acli-py filter delete FILTER_IDS [OPTIONS]
 |---|---|---|
 | `FILTER_IDS` | required | Filter ids. |
 | `-y`, `--yes` |  | Don't ask for confirmation. |
-| `--ignore-errors` |  | Keep going when one item fails; exit 1 at the end. |
+| `--ignore-errors`, `--continue-on-error` |  | Keep going when an issue fails (else stop starting new ones); exit 1 at the end. |
 | `-n`, `--dry-run` |  | Show what would change without changing anything. Reads still run. |
 
 
@@ -123,6 +124,7 @@ acli-py filter star FILTER_ID [OPTIONS]
 |---|---|---|
 | `FILTER_ID` | required | Filter id. |
 | `--remove` |  | Unstar it instead. |
+| `-y`, `--yes` |  | Don't ask for confirmation. |
 | `-n`, `--dry-run` |  | Show what would change without changing anything. Reads still run. |
 
 
@@ -140,7 +142,7 @@ acli-py filter owner [FILTER_IDS] [OPTIONS]
 | `FILTER_IDS` |  | Filter ids ('-' reads them from stdin). |
 | `-f`, `--from-file` `PATH` |  | Read filter ids from a file (commas, spaces or lines). |
 | `-y`, `--yes` |  | Don't ask for confirmation. |
-| `--ignore-errors` |  | Keep going when one item fails; exit 1 at the end. |
+| `--ignore-errors`, `--continue-on-error` |  | Keep going when an issue fails (else stop starting new ones); exit 1 at the end. |
 | `-n`, `--dry-run` |  | Show what would change without changing anything. Reads still run. |
 
 
@@ -157,6 +159,7 @@ acli-py filter columns FILTER_ID [OPTIONS]
 | `FILTER_ID` | required | Filter id. |
 | `--set` `TEXT` |  | Replace the columns with these field ids (repeatable). |
 | `--reset` |  | Go back to the default columns. |
+| `-y`, `--yes` |  | Don't ask for confirmation. |
 | `-n`, `--dry-run` |  | Show what would change without changing anything. Reads still run. |
 | `--json` |  | Print JSON. |
 | `--output` `[table\|json\|csv\|keys\|jsonl]` |  | How to print: table, json, csv, or keys / jsonl (one per line, for pipes). |
