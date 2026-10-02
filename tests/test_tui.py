@@ -30,6 +30,7 @@ from acli_py.presentation.tui.screens import (
 )
 from acli_py.presentation.tui.widgets import type_cell
 from tests import fake_jira
+from tests.conftest import run_cli
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -516,3 +517,17 @@ def test_type_badges():
     assert type_cell(IssueType("Sub-task", subtask=True)).plain == "↳"
     assert type_cell(IssueType("Idea")).plain == "I"
     assert type_cell(None).plain == ""
+
+
+def test_the_activity_log_undoes_the_last_change(site, fake, tmp_path):
+    result, out = run_cli("issue", "edit", "DEMO-1", "-P", "Low", "-y")
+    assert result.exit_code == 0, out
+
+    async def scenario(pilot, app):
+        await pilot.press("L")
+        await screen_of(pilot, app, ActivityScreen)
+        await pilot.press("u")
+        await agree(pilot, app, "Undo DEMO-1 (change 1, EditIssue)?")
+
+    drive(fake, tmp_path, scenario)
+    assert site.issues["DEMO-1"]["fields"]["priority"]["name"] == "Medium"

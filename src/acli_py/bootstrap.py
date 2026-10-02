@@ -26,6 +26,7 @@ from acli_py.application.ports import (
     Destination,
     Filters,
     IssueEditor,
+    IssueFields,
     IssueLinks,
     IssueReader,
     IssueSearch,
@@ -45,6 +46,7 @@ from acli_py.infrastructure.jira.agile import JiraBoards, JiraSprints
 from acli_py.infrastructure.jira.catalog import JiraCatalog
 from acli_py.infrastructure.jira.client import JiraClient
 from acli_py.infrastructure.jira.editor import JiraEditor, JiraWatchers
+from acli_py.infrastructure.jira.fields import JiraIssueFields
 from acli_py.infrastructure.jira.filters import JiraDashboards, JiraFields, JiraFilters
 from acli_py.infrastructure.jira.issues import JiraIssues, JiraSearch
 from acli_py.infrastructure.jira.lifecycle import JiraLinks, JiraStore
@@ -84,6 +86,7 @@ class SiteResolver:
             else JiraStore(there.client, there.url, elsewhere=there.url != site.url),
             AuditLog: audit,
             People: JiraPeople(site.client, lambda: site.me),
+            IssueFields: JiraIssueFields(site.client, lambda: site.me),
             Projects: JiraProjects(site.client),
             Boards: JiraBoards(site.client),
             Sprints: JiraSprints(site.client),

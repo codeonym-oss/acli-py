@@ -17,6 +17,7 @@ from acli_py.domain.values import when as when
 from acli_py.infrastructure.jira import resolve
 
 if TYPE_CHECKING:
+    from collections.abc import Callable, Mapping
     from pathlib import Path
 
     from acli_py.infrastructure.jira.client import JiraClient
@@ -43,6 +44,12 @@ KNOWN_KEYS = {
     "due": "due",
     "duedate": "due",
 }
+
+
+def known_key(name: str) -> str | None:
+    """Return the `IssueInput` key a column or JSON key names ('Fix versions', 'due_date')."""
+    return KNOWN_KEYS.get("".join(c for c in name.lower() if c not in " _-"))
+
 
 TEMPLATE = {
     "project": "DEMO",
@@ -91,7 +98,7 @@ class IssueInput:
         for key, value in data.items():
             if value in (None, "", []):
                 continue
-            known = KNOWN_KEYS.get(key.replace("_", "").replace("-", "").lower())
+            known = known_key(key)
             if key == "fields" and isinstance(value, dict):
                 for name, inner in value.items():
                     result.extra.append(
@@ -207,3 +214,49 @@ def parse_rows(text: str) -> list[dict[str, Any]]:
         if not isinstance(row, dict):
             raise resolve.ResolveError(f"issue {number} is not a JSON object")
     return rows
+
+
+# The field each friendly key of `IssueInput` fills.
+FIELD_OF = {
+    "project": "project",
+    "type": "issuetype",
+    "summary": "summary",
+    "description": "description",
+    "assignee": "assignee",
+    "reporter": "reporter",
+    "labels": "labels",
+    "components": "components",
+    "fix_versions": "fixVersions",
+    "priority": "priority",
+    "parent": "parent",
+    "due": "duedate",
+}
+
+
+class JiraIssueFields:
+    """The `IssueFields` port: `IssueInput` and `build`, with the site's field catalog."""
+
+    def __init__(self, client: JiraClient, me: Callable[[], str]) -> None:
+        self.client = client
+        self.me = me
+        self._catalog: resolve.FieldCatalog | None = None
+
+    @property
+    def catalog(self) -> resolve.FieldCatalog:
+        """Return the site's fields, read once."""
+        if self._catalog is None:
+            self._catalog = resolve.FieldCatalog.load(self.client)
+        return self._catalog
+
+    def build(self, row: Mapping[str, Any], *, creating: bool = False) -> dict[str, Any]:
+        """Return the fields the row sets."""
+        wanted = IssueInput.from_mapping(dict(row))
+        catalog = self.catalog if wanted.extra else None
+        return build(self.client, wanted, me=self.me(), creating=creating, catalog=catalog)
+
+    def field_of(self, column: str) -> str:
+        """Return the field a column fills: a friendly key's, else the one so named."""
+        known = known_key(column)
+        if known:
+            return FIELD_OF[known]
+        return str(self.catalog.find(column)["id"])
