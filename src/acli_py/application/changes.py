@@ -17,7 +17,7 @@ the count to agree.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Protocol, runtime_checkable
@@ -135,6 +135,14 @@ class AuditRecord:
     def keys(self) -> tuple[str, ...]:
         """Return the issues the run touched, or tried to."""
         return tuple(c.key for c in self.changes) + tuple(self.failed)
+
+
+def undone_by(entries: Iterable[AuditRecord]) -> dict[str, str]:
+    """Map each record an undo fully reversed to that undo's id.
+
+    An undo that failed on some issues leaves its record open, so `undo` can finish the job.
+    """
+    return {e.undoes: e.id for e in entries if e.undoes and not e.failed}
 
 
 class Declined(Exception):  # noqa: N818 - it reads as what happened: the change was declined

@@ -9,12 +9,15 @@ from __future__ import annotations
 
 import csv
 import json
+import os
+from contextlib import contextmanager
 from enum import StrEnum
 from typing import TYPE_CHECKING, TextIO
 
 from acli_py.presentation.output import markdown_row, markdown_table
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
     from pathlib import Path
 
     from acli_py.application.queries.issue_columns import IssueColumn
@@ -82,3 +85,18 @@ class IssueWriter:
         if self.fmt is ExportFormat.json:
             self.out.write("\n]\n" if self.count else "]\n")
         self.out.flush()
+
+
+@contextmanager
+def replacing(path: Path) -> Iterator[TextIO]:
+    """Open a file next to `path` for writing, and move it over `path` only once it is done.
+
+    An export that fails halfway (a bad query, a lost connection) leaves `path` as it was.
+    """
+    part = path.with_name(f".{path.name}.part")
+    try:
+        with part.open("w", encoding="utf-8", newline="") as out:
+            yield out
+        os.replace(part, path)
+    finally:
+        part.unlink(missing_ok=True)
