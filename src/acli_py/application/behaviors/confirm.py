@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Callable, Sequence
 from contextlib import asynccontextmanager
 from typing import Any
 
@@ -58,13 +58,22 @@ class Confirm:
             self.approved.remove(change)
 
     @asynccontextmanager
-    async def batch(self, change: Change, *, yes: bool = False) -> AsyncIterator[None]:
-        """Ask once about `change`, for the commands sent inside the block."""
+    async def batch(
+        self, change: Change, *, yes: bool = False, covering: Sequence[Change] = ()
+    ) -> AsyncIterator[None]:
+        """Ask once about `change`, for the commands sent inside the block.
+
+        `covering` are the changes of those commands when `change` reads differently ("Undo
+        change 4" over edits and transitions): agreeing to it agrees to them too.
+        """
         await self.approve(change, yes=yes)
+        self.approved.extend(covering)
         try:
             yield
         finally:
             self.forget(change)
+            for agreed in covering:
+                self.forget(agreed)
 
     async def handle(self, message: object, next: Next[Any], /) -> Any:
         """Ask about the command's change unless it is agreed to already, then run it."""

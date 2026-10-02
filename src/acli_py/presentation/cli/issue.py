@@ -31,6 +31,7 @@ from acli_py.application.queries.count_issues.query import CountIssues
 from acli_py.application.queries.get_history.query import GetHistory
 from acli_py.application.queries.get_issue.query import GetIssue
 from acli_py.application.queries.issue_columns import split
+from acli_py.application.queries.plan_import.query import PlanImport
 from acli_py.application.queries.search_issues.query import SearchIssues
 from acli_py.domain import adf
 from acli_py.domain.jql.smart import cheatsheet
@@ -606,6 +607,87 @@ def _merge(row: IssueInput, common: IssueInput) -> IssueInput:
         row.description = common.description
     row.extra = [*common.extra, *row.extra]
     return row
+
+
+# ── import ───────────────────────────────────────────────────────────────────
+
+
+@app.command("import")
+@guarded
+def import_(
+    file: Annotated[
+        Path,
+        typer.Argument(
+            help="CSV with a header, JSON (an object, a list) or JSON lines; '-' reads JSON "
+            "from stdin.",
+        ),
+    ],
+    project: Annotated[
+        str | None,
+        typer.Option("--project", "-p", help="Project for new issues without a project column."),
+    ] = None,
+    issue_type: Annotated[
+        str | None, typer.Option("--type", "-t", help="Type of new issues (default: Task).")
+    ] = None,
+    concurrency: ConcurrencyOpt = CONCURRENCY,
+    keep_going: KeepGoingOpt = False,
+    force: ForceOpt = False,
+    yes: YesOpt = False,
+    dry_run: DryRunOpt = False,
+    as_json: JsonOpt = False,
+) -> None:
+    """Update issues from a file, by key, and create the rows without one.
+
+    Columns are the names `issue search --fields` and `issue export` use (summary, priority,
+    labels, due…) or any field's name or id. A row with a key changes only what differs from
+    the issue now; status, created, updated and resolution are skipped. Shows how the columns
+    map to fields and each row's change, asks once, then runs a few rows at a time. The run is
+    one audit record: `acli-py undo` puts the edits back. Exits 0 when every row worked, 1
+    when some failed, 2 when nothing ran.
+
+    [dim]acli-py issue search 'p:DEMO is:open' --fields key,summary,priority,labels --csv > open.csv
+    acli-py issue import open.csv --dry-run[/]
+    """
+    rows = issue_fields.read_rows(file)
+    session = connect(dry_run)
+    defaults = session.config.defaults
+    plan = session.send(
+        PlanImport(
+            tuple(rows),
+            (project or defaults.get("project") or "").upper() or None,
+            issue_type or defaults.get("issue-type") or "Task",
+        )
+    )
+    mapping = Table(box=None, pad_edge=False, header_style="bold dim")
+    mapping.add_column("Column")
+    mapping.add_column("Field", style="cyan")
+    for column, target in plan.mapping:
+        mapping.add_row(escape(column), escape(target))
+    output.errors.print(mapping)
+    for ref, why in plan.problems:
+        output.error(f"{escape(ref)}: {escape(why)}")
+    if plan.unchanged:
+        output.info(f"{plural(len(plan.unchanged), 'row')} match their issue already.")
+    if plan.steps:
+        run_many(
+            session,
+            plan.commands,
+            done="would be imported" if session.dry_run else "imported",
+            yes=yes,
+            concurrency=concurrency,
+            keep_going=keep_going,
+            force=force,
+            as_json=as_json,
+            describe=lambda changed: (
+                _created_as(session, changed) if "created" in changed.after else ""
+            ),
+            change=plan.change(),
+            name="ImportIssues",
+        )
+    elif not plan.problems:
+        output.info("Nothing to import.")
+    if plan.problems:
+        raise typer.Exit(1)
 
 
 # What `issue edit --from-json` takes: Jira's own edit payload.

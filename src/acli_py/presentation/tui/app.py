@@ -40,6 +40,7 @@ from acli_py.application.queries.count_issues.query import CountIssues
 from acli_py.application.queries.get_issue.query import GetIssue
 from acli_py.application.queries.list_filters.query import ListFilters
 from acli_py.application.queries.list_projects.query import ListProjects
+from acli_py.application.queries.plan_undo.query import PlanUndo
 from acli_py.application.queries.search_issues.query import SearchIssues
 from acli_py.domain import adf
 from acli_py.domain.jql import Completer, compile_query
@@ -528,9 +529,15 @@ class IssueBrowser(App[None]):
         The engine asks once about `change` (by default, the one the commands make together),
         showing each issue's value now and after, and keeps going past failures.
         """
+        await self._run([make(key) for key in keys], done, change)
+
+    async def _run(
+        self, commands: list[Any], done: str, change: Change | None, undoes: str | None = None
+    ) -> None:
+        """Run commands through the bulk engine (see `_each`), then say how it went."""
         try:
             report = await self.bus.bulk.run(
-                [make(key) for key in keys], change=change, keep_going=True
+                commands, change=change, keep_going=True, undoes=undoes
             )
         except Declined:
             return
@@ -851,8 +858,31 @@ class IssueBrowser(App[None]):
         self.push_screen(HelpScreen())
 
     def action_activity(self) -> None:
-        """Show the activity log."""
-        self.push_screen(ActivityScreen(list(self.bus.activity.entries), list(self.plans)))
+        """Show the activity log; `u` there undoes the last change."""
+        screen = ActivityScreen(list(self.bus.activity.entries), list(self.plans))
+        self.push_screen(screen, self._after_activity)
+
+    def _after_activity(self, undo: bool | None) -> None:
+        if undo:
+            self.undo_last()
+
+    @work(group="action")
+    async def undo_last(self) -> None:
+        """Put back what the last change replaced, asking first (like `acli-py undo`)."""
+        try:
+            plan = await self.bus.send(PlanUndo())
+        except ERRORS as error:
+            self.notify(str(error), severity="error")
+            return
+        for key, why in plan.skipped:
+            self.notify(f"{key}: not undone, {why}.", severity="warning")
+        if plan.drifted:
+            self.notify(
+                f"{', '.join(plan.drifted)} changed again since; undoing sets them back anyway.",
+                severity="warning",
+            )
+        if plan.steps:
+            await self._run(plan.commands, "put back", plan.change(), plan.entry.id)
 
     def action_cursor(self, step: int) -> None:
         """Move the list cursor."""

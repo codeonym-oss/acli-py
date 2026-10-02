@@ -522,11 +522,16 @@ def run_many(
     describe: Callable[[Any], str] | None = None,
     line: Callable[[Any], str] | None = None,
     bus: Bus | None = None,
+    change: Change | None = None,
+    name: str | None = None,
+    undoes: str | None = None,
 ) -> Report:
     """Run one command per issue through the bulk engine: preview, ask once, run, sum up.
 
     Prints a line per issue as it finishes ('DEMO-1 {done} {describe(result)}', or all of
-    `line(result)`) and a summary at the end; exits 1 if any failed.
+    `line(result)`) and a summary at the end; exits 1 if any failed. `change` is the question
+    to ask instead of the one the commands make together; `name` and `undoes` are how the
+    audit log keeps the run (see `Bulk.run`).
     """
 
     def show(outcome: Any) -> None:
@@ -547,6 +552,9 @@ def run_many(
             keep_going=keep_going,
             force=force,
             on_outcome=None if as_json else show,
+            change=change,
+            name=name,
+            undoes=undoes,
         )
     )
     if as_json:

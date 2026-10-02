@@ -128,8 +128,10 @@ Each run of a command that was not a dry run is appended to `audit.jsonl` in the
 directory, one JSON object per line: `at`, `command`, `keys`, `changes` (each issue's `key`,
 `before` and `after`) and `failed` (issue → why). The `issue_changed` subscriber notes each
 change in the `AuditTrail`; a command on its own is recorded at once, while a bulk run
-gathers its changes and is recorded once at the end. Undo (#19) reads it back. A log that
-cannot be written never fails the change it records.
+gathers its changes and is recorded once at the end. `AuditLog.entries()` reads it back,
+each record with its line number as its id: `plan_undo` builds the commands that put a
+record's issues back, and the undo is recorded with the id it `undoes`. A log that cannot be
+written never fails the change it records.
 
 ### mediary is the only way to reach Jira
 

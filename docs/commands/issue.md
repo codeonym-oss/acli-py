@@ -173,6 +173,39 @@ cat new.jsonl | acli-py issue create --from-json - -p DEMO -y
 | `--json` |  | Print JSON. |
 
 
+## `acli-py issue import`
+
+Update issues from a file, by key, and create the rows without one.
+
+Columns are the names `issue search --fields` and `issue export` use (summary, priority,
+labels, due…) or any field's name or id. A row with a key changes only what differs from
+the issue now; status, created, updated and resolution are skipped. Shows how the columns
+map to fields and each row's change, asks once, then runs a few rows at a time. The run is
+one audit record: `acli-py undo` puts the edits back. Exits 0 when every row worked, 1
+when some failed, 2 when nothing ran.
+
+```text
+acli-py issue import FILE [OPTIONS]
+```
+
+```sh
+acli-py issue search 'p:DEMO is:open' --fields key,summary,priority,labels --csv > open.csv
+acli-py issue import open.csv --dry-run
+```
+
+| Option | Default | Description |
+|---|---|---|
+| `FILE` | required | CSV with a header, JSON (an object, a list) or JSON lines; '-' reads JSON from stdin. |
+| `-p`, `--project` `TEXT` |  | Project for new issues without a project column. |
+| `-t`, `--type` `TEXT` |  | Type of new issues (default: Task). |
+| `-c`, `--concurrency` `INTEGER` | `4` | How many issues to work on at once. |
+| `--ignore-errors`, `--continue-on-error` |  | Keep going when an issue fails (else stop starting new ones); exit 1 at the end. |
+| `--force` |  | Allow acting on more than 200 issues at once. |
+| `-y`, `--yes` |  | Don't ask for confirmation. |
+| `-n`, `--dry-run` |  | Show what would change without changing anything. Reads still run. |
+| `--json` |  | Print JSON. |
+
+
 ## `acli-py issue edit`
 
 Change fields on one or many issues.

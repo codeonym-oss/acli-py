@@ -13,6 +13,7 @@ from acli_py.presentation.cli import (
     auth,
     config_cmd,
     filters,
+    history,
     interactive,
     issue,
     issue_parts,
@@ -43,6 +44,8 @@ app.add_typer(project.app, name="project", rich_help_panel="Work")
 app.add_typer(agile.board_app, name="board", rich_help_panel="Work")
 app.add_typer(agile.sprint_app, name="sprint", rich_help_panel="Work")
 app.add_typer(filters.filter_app, name="filter", rich_help_panel="Work")
+app.command("log", rich_help_panel="Work")(history.log)
+app.command("undo", rich_help_panel="Work")(history.undo)
 app.add_typer(misc.dashboard_app, name="dashboard", rich_help_panel="Work")
 app.add_typer(filters.field_app, name="field", rich_help_panel="Site")
 app.add_typer(misc.user_app, name="user", rich_help_panel="Site")

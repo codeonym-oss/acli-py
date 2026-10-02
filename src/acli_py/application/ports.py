@@ -130,6 +130,22 @@ class Watchers(Protocol):
         ...
 
 
+class IssueFields(Protocol):
+    """Turns what someone typed for an issue (a CSV row, a JSON object) into Jira's fields."""
+
+    def build(self, row: Mapping[str, Any], *, creating: bool = False) -> dict[str, Any]:
+        """Return the fields `row` sets, as Jira takes them: names resolved to ids.
+
+        Friendly keys ('summary', 'labels', 'due') and field names ('Story point estimate')
+        both work; values are text, lists, or Markdown for the description.
+        """
+        ...
+
+    def field_of(self, column: str) -> str:
+        """Return the id of the field a column fills; raise `ValueError` when none matches."""
+        ...
+
+
 class IssueStore(Protocol):
     """Creates, deletes and archives whole issues."""
 
@@ -573,4 +589,8 @@ class AuditLog(Protocol):
 
     def record(self, entry: AuditRecord) -> None:
         """Add `entry` to the log."""
+        ...
+
+    def entries(self) -> list[AuditRecord]:
+        """Return every record, oldest first, each with its `id`."""
         ...

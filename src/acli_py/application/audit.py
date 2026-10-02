@@ -45,8 +45,17 @@ class AuditTrail:
             self._gathered.reset(token)
 
     def keep(
-        self, command: str, changes: list[Changed], failed: Mapping[str, str] | None = None
+        self,
+        command: str,
+        changes: list[Changed],
+        failed: Mapping[str, str] | None = None,
+        *,
+        undoes: str | None = None,
     ) -> None:
-        """Record one run, unless it neither changed nor failed on anything."""
+        """Record one run, unless it neither changed nor failed on anything.
+
+        `undoes` names the record the run reversed.
+        """
         if changes or failed:
-            self.log.record(AuditRecord(command, tuple(changes), datetime.now(UTC), failed or {}))
+            at = datetime.now(UTC)
+            self.log.record(AuditRecord(command, tuple(changes), at, failed or {}, undoes))

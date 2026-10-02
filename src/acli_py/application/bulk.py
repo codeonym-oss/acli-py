@@ -165,14 +165,18 @@ class Bulk:
         keep_going: bool = False,
         force: bool = False,
         on_outcome: Callable[[Outcome], Any] | None = None,
+        name: str | None = None,
+        undoes: str | None = None,
     ) -> Report:
         """Run `commands`, asking once about `change` (by default, the one they make together).
 
-        Raises `TooManyError` over the safety cap unless `force`, and `Declined` when the user
-        says no; nothing has run then.
+        The audit log keeps the run under `name` (by default, the commands' class name), and
+        notes the record it reverses when it `undoes` one. Raises `TooManyError` over the
+        safety cap unless `force`, and `Declined` when the user says no; nothing has run then.
         """
         if len(commands) > SAFETY_CAP and not force:
             raise TooManyError(len(commands), SAFETY_CAP)
+        given = change is not None
         change = change or change_of(commands)
         if change is not None and self.confirm.will_ask(change, yes=yes) and not change.preview:
             # A preview helps; when it can't be had, the question goes on without one.
@@ -182,12 +186,15 @@ class Bulk:
         if change is None:
             await self._run_all(commands, report, concurrency, keep_going, on_outcome)
             return report
-        async with self.confirm.batch(change, yes=yes):
+        # A change of its own ("Import 3 rows") covers what each command would ask.
+        covering = [c.change() for c in commands if isinstance(c, Write)] if given else []
+        async with self.confirm.batch(change, yes=yes, covering=covering):
             with self.trail.gather() as changes:
                 await self._run_all(commands, report, concurrency, keep_going, on_outcome)
         if not self.dry_run():
             failed = {o.key: o.error for o in report.failed}
-            self.trail.keep(type(commands[0]).__name__, list(changes), failed)
+            command = name or type(commands[0]).__name__
+            self.trail.keep(command, list(changes), failed, undoes=undoes)
         return report
 
     async def _run_all(

@@ -439,8 +439,11 @@ class HelpScreen(ModalScreen[None]):
         self.dismiss(None)
 
 
-class ActivityScreen(ModalScreen[None]):
-    """Every query and command sent, newest first, and the writes a dry run planned."""
+class ActivityScreen(ModalScreen[bool]):
+    """Every query and command sent, newest first, and the writes a dry run planned.
+
+    `u` closes it asking to undo the last change (see `acli-py undo`).
+    """
 
     SCOPED_CSS = False
 
@@ -451,7 +454,7 @@ class ActivityScreen(ModalScreen[None]):
     ActivityScreen DataTable { height: 1fr; }
     """
     )
-    BINDINGS = [Binding("escape,q,L", "close", "Close")]
+    BINDINGS = [Binding("escape,q,L", "close", "Close"), Binding("u", "undo", "Undo")]
 
     def __init__(self, entries: list[Any], plans: list[Any]) -> None:
         super().__init__()
@@ -460,7 +463,7 @@ class ActivityScreen(ModalScreen[None]):
     def compose(self) -> ComposeResult:
         """Lay out the log."""
         with Vertical():
-            yield Label("Activity", classes="title")
+            yield Label("Activity  [dim]u undoes the last change[/]", classes="title")
             yield DataTable(id="log", zebra_stripes=True, cursor_type="row")
             if self.plans:
                 yield Label(f"Dry run: {len(self.plans)} planned writes", classes="title")
@@ -483,4 +486,8 @@ class ActivityScreen(ModalScreen[None]):
 
     def action_close(self) -> None:
         """Close the log."""
-        self.dismiss(None)
+        self.dismiss(False)
+
+    def action_undo(self) -> None:
+        """Close the log, asking to undo the last change."""
+        self.dismiss(True)
