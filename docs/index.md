@@ -28,6 +28,7 @@ guide/interactive
 guide/dry-run
 guide/pipes
 guide/undo-import
+guide/helpers
 guide/fields
 guide/from-acli
 ```

@@ -26,7 +26,7 @@ from rich.syntax import Syntax
 from rich.table import Table
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable
+    from collections.abc import Callable, Iterable, Iterator
 
     from acli_py.infrastructure.jira.client import PlannedRequest
 
@@ -56,6 +56,7 @@ class Format(StrEnum):
     csv = "csv"
     keys = "keys"  # one key (or id) per line, for piping into another command
     jsonl = "jsonl"  # one JSON object per line, likewise
+    markdown = "markdown"  # a Markdown table, for notes, tickets and chat
 
 
 def pick_format(as_json: bool, as_csv: bool = False, chosen: Format | None = None) -> Format:
@@ -149,7 +150,7 @@ def emit(
     title: str | None = None,
     empty: str = "Nothing found.",
 ) -> list[Any]:
-    """Print rows as a table, JSON (the raw objects), CSV, keys or JSON lines; return the rows."""
+    """Print rows as a table, JSON (the raw objects), CSV, keys, JSON lines or Markdown."""
     rows = list(rows)
     if fmt is Format.json:
         print_json(rows)
@@ -160,6 +161,13 @@ def emit(
             for row in rows
         )
         sys.stdout.write("".join(f"{line}\n" for line in lines))
+        sys.stdout.flush()
+        return rows
+    if fmt is Format.markdown:
+        table = markdown_table(
+            [c.header for c in columns], ([c.text(r) for c in columns] for r in rows)
+        )
+        sys.stdout.write("".join(f"{line}\n" for line in table))
         sys.stdout.flush()
         return rows
     if fmt is Format.csv:
@@ -180,6 +188,24 @@ def emit(
         table.add_row(*(escape(c.text(row)) for c in columns))
     console.print(table)
     return rows
+
+
+def markdown_cell(value: str) -> str:
+    """Return text as one Markdown table cell: pipes escaped, on one line."""
+    return " ".join(value.replace("\\", "\\\\").replace("|", "\\|").split())
+
+
+def markdown_row(cells: Iterable[str]) -> str:
+    """Return one row of a Markdown table."""
+    return "| " + " | ".join(markdown_cell(c) for c in cells) + " |"
+
+
+def markdown_table(headers: list[str], rows: Iterable[list[str]]) -> Iterator[str]:
+    """Yield the lines of a Markdown table: the header, its rule, then each row."""
+    yield markdown_row(headers)
+    yield "|" + "---|" * len(headers)
+    for row in rows:
+        yield markdown_row(row)
 
 
 def details(title: str, rows: Iterable[tuple[str, Any]], subtitle: str | None = None) -> Panel:

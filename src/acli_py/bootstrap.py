@@ -53,6 +53,7 @@ from acli_py.infrastructure.jira.lifecycle import JiraLinks, JiraStore
 from acli_py.infrastructure.jira.parts import JiraAttachments, JiraComments, JiraWorklogs
 from acli_py.infrastructure.jira.projects import JiraPeople, JiraProjects
 from acli_py.infrastructure.jira.workflow import JiraWorkflow
+from acli_py.infrastructure.storage import Views
 
 T = TypeVar("T")
 
@@ -138,3 +139,8 @@ def build_bus(
 def build_catalog(client: JiraClient) -> Catalog:
     """Return the completion catalog for the site `client` talks to."""
     return JiraCatalog(client)
+
+
+def saved_views() -> Views:
+    """Return the saved views and aliases (shared by the CLI, the shell and the TUI)."""
+    return Views()

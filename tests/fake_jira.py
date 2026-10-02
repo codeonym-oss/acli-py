@@ -382,6 +382,16 @@ class FakeJira:
             found = [
                 i for i in found if (i["fields"]["assignee"] or {}).get("accountId") == m.group(1)
             ]
+        if m := re.search(r'(?i)updatedBy\(\s*currentUser\(\)\s*,\s*"([^"]+)"\s*\)', where):
+            since = m.group(1)
+            found = [
+                i
+                for i in found
+                if any(
+                    h["author"]["accountId"] == ALICE["accountId"] and h["created"][:10] >= since
+                    for h in i["history"]
+                )
+            ]
         if m := re.search(r"(?i)sprint\s*=\s*(\d+)", where):
             found = [i for i in found if i["sprint"] == int(m.group(1))]
         if m := re.search(r'(?i)\btext\s*~\s*"([^"]+)"', where):

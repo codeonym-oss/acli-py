@@ -185,3 +185,62 @@ def test_import_reads_the_csv_a_search_prints(site, tmp_path):
     out = ok("issue", "import", str(edited), "-y")
     assert "✔ DEMO-2 imported\n" in out
     assert site.issues["DEMO-2"]["fields"]["summary"] == "Write the release notes"
+
+
+# ── export ───────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    ("args", "expected"),
+    [
+        (["--as", "csv"], "key,summary,priority\nDEMO-1,Login fails on Safari,Medium\n"),
+        (
+            ["--as", "jsonl"],
+            '{"key": "DEMO-1", "summary": "Login fails on Safari", "priority": "Medium"}\n',
+        ),
+        (
+            ["--as", "markdown"],
+            "| key | summary | priority |\n|---|---|---|\n| DEMO-1 | Login fails on Safari | Medium |\n",
+        ),
+    ],
+    ids=["csv", "jsonl", "markdown"],
+)
+def test_export_writes_each_format(site, args, expected):
+    out = ok("issue", "export", "key in (DEMO-1)", "--fields", "summary,priority", *args)
+    assert out == expected
+
+
+def test_export_streams_every_page_to_a_file_and_json_stays_valid(site, tmp_path, monkeypatch):
+    from acli_py.application.queries.export_issues import handler
+
+    monkeypatch.setattr(handler, "PAGE", 2)  # three issues: two pages
+    target = tmp_path / "demo.json"
+    out = ok("issue", "export", "project = DEMO", "-o", str(target))
+    assert "Wrote 3 issues to" in out
+    assert [r["key"] for r in json.loads(target.read_text())] == ["DEMO-1", "DEMO-2", "DEMO-3"]
+    searches = [b for m, p, b in site.log if p == "/rest/api/3/search/jql"]
+    assert [b["maxResults"] for b in searches] == [2, 2]
+    assert json.loads(ok("issue", "export", "key in (NOPE-1)", "--as", "json")) == []
+    assert (
+        len(ok("issue", "export", "project = DEMO", "--limit", "2", "--as", "jsonl").splitlines())
+        == 2
+    )
+
+
+def test_export_then_import_round_trips_through_csv(site, tmp_path):
+    target = tmp_path / "demo.csv"
+    ok(
+        "issue",
+        "export",
+        "project = DEMO",
+        "--fields",
+        "summary,priority,labels,due",
+        "-o",
+        str(target),
+    )
+    target.write_text(
+        target.read_text().replace("DEMO-3,Speed up search,Medium", "DEMO-3,Speed up search,High")
+    )
+    out = ok("issue", "import", str(target), "-y")
+    assert "2 rows match their issue already." in out
+    assert site.issues["DEMO-3"]["fields"]["priority"]["name"] == "High"

@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import re
+import sys
+from contextlib import nullcontext
 from pathlib import Path
 from typing import Annotated, Any
 from urllib.parse import quote
@@ -28,9 +31,10 @@ from acli_py.application.queries.compile_search.query import (
     NothingToSearchError,
 )
 from acli_py.application.queries.count_issues.query import CountIssues
+from acli_py.application.queries.export_issues.query import ExportIssues
 from acli_py.application.queries.get_history.query import GetHistory
 from acli_py.application.queries.get_issue.query import GetIssue
-from acli_py.application.queries.issue_columns import split
+from acli_py.application.queries.issue_columns import columns, split
 from acli_py.application.queries.plan_import.query import PlanImport
 from acli_py.application.queries.search_issues.query import SearchIssues
 from acli_py.domain import adf
@@ -76,6 +80,7 @@ from acli_py.presentation.cli.common import (
     template_of,
 )
 from acli_py.presentation.output import Column, Format, dig
+from acli_py.presentation.writers import ExportFormat, IssueWriter
 
 app = typer.Typer(help="Work with issues (Jira's work items).", no_args_is_help=True)
 
@@ -609,6 +614,57 @@ def _merge(row: IssueInput, common: IssueInput) -> IssueInput:
     return row
 
 
+# ── export and import ────────────────────────────────────────────────────────
+
+
+@app.command("export")
+@guarded
+def export(
+    jql: Annotated[
+        str | None,
+        typer.Argument(help="A smart query or JQL (default: the default project)."),
+    ] = None,
+    saved_filter: Annotated[
+        str | None, typer.Option("--filter", help="Export a saved filter's issues.")
+    ] = None,
+    fields: FieldsOpt = None,
+    as_format: Annotated[
+        ExportFormat | None,
+        typer.Option("--as", help="csv, json, jsonl or markdown (default: from -o, else csv)."),
+    ] = None,
+    to: Annotated[
+        Path | None, typer.Option("--to", "-o", help="Write to this file instead of stdout.")
+    ] = None,
+    limit: Annotated[
+        int | None, typer.Option("--limit", "-l", min=1, help="Stop after this many issues.")
+    ] = None,
+) -> None:
+    """Write every issue a search finds as CSV, JSON, JSON lines or a Markdown table.
+
+    Issues are fetched a page at a time and written as they come, so exports of any size
+    work. Columns are --fields (as for `issue search`). `issue import` reads the file back.
+
+    [dim]acli-py issue export 'p:DEMO is:open' --fields key,summary,priority,labels -o open.csv
+    acli-py issue export '@me is:open' --as markdown[/]
+    """
+    session = connect()
+    query = compiled_search(session, jql, saved_filter=saved_filter)
+    names = split(fields)
+    chosen = as_format or ExportFormat.of(to)
+    with to.open("w", encoding="utf-8", newline="") if to else nullcontext(sys.stdout) as out:
+        writer = IssueWriter(out, columns(names), chosen)
+
+        async def write_all() -> None:
+            async with session.bus.stream(ExportIssues(query, names, limit)) as issues:
+                async for issue in issues:
+                    writer.write(issue)
+
+        asyncio.run(write_all())
+        writer.close()
+    if to:
+        output.success(f"Wrote {plural(writer.count, 'issue')} to {escape(str(to))}")
+
+
 # ── import ───────────────────────────────────────────────────────────────────
 
 
@@ -645,7 +701,7 @@ def import_(
     one audit record: `acli-py undo` puts the edits back. Exits 0 when every row worked, 1
     when some failed, 2 when nothing ran.
 
-    [dim]acli-py issue search 'p:DEMO is:open' --fields key,summary,priority,labels --csv > open.csv
+    [dim]acli-py issue export 'p:DEMO is:open' --fields key,summary,priority,labels -o open.csv
     acli-py issue import open.csv --dry-run[/]
     """
     rows = issue_fields.read_rows(file)

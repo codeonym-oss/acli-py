@@ -87,7 +87,7 @@ OutputOpt = Annotated[
     Format | None,
     typer.Option(
         "--output",
-        help="How to print: table, json, csv, or keys / jsonl (one per line, for pipes).",
+        help="How to print: table, json, csv, markdown, or keys / jsonl (one per line, for pipes).",
         show_default=False,
     ),
 ]
@@ -486,7 +486,7 @@ def show_issues(
         if not view.issues:
             output.info(empty)
         return
-    if chosen not in (Format.table, Format.csv):
+    if chosen not in (Format.table, Format.csv, Format.markdown):
         output.emit(view.to_json(), [], chosen, empty=empty)
         return
     columns = [

@@ -21,7 +21,7 @@ acli-py dashboard list [OPTIONS]
 | `-A`, `--all` |  | Fetch every page, ignoring --limit. |
 | `--json` |  | Print JSON. |
 | `--csv` |  | Print CSV. |
-| `--output` `[table\|json\|csv\|keys\|jsonl]` |  | How to print: table, json, csv, or keys / jsonl (one per line, for pipes). |
+| `--output` `[table\|json\|csv\|keys\|jsonl\|markdown]` |  | How to print: table, json, csv, markdown, or keys / jsonl (one per line, for pipes). |
 
 
 ## `acli-py dashboard view`

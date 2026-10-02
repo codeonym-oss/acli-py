@@ -37,6 +37,11 @@ def test_every_group_is_in_the_reference():
         "filter",
         "field",
         "api",
+        "log",
+        "undo",
+        "standup",
+        "git",
+        "alias",
     ):
         assert f"\n{group}\n" in index
 
@@ -69,8 +74,8 @@ def test_documented_commands_and_options_exist():
         index = 0
         while index < len(words):
             word = words[index]
-            if word == "…":
-                return None  # "and so on"
+            if word == "…" or (command is root and word.startswith("@")):
+                return None  # "and so on", or an alias: whatever it runs
             if word.startswith("-") and not word[1:2].isdigit():
                 param = option(command, word.split("=", 1)[0]) or option(root, word)
                 if param is None:

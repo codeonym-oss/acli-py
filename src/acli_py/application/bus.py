@@ -18,9 +18,10 @@ on the mediator before handing it over.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, TypeVar
 
-from mediary import Mediator
+from mediary import Mediator, Stream
+from mediary.cqrs import StreamQuery
 
 from acli_py.application.audit import AuditTrail
 from acli_py.application.behaviors import CACHE_SECONDS, Activity, Announce, Confirm, QueryCache
@@ -28,6 +29,8 @@ from acli_py.application.bulk import Bulk
 from acli_py.application.events.issue_changed.subscribers import Screens
 from acli_py.application.ports import AuditLog, Confirmer
 from acli_py.application.site import Site
+
+T = TypeVar("T")
 
 
 class Bus:
@@ -59,3 +62,7 @@ class Bus:
     async def send(self, message: Any) -> Any:
         """Send a query or command and return its result."""
         return await self.mediator.send(message)
+
+    def stream(self, query: StreamQuery[T]) -> Stream[T]:
+        """Stream the items a stream query's handler yields, as they come."""
+        return self.mediator.stream(query)

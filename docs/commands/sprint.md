@@ -21,7 +21,7 @@ acli-py sprint list [BOARD] [OPTIONS]
 | `-A`, `--all` |  | Fetch every page, ignoring --limit. |
 | `--json` |  | Print JSON. |
 | `--csv` |  | Print CSV. |
-| `--output` `[table\|json\|csv\|keys\|jsonl]` |  | How to print: table, json, csv, or keys / jsonl (one per line, for pipes). |
+| `--output` `[table\|json\|csv\|keys\|jsonl\|markdown]` |  | How to print: table, json, csv, markdown, or keys / jsonl (one per line, for pipes). |
 
 
 ## `acli-py sprint view`
@@ -144,7 +144,28 @@ acli-py sprint issues SPRINT [OPTIONS]
 | `-A`, `--all` |  | Fetch every page, ignoring --limit. |
 | `--json` |  | Print JSON. |
 | `--csv` |  | Print CSV. |
-| `--output` `[table\|json\|csv\|keys\|jsonl]` |  | How to print: table, json, csv, or keys / jsonl (one per line, for pipes). |
+| `--output` `[table\|json\|csv\|keys\|jsonl\|markdown]` |  | How to print: table, json, csv, markdown, or keys / jsonl (one per line, for pipes). |
+
+
+## `acli-py sprint report`
+
+How a sprint is going: its issues by status and by assignee, and how much is done.
+
+```text
+acli-py sprint report [SPRINT] [OPTIONS]
+```
+
+```sh
+acli-py sprint report --board 1
+acli-py sprint report 7 --output markdown
+```
+
+| Option | Default | Description |
+|---|---|---|
+| `SPRINT` |  | Sprint id (default: the board's active sprint). |
+| `-b`, `--board` `INTEGER` |  | Board id (default: `acli-py config set board`). |
+| `--json` |  | Print JSON. |
+| `--output` `[table\|json\|csv\|keys\|jsonl\|markdown]` |  | How to print: table, json, csv, markdown, or keys / jsonl (one per line, for pipes). |
 
 
 ## `acli-py sprint add`
