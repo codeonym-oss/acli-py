@@ -9,6 +9,7 @@ import pytest
 from acli_py.infrastructure.jira import fields, resolve
 from acli_py.infrastructure.jira.fields import IssueInput, text, when
 from acli_py.infrastructure.jira.resolve import FieldCatalog, ResolveError
+from acli_py.presentation import inputs
 from tests import fake_jira
 
 if TYPE_CHECKING:
@@ -43,10 +44,10 @@ def field(schema: dict, name: str = "F") -> dict:
 
 
 def test_split_and_read_keys(tmp_path):
-    assert resolve.split_keys(["demo-1, DEMO-2", "demo-1 ops-3"]) == ["DEMO-1", "DEMO-2", "OPS-3"]
+    assert inputs.split_keys(["demo-1, DEMO-2", "demo-1 ops-3"]) == ["DEMO-1", "DEMO-2", "OPS-3"]
     keys = tmp_path / "k.txt"
     keys.write_text("DEMO-1\n\nDEMO-2;DEMO-3 # trailing note\n")
-    assert resolve.read_keys_file(keys) == ["DEMO-1", "DEMO-2", "DEMO-3"]
+    assert inputs.read_keys_file(keys) == ["DEMO-1", "DEMO-2", "DEMO-3"]
 
 
 def test_parse_assignment():
@@ -125,11 +126,11 @@ def test_read_text_arg(tmp_path, monkeypatch):
 
     note = tmp_path / "n.md"
     note.write_text("from file")
-    assert resolve.read_text_arg(None, note) == "from file"
-    assert resolve.read_text_arg("inline", None) == "inline"
+    assert inputs.read_text_arg(None, note) == "from file"
+    assert inputs.read_text_arg("inline", None) == "inline"
     monkeypatch.setattr("sys.stdin", io.StringIO("piped"))
-    assert resolve.read_text_arg("-", None) == "piped"
-    assert resolve.read_text_arg(None, None) is None
+    assert inputs.read_text_arg("-", None) == "piped"
+    assert inputs.read_text_arg(None, None) is None
 
 
 def test_build_issue_fields():
@@ -174,10 +175,10 @@ def test_issue_input_from_mapping():
 def test_read_rows(tmp_path: Path):
     one = tmp_path / "one.json"
     one.write_text('{"summary": "x"}')
-    assert fields.read_rows(one) == [{"summary": "x"}]
+    assert inputs.read_rows(one) == [{"summary": "x"}]
     wrapped = tmp_path / "wrapped.json"
     wrapped.write_text('{"issueUpdates": [{"fields": {}}]}')
-    assert fields.read_rows(wrapped) == [{"fields": {}}]
+    assert inputs.read_rows(wrapped) == [{"fields": {}}]
 
 
 def test_display_helpers():

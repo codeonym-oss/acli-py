@@ -1,16 +1,14 @@
-"""Building issue field payloads.
+"""Building issue field payloads: `IssueInput` into the fields Jira takes (`JiraIssueFields`).
 
 `text` and `when` live in `acli_py.domain.values`; they are re-exported for older callers.
 """
 
 from __future__ import annotations
 
-import csv
-import json
-import sys
-from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
+from acli_py.application.inputs import IssueInput as IssueInput
+from acli_py.application.inputs import known_key
 from acli_py.domain import adf
 from acli_py.domain.values import text as text
 from acli_py.domain.values import when as when
@@ -18,114 +16,8 @@ from acli_py.infrastructure.jira import resolve
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
-    from pathlib import Path
 
     from acli_py.infrastructure.jira.client import JiraClient
-
-# Keys `acli-py issue create --from-json/--from-csv` understands; anything else is a field name.
-KNOWN_KEYS = {
-    "project": "project",
-    "projectkey": "project",
-    "type": "type",
-    "issuetype": "type",
-    "summary": "summary",
-    "description": "description",
-    "assignee": "assignee",
-    "reporter": "reporter",
-    "labels": "labels",
-    "label": "labels",
-    "components": "components",
-    "component": "components",
-    "fixversions": "fix_versions",
-    "fixversion": "fix_versions",
-    "priority": "priority",
-    "parent": "parent",
-    "parentissueid": "parent",
-    "due": "due",
-    "duedate": "due",
-}
-
-
-def known_key(name: str) -> str | None:
-    """Return the `IssueInput` key a column or JSON key names ('Fix versions', 'due_date')."""
-    return KNOWN_KEYS.get("".join(c for c in name.lower() if c not in " _-"))
-
-
-TEMPLATE = {
-    "project": "DEMO",
-    "type": "Task",
-    "summary": "Write the release notes",
-    "description": "What changed, **for whom**, and how to upgrade.\n\n- one\n- two",
-    "assignee": "@me",
-    "priority": "Medium",
-    "labels": ["docs", "release"],
-    "components": [],
-    "parent": None,
-    "due": "2026-12-31",
-    "fields": {"Story point estimate": 3},
-}
-
-
-@dataclass
-class IssueInput:
-    """What someone wants an issue to look like, as they typed it."""
-
-    project: str | None = None
-    type: str | None = None
-    summary: str | None = None
-    description: str | None = None
-    assignee: str | None = None
-    reporter: str | None = None
-    labels: list[str] | None = None
-    components: list[str] | None = None
-    fix_versions: list[str] | None = None
-    priority: str | None = None
-    parent: str | None = None
-    due: str | None = None
-    extra: list[str] = field(default_factory=list)
-    raw: dict[str, Any] = field(default_factory=dict)
-
-    @classmethod
-    def from_mapping(cls, data: dict[str, Any]) -> IssueInput:
-        """Build from a JSON object or CSV row using friendly keys (see TEMPLATE).
-
-        An object shaped like Jira's own payload (`{"fields": {"project": …}}`) is passed
-        through untouched.
-        """
-        if isinstance(data.get("fields"), dict) and "project" in data["fields"]:
-            return cls(raw=data)
-        result = cls()
-        for key, value in data.items():
-            if value in (None, "", []):
-                continue
-            known = known_key(key)
-            if key == "fields" and isinstance(value, dict):
-                for name, inner in value.items():
-                    result.extra.append(
-                        f"{name}={inner}"
-                        if isinstance(inner, (str, int, float))
-                        else f"{name}:={json.dumps(inner)}"
-                    )
-            elif known in ("labels", "components", "fix_versions"):
-                items = value if isinstance(value, list) else split_list(str(value))
-                setattr(result, known, [str(v) for v in items])
-            elif known:
-                setattr(result, known, str(value))
-            else:
-                result.extra.append(f"{key}={value}")
-        return result
-
-
-def split_list(text: str) -> list[str]:
-    """Split 'a, b;c' into ['a', 'b', 'c']."""
-    return [p.strip() for p in text.replace(";", ",").split(",") if p.strip()]
-
-
-def flat(values: list[str] | None) -> list[str] | None:
-    """Flatten repeated, comma-separated options."""
-    if values is None:
-        return None
-    return [item for value in values for item in split_list(value)]
 
 
 def build(
@@ -175,47 +67,6 @@ def build(
     return fields
 
 
-def read_rows(path: Path) -> list[dict[str, Any]]:
-    """Read issues from a JSON file (an object, a list or JSON lines) or a CSV file with a header.
-
-    '-' reads JSON or JSON lines from stdin (`issue search --output jsonl | issue create …`).
-    """
-    if str(path) == "-":
-        return parse_rows(sys.stdin.read())
-    text = path.read_text(encoding="utf-8-sig")
-    if path.suffix.lower() == ".csv":
-        return [dict(row) for row in csv.DictReader(text.splitlines())]
-    return parse_rows(text)
-
-
-def parse_rows(text: str) -> list[dict[str, Any]]:
-    """Return the issues in JSON text: one object, a list (or `{"issues": […]}`), or JSON lines."""
-    text = text.lstrip("\ufeff")
-    if not text.strip():
-        return []
-    try:
-        data = json.loads(text)
-    except json.JSONDecodeError as error:
-        lines = [line for line in text.splitlines() if line.strip()]
-        if len(lines) < 2:
-            raise resolve.ResolveError(f"not JSON or JSON lines: {error}") from error
-        data = []
-        for number, line in enumerate(lines, 1):
-            try:
-                data.append(json.loads(line))
-            except json.JSONDecodeError as bad:
-                raise resolve.ResolveError(f"line {number} is not JSON: {bad}") from bad
-    if isinstance(data, dict) and isinstance(data.get("issues"), list):
-        data = data["issues"]
-    if isinstance(data, dict) and isinstance(data.get("issueUpdates"), list):
-        data = data["issueUpdates"]
-    rows = data if isinstance(data, list) else [data]
-    for number, row in enumerate(rows, 1):
-        if not isinstance(row, dict):
-            raise resolve.ResolveError(f"issue {number} is not a JSON object")
-    return rows
-
-
 # The field each friendly key of `IssueInput` fills.
 FIELD_OF = {
     "project": "project",
@@ -250,9 +101,18 @@ class JiraIssueFields:
 
     def build(self, row: Mapping[str, Any], *, creating: bool = False) -> dict[str, Any]:
         """Return the fields the row sets."""
-        wanted = IssueInput.from_mapping(dict(row))
+        return self.fields_for(IssueInput.from_mapping(dict(row)), creating=creating)
+
+    def fields_for(self, wanted: IssueInput, *, creating: bool = False) -> dict[str, Any]:
+        """Return the fields `wanted` sets."""
         catalog = self.catalog if wanted.extra else None
         return build(self.client, wanted, me=self.me(), creating=creating, catalog=catalog)
+
+    def field_values(self, assignments: tuple[str, ...]) -> dict[str, Any]:
+        """Return the fields the assignments set."""
+        if not assignments:
+            return {}
+        return resolve.field_values(self.client, list(assignments), self.me(), self.catalog)
 
     def field_of(self, column: str) -> str:
         """Return the field a column fills: a friendly key's, else the one so named."""

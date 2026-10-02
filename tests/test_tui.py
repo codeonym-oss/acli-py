@@ -11,12 +11,12 @@ import pytest
 from textual.screen import ModalScreen
 from textual.widgets import Input, Markdown, OptionList, TextArea
 
-from acli_py.application.site import Site
 from acli_py.bootstrap import build_bus
 from acli_py.domain.issue import IssueType
 from acli_py.domain.values import ago
 from acli_py.infrastructure.jira.catalog import JiraCatalog
 from acli_py.infrastructure.jira.client import JiraClient
+from acli_py.infrastructure.jira.site import Site
 from acli_py.infrastructure.storage import History, Views
 from acli_py.presentation.tui.app import IssueBrowser, with_order
 from acli_py.presentation.tui.screens import (

@@ -7,7 +7,7 @@ from typing import Annotated
 import typer
 from rich.markup import escape
 
-from acli_py.infrastructure.config import SETTINGS, Config
+from acli_py.bootstrap import SETTINGS, Config
 from acli_py.presentation import output
 from acli_py.presentation.cli.common import JsonOpt, fail, guarded
 

@@ -67,3 +67,7 @@ class JiraSearch:
     def filter_jql(self, filter_id: str) -> str:
         """Return the JQL the saved filter runs."""
         return str(self.client.filter(filter_id).get("jql") or "")
+
+    def problems(self, jql: str) -> list[str]:
+        """Return Jira's complaints about the query."""
+        return self.client.validate_jql(jql)

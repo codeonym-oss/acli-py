@@ -8,7 +8,6 @@ handed to `on_plan`, and answered with a stand-in response.
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -16,6 +15,10 @@ import requests
 from requests.adapters import HTTPAdapter
 from requests.auth import HTTPBasicAuth
 from urllib3.util.retry import Retry
+
+from acli_py.application.dry_run import DRY_RUN_ID as DRY_RUN_ID
+from acli_py.application.dry_run import PlannedRequest
+from acli_py.application.errors import NotFound, SignInError, SiteError
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
@@ -35,11 +38,8 @@ READ_ONLY_POSTS = (
     f"{API}/jql/parse",
 )
 
-# A stand-in id for things a dry run pretends to create.
-DRY_RUN_ID = "DRY-RUN"
 
-
-class JiraError(RuntimeError):
+class JiraError(SiteError):
     """A Jira request failed."""
 
     def __init__(self, message: str, status: int | None = None) -> None:
@@ -47,23 +47,12 @@ class JiraError(RuntimeError):
         self.status = status
 
 
-class AuthError(JiraError):
+class AuthError(JiraError, SignInError):
     """Jira rejected the credentials."""
 
 
-class NotFoundError(JiraError):
+class NotFoundError(JiraError, NotFound):
     """The resource does not exist, or the account cannot see it."""
-
-
-@dataclass
-class PlannedRequest:
-    """A write that a dry run did not send."""
-
-    method: str
-    path: str
-    params: dict[str, Any] = field(default_factory=dict)
-    body: Any = None
-    files: list[str] = field(default_factory=list)
 
 
 def normalize_url(url: str) -> str:

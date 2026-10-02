@@ -125,15 +125,15 @@ src/acli_py/
   domain/          Jira's concepts and rules: pure Python, no I/O
   application/     use cases on the mediary bus: commands/, queries/, events/, behaviors/
   infrastructure/  the Jira client, config, credentials, files
-  presentation/    cli/, shell.py, tui/, output.py
-  bootstrap.py     builds the bus and the adapters for the front ends
+  presentation/    cli/, shell.py, tui/, output.py, inputs.py
+  bootstrap/       builds the bus and the adapters (wiring.py), opens sites (accounts.py)
 ```
 
 Each layer imports only the layers below it (presentation → bootstrap → infrastructure →
 application → domain), and front ends reach infrastructure only through `bootstrap`.
-`uv run lint-imports` checks this in pre-commit and CI. Code written before the layers is
-listed under `ignore_imports` in `pyproject.toml`; when you move a use case, delete its lines
-there. Never add new ones.
+`uv run lint-imports` checks this in pre-commit and CI, with no exceptions: a front end that
+needs something from Jira sends a message on the bus, and one that needs settings or a
+connection asks `acli_py.bootstrap`.
 
 ### Adding a command
 

@@ -31,7 +31,8 @@ acli_py/
     bulk.py · audit.py    the bulk engine, and the audit trail (one record per run)
   infrastructure/    the outside world: the Jira client, config, credentials, files
   presentation/      the front ends: cli/, shell.py, tui/, and output.py
-  bootstrap.py       the composition root: builds the bus and the adapters
+  bootstrap/         the composition root: wiring.py builds the bus and the adapters,
+                     accounts.py signs in and opens a site
 ```
 
 ### The dependency rule
@@ -161,20 +162,23 @@ being a command.
 | `infrastructure/audit.py` | infrastructure | `AuditFile`, the `AuditLog` port as JSON lines |
 | `domain/projects.py`, `agile.py`, `filters.py`, `fields.py` | domain | Projects, boards and sprints (and when a sprint can start), filters, dashboards, fields |
 | `infrastructure/jira/projects.py`, `agile.py`, `filters.py` | infrastructure | The `People`, `Projects`, `Boards`, `Sprints`, `Filters`, `SiteFields` and `Dashboards` ports |
-| `application/messages.py`, `handlers.py`, `site.py` | application | The use cases written before this layout |
+| `infrastructure/jira/site.py` | infrastructure | `Site`: an open client and who uses it (the `CurrentSite` port the bus and the TUI see) |
+| `application/errors.py`, `dry_run.py`, `inputs.py` | application | What front ends catch (`SiteError`…), a dry run's plan, `IssueInput` as typed |
+| `presentation/inputs.py` | presentation | Keys, text and rows of issues, typed or piped in |
+| `bootstrap/wiring.py`, `accounts.py` | composition root | The bus and catalog; accounts, settings and opening a site |
 | `presentation/cli/`, `shell.py`, `tui/`, `output.py` | presentation | The front ends |
 
 ## Consequences
 
-- The move is **expand–contract**. The layers exist now, and code written before them is
-  allowed to break the rules through the explicit `ignore_imports` lists in `pyproject.toml`.
-  Each use case that moves into its own package deletes its lines there, and import-linter
-  fails on a line that no longer matches, so the list only shrinks. When it is empty, the
-  migration is done (issue #18).
-- `application/messages.py` and `handlers.py` shrink as their use cases move into
-  `commands/` and `queries/`, then disappear.
-- The handlers in `application/handlers.py` still reach the client through `Site`. Each one
-  that moves to its own package asks for a port instead; when the last one moves, `Site`
-  leaves the application layer and the layers contract has no exceptions left.
+- The move was **expand–contract**. While it lasted, code written before the layers broke
+  the rules through explicit `ignore_imports` lists in `pyproject.toml`; each use case that
+  moved deleted its lines, and import-linter failed on a line that no longer matched. Issue
+  #18 removed the last of them: both contracts hold with no exceptions.
+- `application/messages.py` and `handlers.py` are gone: every use case has its own package,
+  and handlers ask for ports, never the client. `Site` lives in infrastructure; the bus and
+  the TUI see it through the `CurrentSite` port.
+- Front ends never import infrastructure. They open a site and read settings through
+  `acli_py.bootstrap`, send messages for everything that reaches Jira (people and field names
+  included), and catch the application's errors (`SiteError`, `SettingsError`).
 - Tests follow the layers: domain tests need nothing; handler tests run against the fake Jira
   site; front-end tests drive the CLI, the shell or the TUI end to end.

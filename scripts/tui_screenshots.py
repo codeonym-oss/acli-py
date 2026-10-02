@@ -12,9 +12,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from acli_py.application.site import Site
 from acli_py.bootstrap import build_bus, build_catalog
 from acli_py.infrastructure.jira.client import JiraClient
+from acli_py.infrastructure.jira.site import Site
 from acli_py.infrastructure.storage import History, Views
 from acli_py.presentation.tui.app import IssueBrowser
 from tests import fake_jira
@@ -52,7 +52,7 @@ def main() -> None:
         site = Site(client, "https://demo.atlassian.net", "", "Alice Martin")
         app = IssueBrowser(
             build_bus(site),
-            build_catalog(client),
+            build_catalog(site),
             query="p:DEMO sort:key",
             views=Views(state / "views.json"),
             history=History(state / "history.json"),

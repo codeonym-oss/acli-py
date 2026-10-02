@@ -17,12 +17,12 @@ from acli_py.application.commands import transition_issue as transition_package
 from acli_py.application.commands.transition_issue.command import TransitionIssue
 from acli_py.application.ports import AuditLog, Workflow
 from acli_py.application.queries.count_issues.query import CountIssues
-from acli_py.application.site import Site
 from acli_py.bootstrap import build_bus
 from acli_py.domain.issue import Status, StatusCategory
 from acli_py.domain.workflow import NoSuchTransitionError, Transition, pick
 from acli_py.infrastructure.audit import AuditFile, AuditMemory
 from acli_py.infrastructure.jira.client import JiraClient
+from acli_py.infrastructure.jira.site import Site
 from acli_py.presentation import terminal
 from acli_py.presentation.cli import common
 from tests import fake_jira

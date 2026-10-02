@@ -6,7 +6,7 @@
 
 Call any Jira REST endpoint with your credentials and print the JSON.
 
-Writes honour --dry-run like every other command.
+Writes honour --dry-run like every other command, and are kept in the audit log.
 
 ```text
 acli-py api METHOD PATH [OPTIONS]
