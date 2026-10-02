@@ -16,6 +16,7 @@ from acli_py.application.queries.plan_import.view import (
     ImportPlan,
     ImportStep,
 )
+from acli_py.application.threads import map_in_threads
 from acli_py.domain import edits
 from acli_py.domain.values import text
 
@@ -27,30 +28,46 @@ CREATE_ONLY = ("project", "issuetype")
 
 
 @query_handler
-def plan_import(request: PlanImport, fields: IssueFields, editor: IssueEditor) -> ImportPlan:
-    """Map the columns, then plan a command per row that changes something."""
+async def plan_import(request: PlanImport, fields: IssueFields, editor: IssueEditor) -> ImportPlan:
+    """Map the columns, then plan a command per row that changes something (a few at a time)."""
     mapping = _mapping(request.rows, fields)
+    seen: set[str] = set()
+
+    def plan(numbered: tuple[int, Mapping[str, Any]]) -> ImportStep | str | None:
+        number, row = numbered
+        key = _key_of(row)
+        given = {c: _plain(v) for c, v in row.items() if mapping[c] not in (MATCHED, READ_ONLY)}
+        try:
+            if key:
+                return _update(key, given, mapping, fields, editor)
+            return _create(f"#{number}", given, request, fields)
+        except ValueError as error:  # this row fails, not the import
+            return str(error)
+
+    rows = list(enumerate(request.rows, 1))
+    planned = await map_in_threads(plan, rows)
     steps: list[ImportStep] = []
     unchanged: list[str] = []
     problems: list[tuple[str, str]] = []
-    for number, row in enumerate(request.rows, 1):
-        key = next((str(row[c]).strip().upper() for c in row if _is_key(c) and row[c]), "")
+    for (number, row), step in zip(rows, planned, strict=True):
+        key = _key_of(row)
         ref = key or f"#{number}"
-        given = {c: _plain(v) for c, v in row.items() if mapping[c] not in (MATCHED, READ_ONLY)}
-        try:
-            step = (
-                _update(key, given, mapping, fields, editor)
-                if key
-                else _create(ref, given, request, fields)
-            )
-        except ValueError as error:
-            problems.append((ref, str(error)))
-            continue
-        if step is None:
+        if key in seen:  # two edits of one issue would race, and undo would lose one
+            problems.append((ref, f"row {number} repeats the key; keep one row per issue"))
+        elif isinstance(step, str):
+            problems.append((ref, step))
+        elif step is None:
             unchanged.append(key)
         else:
             steps.append(step)
+        if key:
+            seen.add(key)
     return ImportPlan(tuple(mapping.items()), tuple(steps), tuple(unchanged), tuple(problems))
+
+
+def _key_of(row: Mapping[str, Any]) -> str:
+    """Return the issue a row names in its key column, '' for a new issue."""
+    return next((str(row[c]).strip().upper() for c in row if _is_key(c) and row[c]), "")
 
 
 def _mapping(rows: tuple[Mapping[str, Any], ...], fields: IssueFields) -> dict[str, str]:
