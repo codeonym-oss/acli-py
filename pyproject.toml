@@ -1,6 +1,6 @@
 [project]
 name = "acli-py"
-version = "0.3.0"
+version = "0.3.1"
 description = "A friendly Jira Cloud command line: create, edit, move and delete issues, projects, boards, sprints, filters and fields, with a dry-run mode for every change."
 readme = "README.md"
 license = "MIT"
