@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.3.1](https://github.com/codeonym-oss/acli-py/compare/v0.3.0...v0.3.1) (2026-11-03)
+
+
+### Build
+
+* **deps-dev:** bump ruff from 0.16.9 to 0.16.10 in the dev-tools group ([#39](https://github.com/codeonym-oss/acli-py/issues/39)) ([5c115bd](https://github.com/codeonym-oss/acli-py/commit/5c115bd913c2b265052195568b649637ee810d46))
+* **deps:** bump platformdirs from 4.12.0 to 4.12.2 ([#40](https://github.com/codeonym-oss/acli-py/issues/40)) ([21d4a68](https://github.com/codeonym-oss/acli-py/commit/21d4a68901714b649ecc168d99a337ad1f0bbf06))
+* **deps:** bump platformdirs from 4.12.2 to 4.14.0 ([#48](https://github.com/codeonym-oss/acli-py/issues/48)) ([193c9ae](https://github.com/codeonym-oss/acli-py/commit/193c9ae45c636958781138e14f93117621acb8f5))
+* **deps:** bump typer from 0.27.2 to 0.27.3 ([#43](https://github.com/codeonym-oss/acli-py/issues/43)) ([544c5a1](https://github.com/codeonym-oss/acli-py/commit/544c5a1877ca90abcae1e00676e6c4591a0f17e3))
+
 ## [0.3.0](https://github.com/codeonym-oss/acli-py/compare/v0.2.0...v0.3.0) (2026-10-02)
 
 
